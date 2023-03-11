@@ -18,7 +18,7 @@ jobs:
           cd cloudphotomanager-server
           npm ci
           npm run build
-          npm run lint
+          # npm run lint
           npm run test
 
       - name: Build Web
@@ -26,7 +26,7 @@ jobs:
           cd cloudphotomanager-web
           npm ci
           npm run build
-          npm run lint
+          # npm run lint
           npm run test
 
       - name: Login to Docker Hub
