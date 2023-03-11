@@ -5,29 +5,29 @@ WORKDIR /opt/src
 
 RUN apk add --no-cache bash git python3 perl alpine-sdk
 
-COPY feedwatcher-server feedwatcher-server
+COPY cloudphotomanager-server cloudphotomanager-server
 
-RUN cd feedwatcher-server && \
+RUN cd cloudphotomanager-server && \
     npm ci && \
     npm run build
 
-COPY feedwatcher-web feedwatcher-web
+COPY cloudphotomanager-web cloudphotomanager-web
 
-RUN cd feedwatcher-web && \
+RUN cd cloudphotomanager-web && \
     npm ci && \
     npm run generate
 
 # RUN
 FROM node:18-alpine
 
-COPY --from=builder /opt/src/feedwatcher-server/node_modules /opt/app/feedwatcher/node_modules
-COPY --from=builder /opt/src/feedwatcher-server/dist /opt/app/feedwatcher/dist
-COPY --from=builder /opt/src/feedwatcher-web/.output/public /opt/app/feedwatcher/web
-COPY feedwatcher-server/config.json /opt/app/feedwatcher/config.json
-COPY feedwatcher-server/sql /opt/app/feedwatcher/sql
-COPY feedwatcher-server/processors-system /opt/app/feedwatcher/processors-system
-COPY feedwatcher-server/processors-user /opt/app/feedwatcher/processors-user
+COPY --from=builder /opt/src/cloudphotomanager-server/node_modules /opt/app/cloudphotomanager/node_modules
+COPY --from=builder /opt/src/cloudphotomanager-server/dist /opt/app/cloudphotomanager/dist
+COPY --from=builder /opt/src/cloudphotomanager-web/.output/public /opt/app/cloudphotomanager/web
+COPY cloudphotomanager-server/config.json /opt/app/cloudphotomanager/config.json
+COPY cloudphotomanager-server/sql /opt/app/cloudphotomanager/sql
+COPY cloudphotomanager-server/processors-system /opt/app/cloudphotomanager/processors-system
+COPY cloudphotomanager-server/processors-user /opt/app/cloudphotomanager/processors-user
 
-WORKDIR /opt/app/feedwatcher
+WORKDIR /opt/app/cloudphotomanager
 
 CMD [ "dist/app.js" ]
