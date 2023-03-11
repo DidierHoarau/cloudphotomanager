@@ -25,8 +25,6 @@ COPY --from=builder /opt/src/cloudphotomanager-server/dist /opt/app/cloudphotoma
 COPY --from=builder /opt/src/cloudphotomanager-web/.output/public /opt/app/cloudphotomanager/web
 COPY cloudphotomanager-server/config.json /opt/app/cloudphotomanager/config.json
 COPY cloudphotomanager-server/sql /opt/app/cloudphotomanager/sql
-COPY cloudphotomanager-server/processors-system /opt/app/cloudphotomanager/processors-system
-COPY cloudphotomanager-server/processors-user /opt/app/cloudphotomanager/processors-user
 
 WORKDIR /opt/app/cloudphotomanager
 
