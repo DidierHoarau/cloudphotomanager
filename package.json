@@ -1,0 +1,20 @@
+{
+  "name": "cloudphotomanager",
+  "version": "1.0.9",
+  "description": "",
+  "main": "ecosystem.config.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DidierHoarau/cloudphotomanager.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/DidierHoarau/cloudphotomanager/issues"
+  },
+  "homepage": "https://github.com/DidierHoarau/cloudphotomanager#readme"
+}
