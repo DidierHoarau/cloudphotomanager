@@ -10,12 +10,15 @@ export class AccountRoutes {
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     //
     fastify.get("/", async (req, res) => {
-      console.log("foo");
+      const span = StandardTracer.getSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const accounts = await AccountData.list(StandardTracer.getSpanFromRequest(req));
+      const accounts = await AccountData.list(span);
+      accounts.forEach((account: AccountDefinition) => {
+        delete account.infoPrivate;
+      });
       return res.status(200).send({ accounts });
     });
 
@@ -27,6 +30,7 @@ export class AccountRoutes {
       };
     }
     fastify.post<PostAccountValidation>("/validation", async (req, res) => {
+      const span = StandardTracer.getSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -35,7 +39,7 @@ export class AccountRoutes {
       accountDefinition.info = req.body.info;
       accountDefinition.infoPrivate = req.body.infoPrivate;
       const account = await AccountFactory.getAccountImplementation(accountDefinition);
-      if (await account.validate(accountDefinition)) {
+      if (await account.validate(span)) {
         return res.status(200).send({});
       }
       return res.status(400).send({ error: "Account Validation Failed" });
@@ -50,6 +54,7 @@ export class AccountRoutes {
       };
     }
     fastify.post<PostAccount>("/", async (req, res) => {
+      const span = StandardTracer.getSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -62,10 +67,10 @@ export class AccountRoutes {
       accountDefinition.info = req.body.info;
       accountDefinition.infoPrivate = req.body.infoPrivate;
       const account = await AccountFactory.getAccountImplementation(accountDefinition);
-      if (!(await account.validate(accountDefinition))) {
+      if (!(await account.validate(span))) {
         return res.status(400).send({ error: "Account Validation Failed" });
       }
-      await AccountData.add(StandardTracer.getSpanFromRequest(req), accountDefinition);
+      await AccountData.add(span, accountDefinition);
       return res.status(201).send(account);
     });
   }

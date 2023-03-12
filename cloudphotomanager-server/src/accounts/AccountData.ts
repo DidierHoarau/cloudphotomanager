@@ -6,6 +6,17 @@ import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 
 export class AccountData {
   //
+  public static async get(context: Span, accountId: string): Promise<AccountDefinition> {
+    const span = StandardTracer.startSpan("AccountData_get", context);
+    const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM accounts WHERE id = ? ", [accountId]);
+    if (rawData.length === 0) {
+      throw new Error("Account Not Found");
+    }
+    const account = fromRaw(rawData[0]);
+    span.end();
+    return account;
+  }
+
   public static async list(context: Span): Promise<AccountDefinition[]> {
     const span = StandardTracer.startSpan("AccountData_list", context);
     const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM accounts");

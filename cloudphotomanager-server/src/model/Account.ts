@@ -1,5 +1,7 @@
-import { AccountDefinition } from "./AccountDefinition";
+import { File } from "./File";
+import { Span } from "@opentelemetry/sdk-trace-base";
 
 export interface Account {
-  validate(account: AccountDefinition): Promise<boolean>;
+  validate(context: Span): Promise<boolean>;
+  listFiles(context: Span): Promise<File[]>;
 }

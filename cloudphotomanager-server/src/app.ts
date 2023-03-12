@@ -9,6 +9,8 @@ import { Auth } from "./users/Auth";
 import { StandardTracerApi } from "./StandardTracerApi";
 import { SqlDbutils } from "./utils-std-ts/SqlDbUtils";
 import { AccountRoutes } from "./accounts/AccountRoutes";
+import { Scheduler } from "./scheduler/scheduler";
+import { FileRoutes } from "./files/FileRoutes";
 
 const logger = new Logger("app");
 
@@ -29,6 +31,7 @@ Promise.resolve().then(async () => {
 
   await SqlDbutils.init(span, config);
   await Auth.init(span, config);
+  await Scheduler.init(span, config);
 
   span.end();
 
@@ -57,6 +60,10 @@ Promise.resolve().then(async () => {
 
   fastify.register(new AccountRoutes().getRoutes, {
     prefix: "/api/accounts",
+  });
+
+  fastify.register(new FileRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/files",
   });
 
   /* eslint-disable-next-line */

@@ -1,4 +1,3 @@
-import { Timeout } from "~~/services/Timeout";
 import { AuthService } from "~~/services/AuthService";
 import Config from "~~/services/Config";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
