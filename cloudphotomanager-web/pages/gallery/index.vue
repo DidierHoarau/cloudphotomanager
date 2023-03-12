@@ -4,10 +4,10 @@
     <div class="gallery-file-list">
       <div class="card gallery-file-layout" v-for="file in files" v-bind:key="file.name">
         <div class="gallery-file-name">
-          {{ file.id }}
+          {{ file.name }}
         </div>
         <div class="gallery-file-info">
-          {{ file.dateModified }}
+          {{ file.filepath }}
         </div>
       </div>
     </div>

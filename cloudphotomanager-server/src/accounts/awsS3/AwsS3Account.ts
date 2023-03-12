@@ -5,6 +5,8 @@ import * as AWS from "aws-sdk";
 import { StandardTracer } from "../../utils-std-ts/StandardTracer";
 import { S3 } from "aws-sdk";
 import { File } from "../../model/File";
+import { FileMediaType } from "../../model/FileMediaType";
+import * as fs from "fs-extra";
 
 export class AwsS3Account implements Account {
   //
@@ -17,6 +19,10 @@ export class AwsS3Account implements Account {
     this.accountDefinition = accountDefinition;
   }
 
+  getAccountId(): string {
+    return this.accountDefinition.id;
+  }
+
   async listFiles(context: Span): Promise<File[]> {
     const span = StandardTracer.startSpan("AwsS3Account_listFiles", context);
     const params = {
@@ -25,17 +31,39 @@ export class AwsS3Account implements Account {
     const files: File[] = [];
     const filesRaw = await (await this.getS3Client()).listObjectsV2(params).promise();
     filesRaw.Contents.forEach((fileRaw) => {
-      const file = new File();
-      file.accountId = this.accountDefinition.id;
-      file.id = fileRaw.Key;
-      file.idCloud = fileRaw.Key;
-      file.hash = fileRaw.ETag;
-      file.dateModified = new Date(fileRaw.LastModified);
-      file.info.size = fileRaw.Size;
-      files.push(file);
+      const mediaType = File.getMediaType(fileRaw.Key);
+      if (mediaType === FileMediaType.image || mediaType === FileMediaType.video) {
+        const file = new File();
+        file.accountId = this.accountDefinition.id;
+        file.idCloud = fileRaw.Key;
+        file.filepath = fileRaw.Key;
+        file.name = fileRaw.Key.split("/").pop();
+        file.hash = fileRaw.ETag;
+        file.dateModified = new Date(fileRaw.LastModified);
+        file.info.size = fileRaw.Size;
+        files.push(file);
+      }
     });
     span.end();
     return files;
+  }
+
+  public async downloadFile(context: Span, file: File, folder: string, filename: string): Promise<void> {
+    const span = StandardTracer.startSpan("AwsS3Account_downloadFile", context);
+    const params = {
+      Bucket: this.accountDefinition.infoPrivate.bucket,
+      Key: file.filepath,
+    };
+    const fileStream = (await this.getS3Client()).getObject(params).createReadStream();
+    const writeStream = fs.createWriteStream(`${folder}/${filename}`);
+
+    await new Promise((resolve, reject) => {
+      fileStream.on("error", reject);
+      writeStream.on("error", reject);
+      writeStream.on("finish", resolve);
+      fileStream.pipe(writeStream);
+    });
+    span.end();
   }
 
   public async validate(context: Span): Promise<boolean> {
@@ -49,6 +77,7 @@ export class AwsS3Account implements Account {
       valid = true;
     } catch (err) {
       span.recordException(err);
+      console.log(err);
     }
     span.end();
     return valid;

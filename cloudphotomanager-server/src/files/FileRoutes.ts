@@ -3,6 +3,7 @@ import { AccountData } from "../accounts/AccountData";
 import { AccountFactory } from "../accounts/AccountFactory";
 import { Auth } from "../users/Auth";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
+import { FileData } from "./FileData";
 
 export class FileRoutes {
   //
@@ -19,9 +20,7 @@ export class FileRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const accountDefinition = await AccountData.get(span, req.params.accountId);
-      const account = await AccountFactory.getAccountImplementation(accountDefinition);
-      const files = await account.listFiles(span);
+      const files = await FileData.listForAccount(span, req.params.accountId);
       return res.status(200).send({ files });
     });
   }

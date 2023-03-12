@@ -4,6 +4,7 @@ import { AccountFactory } from "../accounts/AccountFactory";
 import { Config } from "../Config";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { Timeout } from "../utils-std-ts/Timeout";
+import { SchedulerFiles } from "./SchedulerFiles";
 
 let config: Config;
 
@@ -23,7 +24,8 @@ export class Scheduler {
       const accountDefinitions = await AccountData.list(span);
       accountDefinitions.forEach(async (accountDefinition) => {
         const account = await AccountFactory.getAccountImplementation(accountDefinition);
-        account.listFiles(span);
+        await SchedulerFiles.SyncFileInventory(span, account);
+        await SchedulerFiles.SyncFileCache(span, account);
       });
       await Timeout.wait(config.SOURCE_FETCH_FREQUENCY);
     }
