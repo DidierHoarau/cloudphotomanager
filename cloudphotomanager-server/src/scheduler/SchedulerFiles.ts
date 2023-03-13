@@ -37,15 +37,15 @@ export class SchedulerFiles {
     const files = await FileData.listForAccount(span, account.getAccountId());
     for (const file of files) {
       const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
-      if (!fs.existsSync(`${cacheDir}/thumnail.webp`) || !fs.existsSync(`${cacheDir}/preview.webp`)) {
+      if (!fs.existsSync(`${cacheDir}/thumbnail.webp`) || !fs.existsSync(`${cacheDir}/preview.webp`)) {
         logger.info(`Cache missing for ${file.accountId}/${file.id}`);
         await fs.ensureDir(cacheDir);
         await fs.ensureDir(`${cacheDir}/tmp`);
         if (File.getMediaType(file.filepath) === FileMediaType.image) {
           const tmpFileName = `tmp.${file.filepath.split(".").pop()}`;
           await account.downloadFile(span, file, `${cacheDir}/tmp`, tmpFileName);
-          await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 400 }).toFile(`${cacheDir}/thumnail.webp`);
-          await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 1000 }).toFile(`${cacheDir}/preview.webp`);
+          await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 300 }).toFile(`${cacheDir}/thumbnail.webp`);
+          await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
         }
         await fs.remove(`${cacheDir}/tmp`);
       }

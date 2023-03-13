@@ -12,6 +12,7 @@ import { AccountRoutes } from "./accounts/AccountRoutes";
 import { Scheduler } from "./scheduler/Scheduler";
 import { FileRoutes } from "./files/FileRoutes";
 import { SchedulerFiles } from "./scheduler/SchedulerFiles";
+import { FileData } from "./files/FileData";
 
 const logger = new Logger("app");
 
@@ -32,6 +33,7 @@ Promise.resolve().then(async () => {
 
   await SqlDbutils.init(span, config);
   await Auth.init(span, config);
+  await FileData.init(span, config);
   await Scheduler.init(span, config);
   await SchedulerFiles.init(span, config);
 

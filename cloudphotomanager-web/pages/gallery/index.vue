@@ -6,6 +6,9 @@
         <div class="gallery-file-name">
           {{ file.name }}
         </div>
+        <div class="gallery-file-image">
+          <img :src="serverUrl + '/accounts/' + accountSelected + '/files/' + file.id + '/thumbnail'" />
+        </div>
         <div class="gallery-file-info">
           {{ file.filepath }}
         </div>
@@ -28,9 +31,11 @@ export default {
     return {
       accountSelected: "",
       files: [],
+      serverUrl: "",
     };
   },
   async created() {
+    this.serverUrl = (await Config.get()).SERVER_URL;
     await AccountsStore().fetch();
     if (AccountsStore().accounts.length > 0) {
       this.accountSelected = AccountsStore().accounts[0].id;
@@ -56,7 +61,7 @@ export default {
 <style scoped>
 .gallery-file-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15em, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(10em, 1fr));
   gap: 1em;
 }
 .gallery-file-layout {
@@ -65,13 +70,18 @@ export default {
   grid-template-rows: auto auto;
 }
 .gallery-file-name {
-  display: grid;
   grid-row: 1;
   word-break: break-all;
 }
-.gallery-file-info {
-  display: grid;
+.gallery-file-image {
   grid-row: 2;
+  word-break: break-all;
+}
+.gallery-file-image img {
+  width: 100%;
+}
+.gallery-file-info {
+  grid-row: 3;
   font-size: 0.7em;
   word-break: break-all;
 }

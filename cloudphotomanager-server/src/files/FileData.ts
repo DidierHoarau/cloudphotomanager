@@ -3,9 +3,23 @@ import * as _ from "lodash";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 import { File } from "../model/File";
+import { Config } from "../Config";
+
+let config: Config;
 
 export class FileData {
   //
+  public static async init(context: Span, configIn: Config) {
+    const span = StandardTracer.startSpan("FileData_init", context);
+    config = configIn;
+    span.end();
+  }
+
+  public static async getFileCacheDir(context: Span, fileId: string): Promise<string> {
+    const cacheDir = `${config.DATA_DIR}/cache/${fileId[0]}/${fileId[1]}/${fileId}`;
+    return cacheDir;
+  }
+
   public static async getByPath(context: Span, accountId: string, filepath: string): Promise<File> {
     const span = StandardTracer.startSpan("FileData_getByPath", context);
     const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE accountId = ? AND filepath = ? ", [
