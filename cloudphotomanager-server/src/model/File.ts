@@ -10,6 +10,14 @@ export class File {
   public accountId: string;
   public dateModified: Date;
   public hash: string;
+
+  // id VARCHAR(50) NOT NULL,
+  // idCloud VARCHAR(50) NOT NULL,
+  // accountId VARCHAR(50) NOT NULL,
+  // folderpath TEXT NOT NULL,
+  // filename TEXT NOT NULL,
+  // info TEXT NOT NULL
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public info: any;
 

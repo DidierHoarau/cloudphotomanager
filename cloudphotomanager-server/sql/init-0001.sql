@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(50) NOT NULL,
-    name VARCHAR(100) NOT NULL,
+    name VARCHAR(200) NOT NULL,
     passwordEncrypted VARCHAR(500) NOT NULL
 );
 
@@ -12,15 +12,21 @@ CREATE TABLE IF NOT EXISTS users_permissions (
 
 CREATE TABLE IF NOT EXISTS accounts (
     id VARCHAR(50) NOT NULL,
-    name VARCHAR(200) NOT NULL,
+    name VARCHAR(5000) NOT NULL,
+    rootpath VARCHAR(5000) NOT NULL,
     info TEXT NOT NULL,
     infoPrivate TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS files (
     id VARCHAR(50) NOT NULL,
+    idCloud VARCHAR(5000) NOT NULL,
     accountId VARCHAR(50) NOT NULL,
-    filepath TEXT NOT NULL,
-    name VARCHAR(200) NOT NULL,
-    info TEXT NOT NULL
+    filename VARCHAR(5000) NOT NULL,
+    folderpath VARCHAR(5000) NOT NULL,
+    dateSync VARCHAR(100) NOT NULL,
+    dateUpdated VARCHAR(100) NOT NULL,
+    dateMedia VARCHAR(100) NOT NULL,
+    info TEXT NOT NULL,
+    metadata TEXT NOT NULL
 );

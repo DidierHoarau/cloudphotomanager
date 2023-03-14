@@ -4,6 +4,7 @@ export class AccountDefinition {
   //
   public id: string;
   public name: string;
+  public rootpath: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public info: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -30,12 +30,17 @@ export class AccountData {
 
   public static async add(context: Span, accountDefinition: AccountDefinition): Promise<void> {
     const span = StandardTracer.startSpan("AccountData_add", context);
-    await SqlDbutils.execSQL(span, "INSERT INTO accounts (id, name, info, infoPrivate) VALUES (?, ?, ?, ?)", [
-      accountDefinition.id,
-      accountDefinition.name,
-      JSON.stringify(accountDefinition.info),
-      JSON.stringify(accountDefinition.infoPrivate),
-    ]);
+    await SqlDbutils.execSQL(
+      span,
+      "INSERT INTO accounts (id, name, rootpath, info, infoPrivate) VALUES (?, ?, ?, ?, ?)",
+      [
+        accountDefinition.id,
+        accountDefinition.name,
+        accountDefinition.rootpath,
+        JSON.stringify(accountDefinition.info),
+        JSON.stringify(accountDefinition.infoPrivate),
+      ]
+    );
     span.end();
   }
 }
@@ -45,6 +50,7 @@ function fromRaw(accountRaw: any): AccountDefinition {
   const account = new AccountDefinition();
   account.id = accountRaw.id;
   account.name = accountRaw.name;
+  account.rootpath = accountRaw.rootpath;
   account.info = JSON.parse(accountRaw.info);
   account.infoPrivate = JSON.parse(accountRaw.infoPrivate);
   return account;

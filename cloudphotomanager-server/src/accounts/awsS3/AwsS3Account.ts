@@ -19,8 +19,8 @@ export class AwsS3Account implements Account {
     this.accountDefinition = accountDefinition;
   }
 
-  getAccountId(): string {
-    return this.accountDefinition.id;
+  getAccountDefinition(): AccountDefinition {
+    return this.accountDefinition;
   }
 
   async listFiles(context: Span): Promise<File[]> {

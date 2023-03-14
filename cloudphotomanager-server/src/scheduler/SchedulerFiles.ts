@@ -24,7 +24,7 @@ export class SchedulerFiles {
     const span = StandardTracer.startSpan("SchedulerFiles_SyncFileInventory", context);
     const cloudFiles = await account.listFiles(span);
     for (const cloudFile of cloudFiles) {
-      const knownFile = await FileData.getByPath(span, account.getAccountId(), cloudFile.filepath);
+      const knownFile = await FileData.getByPath(span, account.getAccountDefinition().id, cloudFile.filepath);
       if (!knownFile) {
         await FileData.add(span, cloudFile);
       }
@@ -34,7 +34,7 @@ export class SchedulerFiles {
 
   public static async SyncFileCache(context: Span, account: Account) {
     const span = StandardTracer.startSpan("SchedulerFiles_SyncFileCache", context);
-    const files = await FileData.listForAccount(span, account.getAccountId());
+    const files = await FileData.listForAccount(span, account.getAccountDefinition().id);
     for (const file of files) {
       const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
       if (!fs.existsSync(`${cacheDir}/thumbnail.webp`) || !fs.existsSync(`${cacheDir}/preview.webp`)) {

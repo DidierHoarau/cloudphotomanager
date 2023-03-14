@@ -48,6 +48,7 @@ export class AccountRoutes {
     interface PostAccount extends RequestGenericInterface {
       Body: {
         name: string;
+        rootpath: string;
         info: string;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         infoPrivate: any;
@@ -64,14 +65,33 @@ export class AccountRoutes {
       }
       const accountDefinition = new AccountDefinition();
       accountDefinition.name = req.body.name;
+      accountDefinition.rootpath = req.body.rootpath;
       accountDefinition.info = req.body.info;
       accountDefinition.infoPrivate = req.body.infoPrivate;
       const account = await AccountFactory.getAccountImplementation(accountDefinition);
       if (!(await account.validate(span))) {
         return res.status(400).send({ error: "Account Validation Failed" });
       }
-      await AccountData.add(span, accountDefinition);
+      await AccountData.add(span, account.getAccountDefinition());
       return res.status(201).send(account);
+    });
+
+    fastify.get("/onedrive/info", async (req, res) => {
+      const userSession = await Auth.getUserSession(req);
+      if (!userSession.isAuthenticated) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      if (
+        !process.env.ONEDRIVE_CLIENT_ID ||
+        !process.env.ONEDRIVE_CLIENT_SECRET ||
+        !process.env.ONEDRIVE_CALLBACK_SIGNIN
+      ) {
+        return res.status(500).send({ error: "OneDrive Client Not Configured" });
+      }
+      return res.status(200).send({
+        ONEDRIVE_CLIENT_ID: process.env.ONEDRIVE_CLIENT_ID,
+        ONEDRIVE_CALLBACK_SIGNIN: process.env.ONEDRIVE_CALLBACK_SIGNIN,
+      });
     });
   }
 }
