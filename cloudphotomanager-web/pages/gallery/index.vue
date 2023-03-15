@@ -2,9 +2,9 @@
   <div class="page">
     <p>galery</p>
     <div class="gallery-file-list">
-      <div class="card gallery-file-layout" v-for="file in files" v-bind:key="file.name">
+      <div class="card gallery-file-layout" v-for="file in files" v-bind:key="file.id">
         <div class="gallery-file-name">
-          {{ file.name }}
+          {{ file.filename }}
         </div>
         <div class="gallery-file-image">
           <img :src="serverUrl + '/accounts/' + accountSelected + '/files/' + file.id + '/thumbnail'" />

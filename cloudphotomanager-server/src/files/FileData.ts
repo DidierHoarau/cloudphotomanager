@@ -20,12 +20,13 @@ export class FileData {
     return cacheDir;
   }
 
-  public static async getByPath(context: Span, accountId: string, filepath: string): Promise<File> {
+  public static async getByPath(context: Span, accountId: string, folderpath: string, filename: string): Promise<File> {
     const span = StandardTracer.startSpan("FileData_getByPath", context);
-    const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE accountId = ? AND filepath = ? ", [
-      accountId,
-      filepath,
-    ]);
+    const rawData = await SqlDbutils.querySQL(
+      span,
+      "SELECT * FROM files WHERE accountId = ? AND folderpath = ? AND filename = ? ",
+      [accountId, folderpath, filename]
+    );
     if (rawData.length === 0) {
       return null;
     }
@@ -47,13 +48,24 @@ export class FileData {
 
   public static async add(context: Span, file: File): Promise<void> {
     const span = StandardTracer.startSpan("FileData_add", context);
-    await SqlDbutils.execSQL(span, "INSERT INTO files (id, accountId, filepath, name, info) VALUES (?, ?, ?, ?, ?) ", [
-      file.id,
-      file.accountId,
-      file.filepath,
-      file.name,
-      JSON.stringify(file.info),
-    ]);
+    await SqlDbutils.execSQL(
+      span,
+      "INSERT INTO files (id, idCloud, accountId, filename, folderpath, hash, dateUpdated, dateSync, dateMedia, info, metadata) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ",
+      [
+        file.id,
+        file.idCloud,
+        file.accountId,
+        file.filename,
+        file.folderpath,
+        file.hash,
+        file.dateUpdated,
+        file.dateSync,
+        file.dateMedia,
+        JSON.stringify(file.info),
+        JSON.stringify(file.metadata),
+      ]
+    );
     span.end();
   }
 }
@@ -62,9 +74,14 @@ export class FileData {
 function fromRaw(fileRaw: any): File {
   const file = new File();
   file.id = fileRaw.id;
-  file.name = fileRaw.name;
+  file.idCloud = fileRaw.idCloud;
   file.accountId = fileRaw.accountId;
-  file.filepath = fileRaw.filepath;
+  file.filename = fileRaw.filename;
+  file.folderpath = fileRaw.folderpath;
+  file.dateSync = new Date(fileRaw.dateSync);
+  file.dateUpdated = new Date(fileRaw.dateUpdated);
+  file.dateMedia = new Date(fileRaw.dateMedia) || null;
   file.info = JSON.parse(fileRaw.info);
+  file.metadata = JSON.parse(fileRaw.metadata);
   return file;
 }

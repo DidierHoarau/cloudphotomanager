@@ -36,10 +36,11 @@ export class AwsS3Account implements Account {
         const file = new File();
         file.accountId = this.accountDefinition.id;
         file.idCloud = fileRaw.Key;
-        file.filepath = fileRaw.Key;
-        file.name = fileRaw.Key.split("/").pop();
+        file.filename = fileRaw.Key;
+        file.folderpath = fileRaw.Key.split("/").pop();
         file.hash = fileRaw.ETag;
-        file.dateModified = new Date(fileRaw.LastModified);
+        file.dateUpdated = new Date(fileRaw.LastModified);
+        file.dateSync = new Date();
         file.info.size = fileRaw.Size;
         files.push(file);
       }
@@ -52,7 +53,7 @@ export class AwsS3Account implements Account {
     const span = StandardTracer.startSpan("AwsS3Account_downloadFile", context);
     const params = {
       Bucket: this.accountDefinition.infoPrivate.bucket,
-      Key: file.filepath,
+      Key: `${file.folderpath}/${file.filename}`,
     };
     const fileStream = (await this.getS3Client()).getObject(params).createReadStream();
     const writeStream = fs.createWriteStream(`${folder}/${filename}`);

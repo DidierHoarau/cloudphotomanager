@@ -23,11 +23,25 @@ export class SchedulerFiles {
   public static async SyncFileInventory(context: Span, account: Account) {
     const span = StandardTracer.startSpan("SchedulerFiles_SyncFileInventory", context);
     const cloudFiles = await account.listFiles(span);
+    const syncSummary = { dateStarted: new Date(), added: 0, updated: 0, deleted: 0 };
     for (const cloudFile of cloudFiles) {
-      const knownFile = await FileData.getByPath(span, account.getAccountDefinition().id, cloudFile.filepath);
+      const knownFile = await FileData.getByPath(
+        span,
+        account.getAccountDefinition().id,
+        cloudFile.folderpath,
+        cloudFile.filename
+      );
       if (!knownFile) {
+        syncSummary.added++;
         await FileData.add(span, cloudFile);
       }
+    }
+    if (syncSummary.added > 0) {
+      logger.info(
+        `Sync done for ${account.getAccountDefinition().id} in ${
+          new Date().getTime() / 1000 - syncSummary.dateStarted.getTime() / 1000
+        } s - ${syncSummary.added} added`
+      );
     }
     span.end();
   }
@@ -38,14 +52,20 @@ export class SchedulerFiles {
     for (const file of files) {
       const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
       if (!fs.existsSync(`${cacheDir}/thumbnail.webp`) || !fs.existsSync(`${cacheDir}/preview.webp`)) {
-        logger.info(`Cache missing for ${file.accountId}/${file.id}`);
+        // logger.info(`Cache missing for ${file.accountId}/${file.id}`);
         await fs.ensureDir(cacheDir);
         await fs.ensureDir(`${cacheDir}/tmp`);
-        if (File.getMediaType(file.filepath) === FileMediaType.image) {
-          const tmpFileName = `tmp.${file.filepath.split(".").pop()}`;
-          await account.downloadFile(span, file, `${cacheDir}/tmp`, tmpFileName);
-          await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 300 }).toFile(`${cacheDir}/thumbnail.webp`);
-          await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
+        if (File.getMediaType(file.filename) === FileMediaType.image) {
+          const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
+          await account
+            .downloadFile(span, file, `${cacheDir}/tmp`, tmpFileName)
+            .then(async () => {
+              await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 300 }).toFile(`${cacheDir}/thumbnail.webp`);
+              await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
+            })
+            .catch((err) => {
+              // logger.error(err);
+            });
         }
         await fs.remove(`${cacheDir}/tmp`);
       }

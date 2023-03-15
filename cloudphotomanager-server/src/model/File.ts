@@ -5,25 +5,23 @@ export class File {
   //
   public id: string;
   public idCloud: string;
-  public name: string;
-  public filepath: string;
+  public filename: string;
+  public folderpath: string;
   public accountId: string;
-  public dateModified: Date;
+  public dateSync: Date;
+  public dateUpdated: Date;
+  public dateMedia: Date;
   public hash: string;
-
-  // id VARCHAR(50) NOT NULL,
-  // idCloud VARCHAR(50) NOT NULL,
-  // accountId VARCHAR(50) NOT NULL,
-  // folderpath TEXT NOT NULL,
-  // filename TEXT NOT NULL,
-  // info TEXT NOT NULL
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public info: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  public metadata: any;
 
   constructor() {
     this.id = uuidv4();
     this.info = {};
+    this.metadata = {};
   }
 
   public static getMediaType(name: string): FileMediaType {

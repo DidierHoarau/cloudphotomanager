@@ -5,6 +5,7 @@ import { StandardTracer } from "../../utils-std-ts/StandardTracer";
 import { File } from "../../model/File";
 import axios from "axios";
 import { Logger } from "../../utils-std-ts/Logger";
+import { encode, decode } from "html-entities";
 
 const logger = new Logger("OneDriveAccount");
 
@@ -45,6 +46,7 @@ export class OneDriveAccount implements Account {
   public async downloadFile(context: Span, file: File, folder: string, filename: string): Promise<void> {
     const span = StandardTracer.startSpan("OneDriveAccount_downloadFile", context);
     span.end();
+    throw new Error("OneDriveAccount_downloadFile Not Implemented Yet");
   }
 
   public async validate(context: Span): Promise<boolean> {
@@ -101,9 +103,21 @@ export class OneDriveAccount implements Account {
     ).data.value;
 
     for (const child of children) {
-      console.log(child);
       if (child.folder) {
         await this.listAllFiles(context, child.id, files);
+      } else {
+        const file = new File();
+        file.accountId = this.accountDefinition.id;
+        file.idCloud = child.id;
+        file.filename = child.name;
+        file.folderpath = child.parentReference.path
+          .replace("/drive/root:", "")
+          .replace(this.accountDefinition.rootpath, "")
+          .replaceAll("%20", " ");
+        file.dateSync = new Date();
+        file.dateUpdated = new Date(child.lastModifiedDateTime);
+        file.hash = child.file.hashes.sha256Hash;
+        files.push(file);
       }
     }
   }

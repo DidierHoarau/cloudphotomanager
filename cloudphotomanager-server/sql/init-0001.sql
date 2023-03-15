@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS files (
     folderpath VARCHAR(5000) NOT NULL,
     dateSync VARCHAR(100) NOT NULL,
     dateUpdated VARCHAR(100) NOT NULL,
-    dateMedia VARCHAR(100) NOT NULL,
+    dateMedia VARCHAR(100),
+    hash VARCHAR(500) NOT NULL,
     info TEXT NOT NULL,
     metadata TEXT NOT NULL
 );
