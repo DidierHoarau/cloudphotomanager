@@ -1,7 +1,7 @@
 import { Account } from "../model/Account";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { AwsS3Account } from "./awsS3/AwsS3Account";
-import { OneDriveAccount } from "./awsS3/OneDriveAccount";
+import { OneDriveAccount } from "./oneDrive/OneDriveAccount";
 
 export class AccountFactory {
   public static async getAccountImplementation(accountDefinition: AccountDefinition): Promise<Account> {

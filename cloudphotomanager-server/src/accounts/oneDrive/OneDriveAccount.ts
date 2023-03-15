@@ -3,8 +3,6 @@ import { AccountDefinition } from "../../model/AccountDefinition";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { StandardTracer } from "../../utils-std-ts/StandardTracer";
 import { File } from "../../model/File";
-import { FileMediaType } from "../../model/FileMediaType";
-import * as fs from "fs-extra";
 import axios from "axios";
 import { Logger } from "../../utils-std-ts/Logger";
 
@@ -13,6 +11,8 @@ const logger = new Logger("OneDriveAccount");
 export class OneDriveAccount implements Account {
   //
   public static TYPE = "oneDrive";
+  private token: string;
+  private tokenExpiration = new Date();
 
   private accountDefinition: AccountDefinition;
 
@@ -27,6 +27,17 @@ export class OneDriveAccount implements Account {
   async listFiles(context: Span): Promise<File[]> {
     const span = StandardTracer.startSpan("OneDriveAccount_listFiles", context);
     const files: File[] = [];
+
+    const rootFolderId = (
+      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/root:${this.accountDefinition.rootpath}`, {
+        headers: {
+          Authorization: `Bearer ${await this.getToken(span)}`,
+        },
+      })
+    ).data.id;
+
+    await this.listAllFiles(span, rootFolderId, files);
+
     span.end();
     return files;
   }
@@ -60,5 +71,40 @@ export class OneDriveAccount implements Account {
       });
     span.end();
     return valid;
+  }
+
+  private async getToken(context: Span): Promise<string> {
+    if (new Date() > this.tokenExpiration) {
+      const span = StandardTracer.startSpan("OneDriveAccount_getToken", context);
+      const params = new URLSearchParams();
+      params.append("client_id", process.env.ONEDRIVE_CLIENT_ID);
+      params.append("redirect_uri", process.env.ONEDRIVE_CALLBACK_SIGNIN);
+      params.append("client_secret", process.env.ONEDRIVE_CLIENT_SECRET);
+      params.append("refresh_token", this.accountDefinition.infoPrivate.refreshToken);
+      params.append("grant_type", "refresh_token");
+      await axios.post("https://login.microsoftonline.com/common/oauth2/v2.0/token", params).then((res) => {
+        this.token = res.data.access_token;
+        this.tokenExpiration = new Date(new Date().getTime() + parseInt(res.data.expires_in) * 1000 * 0.8);
+      });
+      span.end();
+    }
+    return this.token;
+  }
+
+  private async listAllFiles(context: Span, folderId: string, files: File[]): Promise<void> {
+    const children = (
+      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${folderId}/children`, {
+        headers: {
+          Authorization: `Bearer ${await this.getToken(context)}`,
+        },
+      })
+    ).data.value;
+
+    for (const child of children) {
+      console.log(child);
+      if (child.folder) {
+        await this.listAllFiles(context, child.id, files);
+      }
+    }
   }
 }
