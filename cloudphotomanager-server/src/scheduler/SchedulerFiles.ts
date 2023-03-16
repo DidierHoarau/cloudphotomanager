@@ -11,6 +11,7 @@ import * as sharp from "sharp";
 
 let config: Config;
 const logger = new Logger("SchedulerFiles");
+const LIMIT_CACHE_SYNC = 1000;
 
 export class SchedulerFiles {
   //
@@ -49,24 +50,30 @@ export class SchedulerFiles {
   public static async SyncFileCache(context: Span, account: Account) {
     const span = StandardTracer.startSpan("SchedulerFiles_SyncFileCache", context);
     const files = await FileData.listForAccount(span, account.getAccountDefinition().id);
+    let syncCount = 0;
     for (const file of files) {
+      if (syncCount >= LIMIT_CACHE_SYNC) {
+        break;
+      }
       const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
-      if (!fs.existsSync(`${cacheDir}/thumbnail.webp`) || !fs.existsSync(`${cacheDir}/preview.webp`)) {
-        // logger.info(`Cache missing for ${file.accountId}/${file.id}`);
+      if (
+        File.getMediaType(file.filename) === FileMediaType.image &&
+        (!fs.existsSync(`${cacheDir}/thumbnail.webp`) || !fs.existsSync(`${cacheDir}/preview.webp`))
+      ) {
+        logger.info(`Cache missing for ${file.accountId}/${file.id}`);
+        syncCount++;
         await fs.ensureDir(cacheDir);
         await fs.ensureDir(`${cacheDir}/tmp`);
-        if (File.getMediaType(file.filename) === FileMediaType.image) {
-          const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
-          await account
-            .downloadFile(span, file, `${cacheDir}/tmp`, tmpFileName)
-            .then(async () => {
-              await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 300 }).toFile(`${cacheDir}/thumbnail.webp`);
-              await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
-            })
-            .catch((err) => {
-              // logger.error(err);
-            });
-        }
+        const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
+        await account
+          .downloadFile(span, file, `${cacheDir}/tmp`, tmpFileName)
+          .then(async () => {
+            await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 300 }).toFile(`${cacheDir}/thumbnail.webp`);
+            await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
+          })
+          .catch((err) => {
+            logger.error(err);
+          });
         await fs.remove(`${cacheDir}/tmp`);
       }
     }

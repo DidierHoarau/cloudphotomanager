@@ -46,6 +46,20 @@ export class FileData {
     return files;
   }
 
+  public static async listAccountFolder(context: Span, accountId: string, folderpath: string): Promise<File[]> {
+    const span = StandardTracer.startSpan("FileData_listForAccount", context);
+    const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE accountId = ? AND folderpath = ?", [
+      accountId,
+      folderpath,
+    ]);
+    const files = [];
+    rawData.forEach((fileRaw) => {
+      files.push(fromRaw(fileRaw));
+    });
+    span.end();
+    return files;
+  }
+
   public static async add(context: Span, file: File): Promise<void> {
     const span = StandardTracer.startSpan("FileData_add", context);
     await SqlDbutils.execSQL(

@@ -13,6 +13,8 @@ import { Scheduler } from "./scheduler/Scheduler";
 import { FileRoutes } from "./files/FileRoutes";
 import { SchedulerFiles } from "./scheduler/SchedulerFiles";
 import { FileData } from "./files/FileData";
+import { FolderData } from "./files/FolderData";
+import { FolderRoutes } from "./files/FolderRoutes";
 
 const logger = new Logger("app");
 
@@ -34,6 +36,7 @@ Promise.resolve().then(async () => {
   await SqlDbutils.init(span, config);
   await Auth.init(span, config);
   await FileData.init(span, config);
+  await FolderData.init(span, config);
   await Scheduler.init(span, config);
   await SchedulerFiles.init(span, config);
 
@@ -68,6 +71,10 @@ Promise.resolve().then(async () => {
 
   fastify.register(new FileRoutes().getRoutes, {
     prefix: "/api/accounts/:accountId/files",
+  });
+
+  fastify.register(new FolderRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/folders",
   });
 
   /* eslint-disable-next-line */

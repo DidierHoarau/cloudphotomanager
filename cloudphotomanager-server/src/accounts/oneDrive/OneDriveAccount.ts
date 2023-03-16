@@ -1,11 +1,13 @@
+// https://learn.microsoft.com/en-us/onedrive/developer/?view=odsp-graph-online
+
 import { Account } from "../../model/Account";
 import { AccountDefinition } from "../../model/AccountDefinition";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { StandardTracer } from "../../utils-std-ts/StandardTracer";
 import { File } from "../../model/File";
 import axios from "axios";
+import * as fs from "fs-extra";
 import { Logger } from "../../utils-std-ts/Logger";
-import { encode, decode } from "html-entities";
 
 const logger = new Logger("OneDriveAccount");
 
@@ -44,9 +46,33 @@ export class OneDriveAccount implements Account {
   }
 
   public async downloadFile(context: Span, file: File, folder: string, filename: string): Promise<void> {
-    const span = StandardTracer.startSpan("OneDriveAccount_downloadFile", context);
-    span.end();
-    throw new Error("OneDriveAccount_downloadFile Not Implemented Yet");
+    return new Promise(async (resolve, reject) => {
+      const span = StandardTracer.startSpan("OneDriveAccount_downloadFile", context);
+      axios({
+        url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/content`,
+        method: "GET",
+        responseType: "stream",
+        headers: {
+          Authorization: `Bearer ${await this.getToken(context)}`,
+        },
+      })
+        .then((response) => {
+          const writer = fs.createWriteStream(`${folder}/${filename}`);
+          response.data.pipe(writer);
+          writer.on("finish", () => {
+            resolve();
+          });
+          writer.on("error", (error) => {
+            reject(error);
+          });
+        })
+        .catch((error) => {
+          reject(error);
+        })
+        .finally(() => {
+          span.end();
+        });
+    });
   }
 
   public async validate(context: Span): Promise<boolean> {
@@ -103,9 +129,9 @@ export class OneDriveAccount implements Account {
     ).data.value;
 
     for (const child of children) {
-      if (child.folder) {
+      if (child.folder && files.length < 100) {
         await this.listAllFiles(context, child.id, files);
-      } else {
+      } else if (!child.folder) {
         const file = new File();
         file.accountId = this.accountDefinition.id;
         file.idCloud = child.id;

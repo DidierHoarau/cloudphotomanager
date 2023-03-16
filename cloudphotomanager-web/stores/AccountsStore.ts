@@ -6,7 +6,8 @@ import * as _ from "lodash";
 
 export const AccountsStore = defineStore("AccountsStore", {
   state: () => ({
-    accounts: "",
+    accounts: [],
+    accountSelected: "",
   }),
 
   getters: {},
@@ -17,6 +18,9 @@ export const AccountsStore = defineStore("AccountsStore", {
         .get(`${(await Config.get()).SERVER_URL}/accounts/`, await AuthService.getAuthHeader())
         .then((res) => {
           this.accounts = _.sortBy(res.data.accounts, ["name"]);
+          if (this.accounts.length > 0) {
+            this.accountSelected = (this.accounts[0] as any).id;
+          }
         })
         .catch(handleError);
     },

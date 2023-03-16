@@ -8,18 +8,21 @@ export class FileRoutes {
   //
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     //
-    interface GetFilesAccountIdRequest extends RequestGenericInterface {
+    interface PostFilesAccountIdRequest extends RequestGenericInterface {
       Params: {
         accountId: string;
       };
+      Body: {
+        folderpath: string;
+      };
     }
-    fastify.get<GetFilesAccountIdRequest>("/", async (req, res) => {
+    fastify.post<PostFilesAccountIdRequest>("/search", async (req, res) => {
       const span = StandardTracer.getSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const files = await FileData.listForAccount(span, req.params.accountId);
+      const files = await FileData.listAccountFolder(span, req.params.accountId, req.body.folderpath);
       return res.status(200).send({ files });
     });
 
