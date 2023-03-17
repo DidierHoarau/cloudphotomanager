@@ -22,7 +22,7 @@
           {{ file.filename }}
         </div>
         <div class="gallery-file-image">
-          <img :src="serverUrl + '/accounts/' + accountSelected + '/files/' + file.id + '/thumbnail'" />
+          <img :src="serverUrl + '/accounts/' + file.accountId + '/files/' + file.id + '/thumbnail'" />
         </div>
         <div class="gallery-file-info">
           {{ file.filepath }}
@@ -43,8 +43,8 @@ export default {
   data() {
     return {
       files: [],
-      serverUrl: "",
       menuOpened: true,
+      serverUrl: "",
     };
   },
   async created() {

@@ -39,15 +39,25 @@ export const FoldersStore = defineStore("FoldersStore", {
       // console.log(folder, "bar");
     },
     async fetch(accountId: string) {
-      await axios
-        .get(
-          `${(await Config.get()).SERVER_URL}/accounts/${AccountsStore().accountSelected}/folders`,
-          await AuthService.getAuthHeader()
-        )
-        .then((res) => {
-          this.folders = _.sortBy(res.data.folders, ["folderpath"]);
-        })
-        .catch(handleError);
+      const folders: any[] = [];
+      for (const accountIn of AccountsStore().accounts) {
+        const account: any = accountIn;
+        folders.push({ name: account.name, type: "account", folderpath: "/", depth: 0 });
+        await axios
+          .get(`${(await Config.get()).SERVER_URL}/accounts/${account.id}/folders`, await AuthService.getAuthHeader())
+          .then((res) => {
+            for (const folder of _.sortBy(res.data.folders, ["folderpath"])) {
+              folders.push({
+                name: folder.folderpath.split("/").pop(),
+                type: "folder",
+                folderpath: folder.folderpath,
+                depth: folder.folderpath.split("/").length - 1,
+              });
+            }
+          })
+          .catch(handleError);
+      }
+      (this.folders as any[]) = folders;
     },
   },
 });

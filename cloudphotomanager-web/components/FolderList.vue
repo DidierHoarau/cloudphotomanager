@@ -10,9 +10,8 @@
         </span>
         <div v-on:click="selectFolder(folder, index)" class="folder-name-name">
           <span v-if="!folder.isLabel"><i :class="'bi bi-' + folder.icon"></i>&nbsp;</span>
-          {{ folder.folderpath }}
+          {{ folder.name }} - {{ folder.depth }}
         </div>
-        <div v-on:click="selectFolder(folder, index)" class="folder-name-count">{{ folder.unreadCount }}</div>
       </div>
     </div>
   </div>
@@ -29,8 +28,7 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 export default {
   async created() {
     FoldersStore().fetch();
-    if (!SourceItemsStore().selectedSource) {
-      this.loadAllItems();
+    if (!FoldersStore().selectedIndex) {
       FoldersStore().selectedIndex = 0;
     }
     FoldersStore().fetch();
@@ -43,17 +41,9 @@ export default {
   },
   methods: {
     selectFolder(folder, index) {
-      FoldersStore().select(folder);
+      FoldersStore().select(folder, index);
+      FoldersStore().selectedIndex = index;
       EventBus.emit(EventTypes.FOLDER_SELECTED, folder);
-
-      // SourcesStore().selectedIndex = index;
-      // if (source.isRoot) {
-      //   this.loadAllItems();
-      // } else if (source.isLabel) {
-      //   this.loadLabelItems(source);
-      // } else {
-      //   this.loadSourceItems(source);
-      // }
     },
     async loadSourceItems(source) {
       const sourceItemsStore = SourceItemsStore();
