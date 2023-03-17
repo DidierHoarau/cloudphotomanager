@@ -36,13 +36,21 @@ export class SyncInventory {
       if (!knownFile) {
         syncSummary.added++;
         await FileData.add(span, cloudFile);
+      } else if (
+        knownFile.dateMedia != cloudFile.dateMedia ||
+        knownFile.dateUpdated != cloudFile.dateUpdated ||
+        knownFile.hash != cloudFile.hash
+      ) {
+        cloudFile.id = knownFile.id;
+        await FileData.update(span, cloudFile);
+        syncSummary.updated++;
       }
     }
-    if (syncSummary.added > 0) {
+    if (syncSummary.added > 0 || syncSummary.updated > 0 || syncSummary.deleted > 0) {
       logger.info(
         `Sync done for ${account.getAccountDefinition().id} in ${
           new Date().getTime() / 1000 - syncSummary.dateStarted.getTime() / 1000
-        } s - ${syncSummary.added} added`
+        } s - ${syncSummary.added} added ; ${syncSummary.updated} updated ; ${syncSummary.deleted} deleted ; `
       );
     }
     SyncQueue.popId(SyncQueue.TYPE_SYNC_INVENTORY, account.getAccountDefinition().id);

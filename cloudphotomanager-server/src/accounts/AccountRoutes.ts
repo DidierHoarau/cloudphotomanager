@@ -1,5 +1,6 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountDefinition } from "../model/AccountDefinition";
+import { Scheduler } from "../sync/Scheduler";
 import { Auth } from "../users/Auth";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { AccountData } from "./AccountData";
@@ -73,6 +74,7 @@ export class AccountRoutes {
         return res.status(400).send({ error: "Account Validation Failed" });
       }
       await AccountData.add(span, account.getAccountDefinition());
+      Scheduler.startAccountSync(span, account.getAccountDefinition());
       return res.status(201).send(account);
     });
 

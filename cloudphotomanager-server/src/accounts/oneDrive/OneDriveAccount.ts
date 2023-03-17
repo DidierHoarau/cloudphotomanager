@@ -32,7 +32,7 @@ export class OneDriveAccount implements Account {
     const files: File[] = [];
 
     const rootFolderId = (
-      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/root:${this.accountDefinition.rootpath}`, {
+      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/root:${encodeURI(this.accountDefinition.rootpath)}`, {
         headers: {
           Authorization: `Bearer ${await this.getToken(span)}`,
         },
@@ -155,14 +155,27 @@ export class OneDriveAccount implements Account {
         file.accountId = this.accountDefinition.id;
         file.idCloud = child.id;
         file.filename = child.name;
-        file.folderpath = child.parentReference.path
+        file.folderpath = decodeURI(child.parentReference.path)
           .replace("/drive/root:", "")
-          .replace(this.accountDefinition.rootpath, "")
-          .replaceAll("%20", " ");
+          .replace(encodeURI(this.accountDefinition.rootpath), "");
         file.dateSync = new Date();
         file.dateUpdated = new Date(child.lastModifiedDateTime);
-        file.dateMedia = new Date(child.photo.takenDateTime);
-        file.metadata = { photo: child.photo, image: child.image };
+        if (child.photo && child.photo.takenDateTime) {
+          file.dateMedia = new Date(child.photo.takenDateTime);
+        } else {
+          file.dateMedia = new Date(child.fileSystemInfo.createdDateTime);
+        }
+        file.info = { test: "test" };
+        file.metadata = {};
+        if (child.photo) {
+          file.metadata.photo = child.photo;
+        }
+        if (child.video) {
+          file.metadata.photo = child.photo;
+        }
+        if (child.image) {
+          file.metadata.image = child.image;
+        }
         file.hash = child.file.hashes.sha256Hash;
         files.push(file);
       }

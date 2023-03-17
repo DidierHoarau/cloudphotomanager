@@ -29,12 +29,18 @@ export class Scheduler {
       const span = StandardTracer.startSpan("Scheduler_startSchedule");
       const accountDefinitions = await AccountData.list(span);
       accountDefinitions.forEach(async (accountDefinition) => {
-        const account = await AccountFactory.getAccountImplementation(accountDefinition);
-        SyncInventory.startSync(span, account);
-        SyncFileCache.startSync(span, account);
-        SyncFileMetadata.startSync(span, account);
+        Scheduler.startAccountSync(span, accountDefinition);
       });
       await Timeout.wait(config.SOURCE_FETCH_FREQUENCY);
     }
+  }
+
+  public static async startAccountSync(context: Span, accountDefinition: AccountDefinition) {
+    const span = StandardTracer.startSpan("Scheduler_startAccountSync", context);
+    const account = await AccountFactory.getAccountImplementation(accountDefinition);
+    await SyncInventory.startSync(span, account);
+    await SyncFileMetadata.startSync(span, account);
+    SyncFileCache.startSync(span, account);
+    span.end();
   }
 }

@@ -73,9 +73,9 @@ export class FileData {
         file.filename,
         file.folderpath,
         file.hash,
-        file.dateUpdated,
-        file.dateSync,
-        file.dateMedia,
+        file.dateUpdated.toISOString(),
+        file.dateSync.toISOString(),
+        file.dateMedia.toISOString(),
         JSON.stringify(file.info),
         JSON.stringify(file.metadata),
       ]
@@ -88,7 +88,8 @@ export class FileData {
     await SqlDbutils.execSQL(
       span,
       "UPDATE files " +
-        " SET idCloud = ?, accountId = ?, filename = ?, folderpath = ?, hash = ?, dateUpdated = ?, dateSync = ?, dateMedia = ?, info = ?, metadata = ? " +
+        " SET idCloud = ?, accountId = ?, filename = ?, folderpath = ?, hash = ?, " +
+        "     dateUpdated = ?, dateSync = ?, dateMedia = ?, info = ?, metadata = ? " +
         " WHERE id = ? ",
       [
         file.idCloud,
@@ -96,9 +97,9 @@ export class FileData {
         file.filename,
         file.folderpath,
         file.hash,
-        file.dateUpdated,
-        file.dateSync,
-        file.dateMedia,
+        file.dateUpdated.toISOString(),
+        file.dateSync.toISOString(),
+        file.dateMedia.toISOString(),
         JSON.stringify(file.info),
         JSON.stringify(file.metadata),
         file.id,
@@ -116,9 +117,10 @@ function fromRaw(fileRaw: any): File {
   file.accountId = fileRaw.accountId;
   file.filename = fileRaw.filename;
   file.folderpath = fileRaw.folderpath;
+  file.hash = fileRaw.hash;
   file.dateSync = new Date(fileRaw.dateSync);
   file.dateUpdated = new Date(fileRaw.dateUpdated);
-  file.dateMedia = new Date(fileRaw.dateMedia) || null;
+  file.dateMedia = new Date(fileRaw.dateMedia);
   file.info = JSON.parse(fileRaw.info);
   file.metadata = JSON.parse(fileRaw.metadata);
   return file;
