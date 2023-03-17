@@ -9,12 +9,13 @@ import { Auth } from "./users/Auth";
 import { StandardTracerApi } from "./StandardTracerApi";
 import { SqlDbutils } from "./utils-std-ts/SqlDbUtils";
 import { AccountRoutes } from "./accounts/AccountRoutes";
-import { Scheduler } from "./scheduler/Scheduler";
+import { Scheduler } from "./sync/Scheduler";
 import { FileRoutes } from "./files/FileRoutes";
-import { SchedulerFiles } from "./scheduler/SchedulerFiles";
+import { SyncFileMetadata } from "./sync/SyncFileMetadata";
 import { FileData } from "./files/FileData";
 import { FolderData } from "./files/FolderData";
 import { FolderRoutes } from "./files/FolderRoutes";
+import { SyncRoutes } from "./sync/SyncRoutes";
 
 const logger = new Logger("app");
 
@@ -38,7 +39,6 @@ Promise.resolve().then(async () => {
   await FileData.init(span, config);
   await FolderData.init(span, config);
   await Scheduler.init(span, config);
-  await SchedulerFiles.init(span, config);
 
   span.end();
 
@@ -75,6 +75,10 @@ Promise.resolve().then(async () => {
 
   fastify.register(new FolderRoutes().getRoutes, {
     prefix: "/api/accounts/:accountId/folders",
+  });
+
+  fastify.register(new SyncRoutes().getRoutes, {
+    prefix: "/api/sync",
   });
 
   /* eslint-disable-next-line */

@@ -1,9 +1,10 @@
 <template>
   <div class="gallery-layout page">
-    <div class="gallery-actions actions">
-      <i class="bi bi-arrow-clockwise" v-on:click="refresh()"></i>
-      <i class="bi bi-caret-up-square gallery-actions-menu-toggle" v-if="menuOpened" v-on:click="openListMenu()"></i>
-      <i class="bi bi-caret-down-square gallery-actions-menu-toggle" v-else v-on:click="openListMenu()"></i>
+    <div class="gallery-layout-actions actions">
+      <!-- <i class="bi bi-arrow-clockwise" v-on:click="refresh()"></i>
+      <i class="bi bi-caret-up-square gallery-layout-actions-menu-toggle" v-if="menuOpened" v-on:click="openListMenu()"></i>
+      <i class="bi bi-caret-down-square gallery-layout-actions-menu-toggle" v-else v-on:click="openListMenu()"></i> -->
+      <kbd v-if="syncStore.countTotal > 0">Sync: {{ syncStore.countTotal }}</kbd>
     </div>
     <div class="gallery-folders" :class="{ 'gallery-folders-closed': !menuOpened }">
       <FolderList />
@@ -32,6 +33,10 @@
   </div>
 </template>
 
+<script setup>
+const syncStore = SyncStore();
+</script>
+
 <script>
 import axios from "axios";
 import * as _ from "lodash";
@@ -50,6 +55,7 @@ export default {
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
     await AccountsStore().fetch();
+    SyncStore().fetch();
     if (AccountsStore().accounts.length > 0) {
       FoldersStore().fetch();
     }
@@ -118,9 +124,14 @@ export default {
 @media (min-width: 701px) {
   .gallery-layout {
     display: grid;
-    grid-template-rows: 4em 2.5em 1fr;
+    grid-template-rows: 2.5em 2.5em 1fr;
     grid-template-columns: auto 1fr 1fr;
     column-gap: 1em;
+  }
+  .gallery-layout-actions {
+    grid-column-start: 1;
+    grid-column-end: span 3;
+    grid-row-start: 1;
   }
   .gallery-files-actions {
     grid-row: 2;
@@ -147,7 +158,7 @@ export default {
     grid-row-end: span 2;
     grid-column: 1;
   }
-  .gallery-actions-menu-toggle {
+  .gallery-layout-actions-menu-toggle {
     visibility: hidden;
     font-size: 0px;
     padding: 0px;
@@ -159,8 +170,12 @@ export default {
   .gallery-layout {
     display: grid;
     grid-template-rows: 2.5em 1fr 2.5em 2fr;
-    grid-template-columns: auto auto;
+    grid-template-columns: 1fr;
     column-gap: 1em;
+  }
+  .gallery-layout-actions {
+    grid-column: 1;
+    grid-row: 1;
   }
   .gallery-files-actions {
     grid-row: 3;

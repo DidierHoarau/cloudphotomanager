@@ -48,7 +48,7 @@ main {
   margin-right: 0.5em;
 }
 
-.page-actions {
+.actions {
   text-align: right;
 }
 

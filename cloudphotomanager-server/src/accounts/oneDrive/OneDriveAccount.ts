@@ -47,7 +47,6 @@ export class OneDriveAccount implements Account {
 
   public async updateFileMetadata(context: Span, file: File): Promise<void> {
     const span = StandardTracer.startSpan("OneDriveAccount_updateFileMetadata", context);
-    console.log("foo");
     const info = (
       await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`, {
         headers: {
