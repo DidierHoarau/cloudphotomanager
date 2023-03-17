@@ -25,7 +25,7 @@
           <img :src="serverUrl + '/accounts/' + file.accountId + '/files/' + file.id + '/thumbnail'" />
         </div>
         <div class="gallery-file-info">
-          {{ file.filepath }}
+          {{ relativeTime(file.dateMedia) }}
         </div>
       </div>
     </div>
@@ -76,6 +76,12 @@ export default {
     openListMenu() {
       this.menuOpened = !this.menuOpened;
     },
+    relativeTime(date) {
+      if (!date || new Date(date).getTime() === 0) {
+        return "";
+      }
+      return new Date(date).toLocaleString();
+    },
   },
 };
 </script>
@@ -93,6 +99,7 @@ export default {
 }
 .gallery-file-name {
   grid-row: 1;
+  font-size: 0.7em;
   word-break: break-all;
 }
 .gallery-file-image {

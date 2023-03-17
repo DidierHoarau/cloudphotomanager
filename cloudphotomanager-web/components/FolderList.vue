@@ -2,15 +2,15 @@
   <div>
     <div v-for="(folder, index) in foldersStore.folders" v-bind:key="folder.name">
       <!-- v-if="folder.isVisible" -->
-      <div class="source-name-layout" :class="{ 'source-active': foldersStore.selectedIndex == index }">
-        <span v-on:click="toggleLabelCollapsed(folder, index)" class="folder-name-indent">
+      <div class="folder-list-layout" :class="{ 'source-active': foldersStore.selectedIndex == index }">
+        <span v-on:click="toggleLabelCollapsed(folder, index)" class="folder-list-indent">
           <span v-html="getIndentation(folder)"></span>
           <i v-if="folder.isLabel && folder.isCollapsed" class="bi bi-caret-right-fill"></i>
           <i v-else-if="folder.isLabel" class="bi bi-caret-down-fill"></i>
         </span>
-        <div v-on:click="selectFolder(folder, index)" class="folder-name-name">
+        <div v-on:click="selectFolder(folder, index)" class="folder-list-name">
           <span v-if="!folder.isLabel"><i :class="'bi bi-' + folder.icon"></i>&nbsp;</span>
-          {{ folder.name }} - {{ folder.depth }}
+          {{ folder.name }}
         </div>
       </div>
     </div>
@@ -118,22 +118,20 @@ export default {
   }
 }
 
-.source-name-layout {
+.folder-list-layout {
   display: grid;
   grid-template-columns: auto 1fr auto;
   padding: 0.3em 0.5em;
+  max-width: 100%;
 }
 .source-name-indent {
   grid-column: 1;
   padding-right: 0.5em;
 }
-.source-name-name {
+.folder-list-name {
   grid-column: 2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.source-name-count {
-  grid-column: 3;
 }
 </style>
