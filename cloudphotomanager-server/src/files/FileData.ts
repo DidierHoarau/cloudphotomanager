@@ -82,6 +82,30 @@ export class FileData {
     );
     span.end();
   }
+
+  public static async update(context: Span, file: File): Promise<void> {
+    const span = StandardTracer.startSpan("FileData_add", context);
+    await SqlDbutils.execSQL(
+      span,
+      "UPDATE files " +
+        " SET idCloud = ?, accountId = ?, filename = ?, folderpath = ?, hash = ?, dateUpdated = ?, dateSync = ?, dateMedia = ?, info = ?, metadata = ? " +
+        " WHERE id = ? ",
+      [
+        file.idCloud,
+        file.accountId,
+        file.filename,
+        file.folderpath,
+        file.hash,
+        file.dateUpdated,
+        file.dateSync,
+        file.dateMedia,
+        JSON.stringify(file.info),
+        JSON.stringify(file.metadata),
+        file.id,
+      ]
+    );
+    span.end();
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

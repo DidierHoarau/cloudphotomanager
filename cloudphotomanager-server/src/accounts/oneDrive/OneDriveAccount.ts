@@ -45,6 +45,26 @@ export class OneDriveAccount implements Account {
     return files;
   }
 
+  public async updateFileMetadata(context: Span, file: File): Promise<void> {
+    const span = StandardTracer.startSpan("OneDriveAccount_updateFileMetadata", context);
+    console.log("foo");
+    const info = (
+      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`, {
+        headers: {
+          Authorization: `Bearer ${await this.getToken(context)}`,
+        },
+      })
+    ).data;
+    if (info.photo) {
+      file.dateSync = new Date();
+      file.dateUpdated = new Date(info.lastModifiedDateTime);
+      file.dateMedia = new Date(info.photo.takenDateTime);
+      file.metadata = { photo: info.photo, image: info.image };
+      file.hash = info.file.hashes.sha256Hash;
+    }
+    span.end();
+  }
+
   public async downloadFile(context: Span, file: File, folder: string, filename: string): Promise<void> {
     return new Promise(async (resolve, reject) => {
       const span = StandardTracer.startSpan("OneDriveAccount_downloadFile", context);
@@ -142,6 +162,8 @@ export class OneDriveAccount implements Account {
           .replaceAll("%20", " ");
         file.dateSync = new Date();
         file.dateUpdated = new Date(child.lastModifiedDateTime);
+        file.dateMedia = new Date(child.photo.takenDateTime);
+        file.metadata = { photo: child.photo, image: child.image };
         file.hash = child.file.hashes.sha256Hash;
         files.push(file);
       }

@@ -8,10 +8,11 @@ import { Logger } from "../utils-std-ts/Logger";
 import { FileMediaType } from "../model/FileMediaType";
 import { File } from "../model/File";
 import * as sharp from "sharp";
+import * as _ from "lodash";
 
 let config: Config;
 const logger = new Logger("SchedulerFiles");
-const LIMIT_CACHE_SYNC = 1000;
+const syncFileCacheQueue = [];
 
 export class SchedulerFiles {
   //
@@ -50,31 +51,59 @@ export class SchedulerFiles {
   public static async SyncFileCache(context: Span, account: Account) {
     const span = StandardTracer.startSpan("SchedulerFiles_SyncFileCache", context);
     const files = await FileData.listForAccount(span, account.getAccountDefinition().id);
-    let syncCount = 0;
     for (const file of files) {
-      if (syncCount >= LIMIT_CACHE_SYNC) {
-        break;
-      }
       const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
       if (
         File.getMediaType(file.filename) === FileMediaType.image &&
         (!fs.existsSync(`${cacheDir}/thumbnail.webp`) || !fs.existsSync(`${cacheDir}/preview.webp`))
       ) {
-        logger.info(`Cache missing for ${file.accountId}/${file.id}`);
-        syncCount++;
-        await fs.ensureDir(cacheDir);
-        await fs.ensureDir(`${cacheDir}/tmp`);
-        const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
-        await account
-          .downloadFile(span, file, `${cacheDir}/tmp`, tmpFileName)
-          .then(async () => {
-            await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 300 }).toFile(`${cacheDir}/thumbnail.webp`);
-            await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
-          })
-          .catch((err) => {
-            logger.error(err);
-          });
-        await fs.remove(`${cacheDir}/tmp`);
+        if (!_.find(syncFileCacheQueue, { id: file.id })) {
+          logger.info(`Cache missing for ${file.accountId}/${file.id}`);
+          syncFileCacheQueue.push({ id: file.id, file, account });
+        }
+      }
+    }
+    span.end();
+    SchedulerFiles.SyncFileCacheProcessQueue();
+  }
+
+  private static async SyncFileCacheProcessQueue() {
+    if (syncFileCacheQueue.length === 0) {
+      return;
+    }
+    const span = StandardTracer.startSpan("SchedulerFiles_SyncFileCacheProcessQueue");
+    try {
+      const item = syncFileCacheQueue.pop();
+      const file = item.file;
+      const account = item.account;
+      const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
+      await fs.ensureDir(cacheDir);
+      await fs.ensureDir(`${cacheDir}/tmp`);
+      const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
+      await account
+        .downloadFile(span, file, `${cacheDir}/tmp`, tmpFileName)
+        .then(async () => {
+          await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 300 }).toFile(`${cacheDir}/thumbnail.webp`);
+          await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
+        })
+        .catch((err) => {
+          logger.error(err);
+        });
+      await fs.remove(`${cacheDir}/tmp`);
+    } catch (err) {
+      logger.error(err);
+    }
+    span.end();
+    SchedulerFiles.SyncFileCacheProcessQueue();
+  }
+
+  public static async SyncFileMetadata(context: Span, account: Account) {
+    const span = StandardTracer.startSpan("SchedulerFiles_SyncFileCache", context);
+    const files = await FileData.listForAccount(span, account.getAccountDefinition().id);
+    for (const file of files) {
+      if (Object.keys(file.metadata).length === 0) {
+        await account.updateFileMetadata(span, file);
+        await FileData.update(span, file);
       }
     }
     span.end();

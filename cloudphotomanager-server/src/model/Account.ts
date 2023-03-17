@@ -7,4 +7,5 @@ export interface Account {
   listFiles(context: Span): Promise<File[]>;
   downloadFile(context: Span, file: File, folder: string, filename: string): Promise<void>;
   getAccountDefinition(): AccountDefinition;
+  updateFileMetadata(context: Span, file: File): Promise<void>;
 }

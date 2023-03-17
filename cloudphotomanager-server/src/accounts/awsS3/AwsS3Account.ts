@@ -18,6 +18,9 @@ export class AwsS3Account implements Account {
   constructor(accountDefinition: AccountDefinition) {
     this.accountDefinition = accountDefinition;
   }
+  updateFileMetadata(context: Span, file: File): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
 
   getAccountDefinition(): AccountDefinition {
     return this.accountDefinition;
