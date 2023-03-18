@@ -7,6 +7,7 @@ import { S3 } from "aws-sdk";
 import { File } from "../../model/File";
 import { FileMediaType } from "../../model/FileMediaType";
 import * as fs from "fs-extra";
+import { Folder } from "../../model/Folder";
 
 export class AwsS3Account implements Account {
   //
@@ -18,38 +19,18 @@ export class AwsS3Account implements Account {
   constructor(accountDefinition: AccountDefinition) {
     this.accountDefinition = accountDefinition;
   }
+  listFolders(context: Span): Promise<Folder[]> {
+    throw new Error("Method not implemented.");
+  }
+  listFileInFolders(context: Span, folder: Folder): Promise<File[]> {
+    throw new Error("Method not implemented.");
+  }
   updateFileMetadata(context: Span, file: File): Promise<void> {
     throw new Error("Method not implemented.");
   }
 
   getAccountDefinition(): AccountDefinition {
     return this.accountDefinition;
-  }
-
-  async listFiles(context: Span): Promise<File[]> {
-    const span = StandardTracer.startSpan("AwsS3Account_listFiles", context);
-    const params = {
-      Bucket: this.accountDefinition.infoPrivate.bucket,
-    };
-    const files: File[] = [];
-    const filesRaw = await (await this.getS3Client()).listObjectsV2(params).promise();
-    filesRaw.Contents.forEach((fileRaw) => {
-      const mediaType = File.getMediaType(fileRaw.Key);
-      if (mediaType === FileMediaType.image || mediaType === FileMediaType.video) {
-        const file = new File();
-        file.accountId = this.accountDefinition.id;
-        file.idCloud = fileRaw.Key;
-        file.filename = fileRaw.Key;
-        file.folderpath = fileRaw.Key.split("/").pop();
-        file.hash = fileRaw.ETag;
-        file.dateUpdated = new Date(fileRaw.LastModified);
-        file.dateSync = new Date();
-        file.info.size = fileRaw.Size;
-        files.push(file);
-      }
-    });
-    span.end();
-    return files;
   }
 
   public async downloadFile(context: Span, file: File, folder: string, filename: string): Promise<void> {

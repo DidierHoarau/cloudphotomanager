@@ -33,4 +33,10 @@ export class FolderData {
     span.end();
     return folders;
   }
+
+  public static async deleteForAccount(context: Span, accountId: string, folderpath: string): Promise<void> {
+    const span = StandardTracer.startSpan("FolderData_listForAccount", context);
+    await SqlDbutils.execSQL(span, "DELETE FROM files WHERE accountId = ? AND folderpath = ?", [accountId, folderpath]);
+    span.end();
+  }
 }

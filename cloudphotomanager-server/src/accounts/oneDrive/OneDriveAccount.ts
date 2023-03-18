@@ -6,8 +6,10 @@ import { Span } from "@opentelemetry/sdk-trace-base";
 import { StandardTracer } from "../../utils-std-ts/StandardTracer";
 import { File } from "../../model/File";
 import axios from "axios";
-import * as fs from "fs-extra";
 import { Logger } from "../../utils-std-ts/Logger";
+import { Folder } from "../../model/Folder";
+import { OneDriveFileOperations } from "./OneDriveFileOperations";
+import { OneDriveInventory } from "./OneDriveInventory";
 
 const logger = new Logger("OneDriveAccount");
 
@@ -23,26 +25,8 @@ export class OneDriveAccount implements Account {
     this.accountDefinition = accountDefinition;
   }
 
-  getAccountDefinition(): AccountDefinition {
+  public getAccountDefinition(): AccountDefinition {
     return this.accountDefinition;
-  }
-
-  async listFiles(context: Span): Promise<File[]> {
-    const span = StandardTracer.startSpan("OneDriveAccount_listFiles", context);
-    const files: File[] = [];
-
-    const rootFolderId = (
-      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/root:${encodeURI(this.accountDefinition.rootpath)}`, {
-        headers: {
-          Authorization: `Bearer ${await this.getToken(span)}`,
-        },
-      })
-    ).data.id;
-
-    await this.listAllFiles(span, rootFolderId, files);
-
-    span.end();
-    return files;
   }
 
   public async updateFileMetadata(context: Span, file: File): Promise<void> {
@@ -62,36 +46,6 @@ export class OneDriveAccount implements Account {
       file.hash = info.file.hashes.sha256Hash;
     }
     span.end();
-  }
-
-  public async downloadFile(context: Span, file: File, folder: string, filename: string): Promise<void> {
-    return new Promise(async (resolve, reject) => {
-      const span = StandardTracer.startSpan("OneDriveAccount_downloadFile", context);
-      axios({
-        url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/content`,
-        method: "GET",
-        responseType: "stream",
-        headers: {
-          Authorization: `Bearer ${await this.getToken(context)}`,
-        },
-      })
-        .then((response) => {
-          const writer = fs.createWriteStream(`${folder}/${filename}`);
-          response.data.pipe(writer);
-          writer.on("finish", () => {
-            resolve();
-          });
-          writer.on("error", (error) => {
-            reject(error);
-          });
-        })
-        .catch((error) => {
-          reject(error);
-        })
-        .finally(() => {
-          span.end();
-        });
-    });
   }
 
   public async validate(context: Span): Promise<boolean> {
@@ -120,7 +74,7 @@ export class OneDriveAccount implements Account {
     return valid;
   }
 
-  private async getToken(context: Span): Promise<string> {
+  public async getToken(context: Span): Promise<string> {
     if (new Date() > this.tokenExpiration) {
       const span = StandardTracer.startSpan("OneDriveAccount_getToken", context);
       const params = new URLSearchParams();
@@ -138,48 +92,30 @@ export class OneDriveAccount implements Account {
     return this.token;
   }
 
-  private async listAllFiles(context: Span, folderId: string, files: File[]): Promise<void> {
-    const children = (
-      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${folderId}/children`, {
+  async listFolders(context: Span): Promise<Folder[]> {
+    const span = StandardTracer.startSpan("OneDriveAccount_listFiles", context);
+    const folders: Folder[] = [];
+    const rootFolderId = (
+      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/root:${encodeURI(this.accountDefinition.rootpath)}`, {
         headers: {
-          Authorization: `Bearer ${await this.getToken(context)}`,
+          Authorization: `Bearer ${await this.getToken(span)}`,
         },
       })
-    ).data.value;
+    ).data.id;
+    const folder = new Folder();
+    folder.accountId = this.accountDefinition.id;
+    folder.folderpath = "/";
+    folders.push(folder);
+    await OneDriveInventory.listFolders(span, this, rootFolderId, folders);
+    span.end();
+    return folders;
+  }
 
-    for (const child of children) {
-      if (child.folder) {
-        await this.listAllFiles(context, child.id, files);
-      } else {
-        const file = new File();
-        file.accountId = this.accountDefinition.id;
-        file.idCloud = child.id;
-        file.filename = child.name;
-        file.folderpath = decodeURI(child.parentReference.path)
-          .replace("/drive/root:", "")
-          .replace(decodeURI(this.accountDefinition.rootpath), "/")
-          .replace("//", "/");
-        file.dateSync = new Date();
-        file.dateUpdated = new Date(child.lastModifiedDateTime);
-        if (child.photo && child.photo.takenDateTime) {
-          file.dateMedia = new Date(child.photo.takenDateTime);
-        } else {
-          file.dateMedia = new Date(child.fileSystemInfo.createdDateTime);
-        }
-        file.info = { test: "test" };
-        file.metadata = {};
-        if (child.photo) {
-          file.metadata.photo = child.photo;
-        }
-        if (child.video) {
-          file.metadata.photo = child.photo;
-        }
-        if (child.image) {
-          file.metadata.image = child.image;
-        }
-        file.hash = child.file.hashes.sha256Hash;
-        files.push(file);
-      }
-    }
+  public async listFileInFolders(context: Span, folder: Folder): Promise<File[]> {
+    return await OneDriveInventory.listFilesInFolder(context, this, folder);
+  }
+
+  public async downloadFile(context: Span, file: File, folderpath: string, filename: string): Promise<void> {
+    await OneDriveFileOperations.downloadFile(context, this, file, folderpath, filename);
   }
 }
