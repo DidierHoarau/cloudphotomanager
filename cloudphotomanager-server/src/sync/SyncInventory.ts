@@ -25,27 +25,31 @@ export class SyncInventory {
     SyncQueue.push(SyncQueue.TYPE_SYNC_INVENTORY, account.getAccountDefinition().id, account);
     const span = StandardTracer.startSpan("SyncInventory_SyncFileInventory", context);
     const cloudFiles = await account.listFiles(span);
+    const knownFiles = await FileData.listForAccount(span, account.getAccountDefinition().id);
     const syncSummary = { dateStarted: new Date(), added: 0, updated: 0, deleted: 0 };
     for (const cloudFile of cloudFiles) {
-      const knownFile = await FileData.getByPath(
-        span,
-        account.getAccountDefinition().id,
-        cloudFile.folderpath,
-        cloudFile.filename
-      );
+      const knownFile = _.find(knownFiles, { folderpath: cloudFile.folderpath, filename: cloudFile.filename });
       if (!knownFile) {
         syncSummary.added++;
         await FileData.add(span, cloudFile);
       } else if (
-        knownFile.dateMedia != cloudFile.dateMedia ||
-        knownFile.dateUpdated != cloudFile.dateUpdated ||
-        knownFile.hash != cloudFile.hash
+        knownFile.dateMedia.getTime() !== cloudFile.dateMedia.getTime() ||
+        knownFile.dateUpdated.getTime() !== cloudFile.dateUpdated.getTime() ||
+        knownFile.hash !== cloudFile.hash
       ) {
         cloudFile.id = knownFile.id;
         await FileData.update(span, cloudFile);
         syncSummary.updated++;
       }
     }
+    for (const knownFile of knownFiles) {
+      const cloudFile = _.find(cloudFiles, { folderpath: knownFile.folderpath, filename: knownFile.filename });
+      if (!cloudFile) {
+        await FileData.delete(span, knownFile.id);
+        syncSummary.deleted++;
+      }
+    }
+
     if (syncSummary.added > 0 || syncSummary.updated > 0 || syncSummary.deleted > 0) {
       logger.info(
         `Sync done for ${account.getAccountDefinition().id} in ${

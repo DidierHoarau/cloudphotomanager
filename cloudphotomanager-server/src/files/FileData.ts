@@ -107,6 +107,12 @@ export class FileData {
     );
     span.end();
   }
+
+  public static async delete(context: Span, id: string): Promise<void> {
+    const span = StandardTracer.startSpan("FileData_delete", context);
+    await SqlDbutils.execSQL(span, "DELETE FROM files WHERE id = ?", [id]);
+    span.end();
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -148,16 +148,17 @@ export class OneDriveAccount implements Account {
     ).data.value;
 
     for (const child of children) {
-      if (child.folder && files.length < 100) {
+      if (child.folder) {
         await this.listAllFiles(context, child.id, files);
-      } else if (!child.folder) {
+      } else {
         const file = new File();
         file.accountId = this.accountDefinition.id;
         file.idCloud = child.id;
         file.filename = child.name;
         file.folderpath = decodeURI(child.parentReference.path)
           .replace("/drive/root:", "")
-          .replace(encodeURI(this.accountDefinition.rootpath), "");
+          .replace(decodeURI(this.accountDefinition.rootpath), "/")
+          .replace("//", "/");
         file.dateSync = new Date();
         file.dateUpdated = new Date(child.lastModifiedDateTime);
         if (child.photo && child.photo.takenDateTime) {
