@@ -26,13 +26,13 @@ export class FileRoutes {
       return res.status(200).send({ files });
     });
 
-    interface GetFilesAccountIdFileIdRequest extends RequestGenericInterface {
+    interface GetFilesAccountIdFileIdThumbnailRequest extends RequestGenericInterface {
       Params: {
         accountId: string;
         fileId: string;
       };
     }
-    fastify.get<GetFilesAccountIdFileIdRequest>("/:fileId/thumbnail", async (req, res) => {
+    fastify.get<GetFilesAccountIdFileIdThumbnailRequest>("/:fileId/thumbnail", async (req, res) => {
       const span = StandardTracer.getSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       // if (!userSession.isAuthenticated) {
@@ -41,6 +41,32 @@ export class FileRoutes {
 
       const cacheDir = await FileData.getFileCacheDir(span, req.params.fileId);
       const filepath = `${cacheDir}/thumbnail.webp`;
+      if (!fs.existsSync(filepath)) {
+        return res.status(404).send({ error: "File Not Found" });
+      }
+      const stream = fs.createReadStream(filepath);
+      const stats = await fs.statSync(filepath);
+      res.header("Content-Disposition", `attachment; filename=${req.params.accountId}.webp`);
+      res.header("Content-Length", stats.size);
+      res.header("Content-Type", "application/octet-stream");
+      return res.send(stream);
+    });
+
+    interface GetFilesAccountIdFileIdPreviewRequest extends RequestGenericInterface {
+      Params: {
+        accountId: string;
+        fileId: string;
+      };
+    }
+    fastify.get<GetFilesAccountIdFileIdPreviewRequest>("/:fileId/preview", async (req, res) => {
+      const span = StandardTracer.getSpanFromRequest(req);
+      const userSession = await Auth.getUserSession(req);
+      // if (!userSession.isAuthenticated) {
+      //   return res.status(403).send({ error: "Access Denied" });
+      // }
+
+      const cacheDir = await FileData.getFileCacheDir(span, req.params.fileId);
+      const filepath = `${cacheDir}/preview.webp`;
       if (!fs.existsSync(filepath)) {
         return res.status(404).send({ error: "File Not Found" });
       }

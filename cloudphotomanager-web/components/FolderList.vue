@@ -6,11 +6,14 @@
         <span v-on:click="toggleLabelCollapsed(folder, index)" class="folder-list-indent">
           <span v-html="getIndentation(folder)"></span>
           <i v-if="folder.isLabel && folder.isCollapsed" class="bi bi-caret-right-fill"></i>
-          <i v-else-if="folder.isLabel" class="bi bi-caret-down-fill"></i>
+          <i v-else class="bi bi-folder2-open"></i>
         </span>
         <div v-on:click="selectFolder(folder, index)" class="folder-list-name">
           <span v-if="!folder.isLabel"><i :class="'bi bi-' + folder.icon"></i>&nbsp;</span>
           {{ folder.name }}
+        </div>
+        <div v-on:click="selectFolder(folder, index)" class="folder-list-count">
+          {{ folder.childrenCount }}
         </div>
       </div>
     </div>
@@ -41,7 +44,6 @@ export default {
   },
   methods: {
     selectFolder(folder, index) {
-      FoldersStore().select(folder, index);
       FoldersStore().selectedIndex = index;
       EventBus.emit(EventTypes.FOLDER_SELECTED, folder);
     },
@@ -92,9 +94,12 @@ export default {
       }
       return true;
     },
-    getIndentation(source) {
+    getIndentation(folder) {
+      if (folder.folderpath === "/") {
+        return "";
+      }
       let indent = "";
-      for (let i = 0; i < source.depth; i++) {
+      for (let i = 0; i < folder.folderpath.split("/").length - 1; i++) {
         indent += "&nbsp;&nbsp;&nbsp;&nbsp;";
       }
       return indent;
@@ -133,5 +138,10 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.folder-list-count {
+  grid-column: 3;
+  opacity: 0.2;
+  font-size: 0.9em;
 }
 </style>

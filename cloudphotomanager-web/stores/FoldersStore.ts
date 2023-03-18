@@ -15,44 +15,34 @@ export const FoldersStore = defineStore("FoldersStore", {
   getters: {},
 
   actions: {
-    // async selectFolder(sourceId: string) {
-    //   const sourceItemsStore = SourceItemsStore();
-    //   if (!sourceId) {
-    //     sourceItemsStore.selectedSource = "";
-    //     sourceItemsStore.page = 1;
-    //     sourceItemsStore.searchCriteria = "all";
-    //     sourceItemsStore.filterStatus = "unread";
-    //     sourceItemsStore.fetch();
-    //   }
-    //   const position = _.findIndex(this.sources, { sourceId });
-    //   if (position < 0) {
-    //     return;
-    //   }
-    //   this.selectedIndex = position;
-    //   sourceItemsStore.selectedSource = sourceId;
-    //   sourceItemsStore.searchCriteria = "sourceId";
-    //   sourceItemsStore.searchCriteriaValue = sourceId;
-    //   sourceItemsStore.page = 1;
-    //   sourceItemsStore.fetch();
-    // },
-    async select(folder: any) {
-      // console.log(folder, "bar");
-    },
     async fetch(accountId: string) {
       const folders: any[] = [];
       for (const accountIn of AccountsStore().accounts) {
         const account: any = accountIn;
-        folders.push({ name: account.name, type: "account", folderpath: "/", depth: 0 });
+        folders.push({ name: account.name, folderpath: "/", depth: 0 });
         await axios
           .get(`${(await Config.get()).SERVER_URL}/accounts/${account.id}/folders`, await AuthService.getAuthHeader())
           .then((res) => {
             for (const folder of _.sortBy(res.data.folders, ["folderpath"])) {
-              folders.push({
-                name: folder.folderpath.split("/").pop(),
-                type: "folder",
-                folderpath: folder.folderpath,
-                depth: folder.folderpath.split("/").length - 1,
-              });
+              if (folder.folderpath !== "/") {
+                let basePath = "";
+                for (let i = 1; i < folder.folderpath.split("/").length - 1; i++) {
+                  basePath += "/" + folder.folderpath.split("/")[i];
+                  const newFolderTree = {
+                    name: basePath.split("/").pop(),
+                    folderpath: basePath,
+                  };
+                  if (!_.find(folders, { folderpath: newFolderTree.folderpath })) {
+                    folders.push(newFolderTree);
+                  }
+                }
+                folders.push({
+                  name: folder.folderpath.split("/").pop(),
+                  type: "folder",
+                  folderpath: folder.folderpath,
+                  childrenCount: folder.childrenCount,
+                });
+              }
             }
           })
           .catch(handleError);

@@ -18,7 +18,7 @@
       <i v-else v-on:click="toggleUnreadFIlter()" class="bi bi-eye"></i> -->
     </div>
     <div class="gallery-file-list">
-      <div class="card gallery-file" v-for="file in files" v-bind:key="file.id">
+      <div class="card gallery-file" v-on:click="selectGalleryFile(file)" v-for="file in files" v-bind:key="file.id">
         <div class="gallery-file-name">
           {{ file.filename }}
         </div>
@@ -30,6 +30,12 @@
         </div>
       </div>
     </div>
+    <GalleryItemFocus
+      v-if="selectedFile"
+      :file="selectedFile"
+      class="gallery-item-focus"
+      @onFileClosed="unselectGalleryFile"
+    />
   </div>
 </template>
 
@@ -50,6 +56,7 @@ export default {
       files: [],
       menuOpened: true,
       serverUrl: "",
+      selectedFile: null,
     };
   },
   async created() {
@@ -78,6 +85,12 @@ export default {
           this.files = _.sortBy(res.data.files, ["name"]);
         })
         .catch(handleError);
+    },
+    selectGalleryFile(file) {
+      this.selectedFile = file;
+    },
+    unselectGalleryFile() {
+      this.selectedFile = null;
     },
     openListMenu() {
       this.menuOpened = !this.menuOpened;
@@ -215,5 +228,13 @@ export default {
   .gallery-folders {
     background-color: #aaaaaa33;
   }
+}
+.gallery-item-focus {
+  background-color: black;
+  position: fixed;
+  top: 0em;
+  right: 0;
+  width: 100vw;
+  height: 100vh;
 }
 </style>

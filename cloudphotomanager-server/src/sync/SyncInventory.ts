@@ -6,6 +6,7 @@ import { Config } from "../Config";
 import { Logger } from "../utils-std-ts/Logger";
 import * as _ from "lodash";
 import { SyncQueue } from "./SyncQueue";
+import { Timeout } from "../utils-std-ts/Timeout";
 
 let config: Config;
 const logger = new Logger("SyncInventory");
@@ -41,6 +42,7 @@ export class SyncInventory {
         await FileData.update(span, cloudFile);
         syncSummary.updated++;
       }
+      Timeout.wait(1);
     }
     for (const knownFile of knownFiles) {
       const cloudFile = _.find(cloudFiles, { folderpath: knownFile.folderpath, filename: knownFile.filename });
@@ -48,6 +50,7 @@ export class SyncInventory {
         await FileData.delete(span, knownFile.id);
         syncSummary.deleted++;
       }
+      Timeout.wait(1);
     }
 
     if (syncSummary.added > 0 || syncSummary.updated > 0 || syncSummary.deleted > 0) {
