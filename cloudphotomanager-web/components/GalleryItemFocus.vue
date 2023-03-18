@@ -35,6 +35,7 @@ export default {
 .file-preview {
   width: 100%;
   height: 100%;
+  text-align: center;
 }
 .file-preview img {
   max-width: 100%;

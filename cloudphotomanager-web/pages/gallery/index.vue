@@ -19,11 +19,14 @@
     </div>
     <div class="gallery-file-list">
       <div class="card gallery-file" v-on:click="selectGalleryFile(file)" v-for="file in files" v-bind:key="file.id">
+        <div class="gallery-file-image">
+          <img
+            :src="serverUrl + '/accounts/' + file.accountId + '/files/' + file.id + '/thumbnail'"
+            onerror="this.onerror=null; this.src='/images/file-sync-in-progress.webp'"
+          />
+        </div>
         <div class="gallery-file-name">
           {{ file.filename }}
-        </div>
-        <div class="gallery-file-image">
-          <img :src="serverUrl + '/accounts/' + file.accountId + '/files/' + file.id + '/thumbnail'" />
         </div>
         <div class="gallery-file-info">
           {{ relativeTime(file.dateMedia) }}
@@ -117,21 +120,25 @@ export default {
   grid-template-rows: auto auto;
 }
 .gallery-file-name {
-  grid-row: 1;
+  grid-row: 2;
   font-size: 0.7em;
   word-break: break-all;
+  opacity: 0.8;
 }
 .gallery-file-image {
-  grid-row: 2;
+  grid-row: 1;
   word-break: break-all;
 }
 .gallery-file-image img {
   width: 100%;
+  height: 8em;
+  object-fit: cover;
 }
 .gallery-file-info {
   grid-row: 3;
-  font-size: 0.7em;
+  font-size: 0.6em;
   word-break: break-all;
+  opacity: 0.4;
 }
 
 @media (min-width: 701px) {
