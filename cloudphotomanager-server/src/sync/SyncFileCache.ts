@@ -10,6 +10,7 @@ import { File } from "../model/File";
 import * as sharp from "sharp";
 import { SyncQueue } from "./SyncQueue";
 import { Timeout } from "../utils-std-ts/Timeout";
+import { Folder } from "../model/Folder";
 
 let config: Config;
 const logger = new Logger("SchedulerFiles");
@@ -22,9 +23,9 @@ export class SyncFileCache {
     span.end();
   }
 
-  public static async startSync(context: Span, account: Account) {
+  public static async startSyncForFolder(context: Span, account: Account, folder: Folder) {
     const span = StandardTracer.startSpan("SchedulerFiles_SyncFileCache", context);
-    const files = await FileData.listForAccount(span, account.getAccountDefinition().id);
+    const files = await FileData.listAccountFolder(span, account.getAccountDefinition().id, folder.folderpath);
     for (const file of files) {
       const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
       if (

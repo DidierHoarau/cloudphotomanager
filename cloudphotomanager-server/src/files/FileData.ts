@@ -20,6 +20,17 @@ export class FileData {
     return cacheDir;
   }
 
+  public static async get(context: Span, id: string): Promise<File> {
+    const span = StandardTracer.startSpan("FileData_getByPath", context);
+    const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE id = ? ", [id]);
+    if (rawData.length === 0) {
+      return null;
+    }
+    const file = fromRaw(rawData[0]);
+    span.end();
+    return file;
+  }
+
   public static async getByPath(context: Span, accountId: string, folderpath: string, filename: string): Promise<File> {
     const span = StandardTracer.startSpan("FileData_getByPath", context);
     const rawData = await SqlDbutils.querySQL(

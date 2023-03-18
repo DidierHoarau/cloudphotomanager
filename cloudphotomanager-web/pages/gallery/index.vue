@@ -1,23 +1,14 @@
 <template>
   <div class="gallery-layout page">
     <div class="gallery-layout-actions actions">
-      <!-- <i class="bi bi-arrow-clockwise" v-on:click="refresh()"></i>
-      <i class="bi bi-caret-up-square gallery-layout-actions-menu-toggle" v-if="menuOpened" v-on:click="openListMenu()"></i>
-      <i class="bi bi-caret-down-square gallery-layout-actions-menu-toggle" v-else v-on:click="openListMenu()"></i> -->
       <kbd v-if="syncStore.countTotal > 0">Sync: {{ syncStore.countTotal }}</kbd>
     </div>
     <div class="gallery-folders" :class="{ 'gallery-folders-closed': !menuOpened }">
-      <FolderList />
+      <FolderList @onFolderSelected="onFolderSelected" />
     </div>
-    <div class="gallery-files-actions actions">
-      <!-- <NuxtLink v-if="sourceItemsStore.selectedSource" :to="'/gallery/' + sourceItemsStore.selectedSource"
-        ><i class="bi bi-pencil-square"></i
-      ></NuxtLink>
-      <i v-if="sourceItemsStore.sourceItems.length > 0" v-on:click="markAllRead()" class="bi bi-archive"></i>
-      <i v-if="sourceItemsStore.filterStatus == 'unread'" v-on:click="toggleUnreadFIlter()" class="bi bi-eye-slash"></i>
-      <i v-else v-on:click="toggleUnreadFIlter()" class="bi bi-eye"></i> -->
-    </div>
+    <div class="gallery-files-actions actions"></div>
     <div class="gallery-file-list">
+      <Loading v-if="requestEtag" />
       <div class="card gallery-file" v-on:click="selectGalleryFile(file)" v-for="file in files" v-bind:key="file.id">
         <div class="gallery-file-image">
           <img
@@ -60,6 +51,9 @@ export default {
       menuOpened: true,
       serverUrl: "",
       selectedFile: null,
+      requestEtag: "",
+      currentAccountId: "",
+      currentFolderpath: "",
     };
   },
   async created() {
@@ -70,11 +64,16 @@ export default {
       FoldersStore().fetch();
     }
     EventBus.on(EventTypes.FOLDER_SELECTED, (message) => {
+      this.currentAccountId = message.accountId;
+      this.currentFolderpath = message.folderpath;
       this.fetchFiles(message.accountId, message.folderpath);
     });
   },
   methods: {
     async fetchFiles(accountId, folderpath) {
+      const requestEtag = new Date().toISOString();
+      this.requestEtag = requestEtag;
+      this.files = [];
       await axios
         .post(
           `${(await Config.get()).SERVER_URL}/accounts/${AccountsStore().accountSelected}/files/search`,
@@ -85,15 +84,26 @@ export default {
           await AuthService.getAuthHeader()
         )
         .then((res) => {
-          this.files = _.sortBy(res.data.files, ["name"]);
+          if (this.requestEtag === requestEtag) {
+            this.files = _.sortBy(res.data.files, ["name"]);
+          }
+        })
+        .finally(() => {
+          this.requestEtag = "";
         })
         .catch(handleError);
+    },
+    onFolderSelected(event) {
+      this.fetchFiles(event.folder.accountId, event.folder.folderpath);
     },
     selectGalleryFile(file) {
       this.selectedFile = file;
     },
-    unselectGalleryFile() {
+    unselectGalleryFile(result) {
       this.selectedFile = null;
+      if (result.status === "invalidated") {
+        this.fetchFiles(event.folder.accountId, event.folder.folderpath);
+      }
     },
     openListMenu() {
       this.menuOpened = !this.menuOpened;
@@ -117,7 +127,8 @@ export default {
 .gallery-file {
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
+  height: 11em;
 }
 .gallery-file-name {
   grid-row: 2;
@@ -135,6 +146,7 @@ export default {
   object-fit: cover;
 }
 .gallery-file-info {
+  height: 2em;
   grid-row: 3;
   font-size: 0.6em;
   word-break: break-all;

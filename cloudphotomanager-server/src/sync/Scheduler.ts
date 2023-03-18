@@ -39,8 +39,6 @@ export class Scheduler {
     const span = StandardTracer.startSpan("Scheduler_startAccountSync", context);
     const account = await AccountFactory.getAccountImplementation(accountDefinition);
     await SyncInventory.startSync(span, account);
-    await SyncFileMetadata.startSync(span, account);
-    SyncFileCache.startSync(span, account);
     span.end();
   }
 }

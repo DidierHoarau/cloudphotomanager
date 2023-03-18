@@ -5,7 +5,6 @@ import * as AWS from "aws-sdk";
 import { StandardTracer } from "../../utils-std-ts/StandardTracer";
 import { S3 } from "aws-sdk";
 import { File } from "../../model/File";
-import { FileMediaType } from "../../model/FileMediaType";
 import * as fs from "fs-extra";
 import { Folder } from "../../model/Folder";
 
@@ -18,6 +17,12 @@ export class AwsS3Account implements Account {
 
   constructor(accountDefinition: AccountDefinition) {
     this.accountDefinition = accountDefinition;
+  }
+  getFolderByPath(context: Span, folderpath: string): Promise<Folder> {
+    throw new Error("Method not implemented.");
+  }
+  moveFile(context: Span, file: File, folderpathDestination: string): Promise<void> {
+    throw new Error("Method not implemented.");
   }
   listFolders(context: Span): Promise<Folder[]> {
     throw new Error("Method not implemented.");

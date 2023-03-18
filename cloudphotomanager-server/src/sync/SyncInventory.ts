@@ -9,6 +9,8 @@ import { SyncQueue } from "./SyncQueue";
 import { Timeout } from "../utils-std-ts/Timeout";
 import { FolderData } from "../files/FolderData";
 import { Folder } from "../model/Folder";
+import { SyncFileCache } from "./SyncFileCache";
+import { SyncFileMetadata } from "./SyncFileMetadata";
 
 let config: Config;
 const logger = new Logger("SyncInventory");
@@ -35,6 +37,14 @@ export class SyncInventory {
       SyncQueue.push(SyncQueue.TYPE_SYNC_INVENTORY, cloudFolder.folderpath, { folder: cloudFolder, account });
       await Timeout.wait(1);
     }
+    span.end();
+    await Timeout.wait(1);
+    SyncInventory.processQueue();
+  }
+
+  public static async startSyncFoldertath(context: Span, account: Account, folder: Folder): Promise<void> {
+    const span = StandardTracer.startSpan("SyncInventory_startSyncFoldertath", context);
+    SyncQueue.push(SyncQueue.TYPE_SYNC_INVENTORY, folder.folderpath, { folder, account });
     span.end();
     await Timeout.wait(1);
     SyncInventory.processQueue();
@@ -83,6 +93,8 @@ export class SyncInventory {
           } s - ${syncSummary.added} added ; ${syncSummary.updated} updated ; ${syncSummary.deleted} deleted ; `
         );
       }
+      await SyncFileCache.startSyncForFolder(span, account, folder);
+      await SyncFileMetadata.startSyncForFolder(span, account, folder);
     } catch (err) {
       logger.error(err);
     }

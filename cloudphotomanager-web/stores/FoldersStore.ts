@@ -9,13 +9,14 @@ import { PreferencesLabels } from "~~/services/PreferencesLabels";
 export const FoldersStore = defineStore("FoldersStore", {
   state: () => ({
     folders: [],
-    selectedIndex: -1,
+    loading: false,
   }),
 
   getters: {},
 
   actions: {
     async fetch(accountId: string) {
+      this.loading = true;
       const folders: any[] = [];
       for (const accountIn of AccountsStore().accounts) {
         const account: any = accountIn;
@@ -31,6 +32,8 @@ export const FoldersStore = defineStore("FoldersStore", {
                   const newFolderTree = {
                     name: basePath.split("/").pop(),
                     folderpath: basePath,
+                    accountId: account.id,
+                    indentation: this.getIndentation(basePath),
                   };
                   if (!_.find(folders, { folderpath: newFolderTree.folderpath })) {
                     folders.push(newFolderTree);
@@ -39,8 +42,10 @@ export const FoldersStore = defineStore("FoldersStore", {
                 folders.push({
                   name: folder.folderpath.split("/").pop(),
                   type: "folder",
+                  accountId: account.id,
                   folderpath: folder.folderpath,
                   childrenCount: folder.childrenCount,
+                  indentation: this.getIndentation(folder.folderpath),
                 });
               }
             }
@@ -48,6 +53,17 @@ export const FoldersStore = defineStore("FoldersStore", {
           .catch(handleError);
       }
       (this.folders as any[]) = folders;
+      this.loading = false;
+    },
+    getIndentation(folderpath: string) {
+      if (folderpath === "/") {
+        return "";
+      }
+      let indent = "";
+      for (let i = 0; i < folderpath.split("/").length - 1; i++) {
+        indent += "&nbsp;&nbsp;&nbsp;&nbsp;";
+      }
+      return indent;
     },
   },
 });

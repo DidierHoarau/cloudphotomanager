@@ -118,4 +118,12 @@ export class OneDriveAccount implements Account {
   public async downloadFile(context: Span, file: File, folderpath: string, filename: string): Promise<void> {
     await OneDriveFileOperations.downloadFile(context, this, file, folderpath, filename);
   }
+
+  public async moveFile(context: Span, file: File, folderpathDestination: string): Promise<void> {
+    await OneDriveFileOperations.moveFile(context, this, file, folderpathDestination);
+  }
+
+  public async getFolderByPath(context: Span, folderpath: string): Promise<Folder> {
+    return await OneDriveFileOperations.getFolderByPath(context, this, folderpath);
+  }
 }

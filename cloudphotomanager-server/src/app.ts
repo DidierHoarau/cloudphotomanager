@@ -16,6 +16,7 @@ import { FileData } from "./files/FileData";
 import { FolderData } from "./files/FolderData";
 import { FolderRoutes } from "./files/FolderRoutes";
 import { SyncRoutes } from "./sync/SyncRoutes";
+import { FileOperationsRoutes } from "./files/FileOperationsRoutes";
 
 const logger = new Logger("app");
 
@@ -75,6 +76,10 @@ Promise.resolve().then(async () => {
 
   fastify.register(new FolderRoutes().getRoutes, {
     prefix: "/api/accounts/:accountId/folders",
+  });
+
+  fastify.register(new FileOperationsRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/:fileId/operations",
   });
 
   fastify.register(new SyncRoutes().getRoutes, {

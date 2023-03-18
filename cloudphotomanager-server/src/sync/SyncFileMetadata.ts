@@ -6,6 +6,7 @@ import { Config } from "../Config";
 import { Logger } from "../utils-std-ts/Logger";
 import { SyncQueue } from "./SyncQueue";
 import { Timeout } from "../utils-std-ts/Timeout";
+import { Folder } from "../model/Folder";
 
 let config: Config;
 const logger = new Logger("SyncFileMetadata");
@@ -18,9 +19,9 @@ export class SyncFileMetadata {
     span.end();
   }
 
-  public static async startSync(context: Span, account: Account) {
-    const span = StandardTracer.startSpan("SyncFileMetadata_SyncFileMetadata", context);
-    const files = await FileData.listForAccount(span, account.getAccountDefinition().id);
+  public static async startSyncForFolder(context: Span, account: Account, folder: Folder) {
+    const span = StandardTracer.startSpan("SyncFileMetadata_startSyncForFolder", context);
+    const files = await FileData.listAccountFolder(span, account.getAccountDefinition().id, folder.folderpath);
     for (const file of files) {
       if (Object.keys(file.metadata).length === 0) {
         SyncQueue.push(SyncQueue.TYPE_SYNC_METADATA, file.id, { file, account });
@@ -32,7 +33,7 @@ export class SyncFileMetadata {
     SyncFileMetadata.processQueue();
   }
 
-  public static async processQueue() {
+  private static async processQueue() {
     const queuedItem = SyncQueue.pop(SyncQueue.TYPE_SYNC_METADATA);
     if (!queuedItem) {
       return;

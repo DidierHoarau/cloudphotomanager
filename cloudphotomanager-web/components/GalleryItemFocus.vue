@@ -1,6 +1,10 @@
 <template>
   <div class="file-preview">
     <i class="bi bi-x-circle action" v-on:click="clickedClose()"></i>
+    <div class="file-preview-operations">
+      <button class="secondary outline" v-on:click="clickedMove()">Move...</button>
+    </div>
+    <DialogMove v-if="activeOperation == 'move'" :file="file" @onDone="onOperationDone" />
     <img :src="serverUrl + '/accounts/' + file.accountId + '/files/' + file.id + '/preview'" />
   </div>
 </template>
@@ -18,14 +22,25 @@ export default {
   data() {
     return {
       serverUrl: "",
+      activeOperation: "",
     };
   },
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
   },
   methods: {
-    async clickedClose() {
+    clickedClose() {
       this.$emit("onFileClosed", {});
+    },
+    clickedMove() {
+      this.activeOperation = "move";
+    },
+    onOperationDone(result) {
+      if (result.status === "invalidated") {
+        this.$emit("onFileClosed", { status: "invalidated" });
+        this.$emit("onFileClosed", { status: "invalidated" });
+      }
+      this.activeOperation = "";
     },
   },
 };
@@ -50,5 +65,17 @@ export default {
   right: 1em;
   top: 1em;
   color: #aaf;
+}
+.file-preview-operations {
+  font-size: 1.5em;
+  position: fixed;
+  bottom: 1em;
+  right: 1em;
+  color: #aaf;
+}
+.file-preview-operations button {
+  padding: 0.3em 0.7em;
+  font-size: 0.5em;
+  opacity: 0.5;
 }
 </style>
