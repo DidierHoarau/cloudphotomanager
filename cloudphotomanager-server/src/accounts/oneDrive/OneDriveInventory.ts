@@ -39,10 +39,7 @@ export class OneDriveInventory {
         file.accountId = oneDriveAccount.getAccountDefinition().id;
         file.idCloud = child.id;
         file.filename = child.name;
-        file.folderpath = decodeURI(child.parentReference.path)
-          .replace("/drive/root:", "")
-          .replace(decodeURI(oneDriveAccount.getAccountDefinition().rootpath), "/")
-          .replace("//", "/");
+        file.folderId = folder.id;
         file.dateSync = new Date();
         file.dateUpdated = new Date(child.lastModifiedDateTime);
         if (child.photo && child.photo.takenDateTime) {
@@ -50,7 +47,7 @@ export class OneDriveInventory {
         } else {
           file.dateMedia = new Date(child.fileSystemInfo.createdDateTime);
         }
-        file.info = { test: "test" };
+        file.info = {};
         file.metadata = {};
         if (child.photo) {
           file.metadata.photo = child.photo;
@@ -68,6 +65,28 @@ export class OneDriveInventory {
     return files;
   }
 
+  public static async listFoldersInFolder(
+    context: Span,
+    oneDriveAccount: OneDriveAccount,
+    folder: Folder
+  ): Promise<Folder[]> {
+    const children = (
+      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${folder.idCloud}/children`, {
+        headers: {
+          Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+        },
+      })
+    ).data.value;
+    const folders: Folder[] = [];
+    for (const child of children) {
+      console.log(child);
+      if (child.folder) {
+        folders.push(folderFromRaw(child, oneDriveAccount));
+      }
+    }
+    return folders;
+  }
+
   public static async listFolders(
     context: Span,
     oneDriveAccount: OneDriveAccount,
@@ -83,15 +102,66 @@ export class OneDriveInventory {
     ).data.value;
     for (const child of children) {
       if (child.folder) {
-        const folder = new Folder();
-        folder.accountId = oneDriveAccount.getAccountDefinition().id;
-        folder.folderpath = decodeURI(`${child.parentReference.path}/${child.name}`)
-          .replace("/drive/root:", "")
-          .replace(decodeURI(oneDriveAccount.getAccountDefinition().rootpath), "/")
-          .replace("//", "/");
-        folders.push(folder);
+        folders.push(folderFromRaw(child, oneDriveAccount));
         await OneDriveInventory.listFolders(context, oneDriveAccount, child.id, folders);
       }
     }
   }
+
+  public static async getFolderByPath(
+    context: Span,
+    oneDriveAccount: OneDriveAccount,
+    folderpath: string
+  ): Promise<Folder> {
+    const absoluteFolderPath = `${oneDriveAccount.getAccountDefinition().rootpath}/${folderpath.replace(
+      /\/+$/,
+      ""
+    )}`.replace(/\/+/g, "/");
+    const folderRaw = (
+      await axios
+        .get(`https://graph.microsoft.com/v1.0/me/drive/root:${encodeURI(absoluteFolderPath)}`, {
+          headers: {
+            Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+          },
+        })
+        .catch((err) => {
+          if (err.response.status !== 404) {
+            throw err;
+          }
+          return { data: {} };
+        })
+    ).data;
+    if (!folderRaw.id) {
+      return null;
+    }
+    return folderFromRaw(folderRaw, oneDriveAccount);
+  }
+
+  public static async getFolder(context: Span, oneDriveAccount: OneDriveAccount, folderIn: Folder): Promise<Folder> {
+    const folderRaw = (
+      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${folderIn.idCloud}`, {
+        headers: {
+          Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+        },
+      })
+    ).data;
+    const folder = new Folder();
+    folder.idCloud = folderRaw.id;
+    folder.accountId = oneDriveAccount.getAccountDefinition().id;
+    folder.folderpath = oneDriveAccount.folderToDecodedRelative(`${folderRaw.parentReference.path}/${folderRaw.name}`);
+    folder.dateSync = new Date();
+    folder.dateUpdated = new Date(folderRaw.lastModifiedDateTime);
+    return folder;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function folderFromRaw(data: any, oneDriveAccount: OneDriveAccount): Folder {
+  const folder = new Folder();
+  folder.idCloud = data.id;
+  folder.accountId = oneDriveAccount.getAccountDefinition().id;
+  folder.folderpath = oneDriveAccount.folderToDecodedRelative(`${data.parentReference.path}/${data.name}`);
+  folder.dateSync = new Date();
+  folder.dateUpdated = new Date(data.lastModifiedDateTime);
+  return folder;
 }

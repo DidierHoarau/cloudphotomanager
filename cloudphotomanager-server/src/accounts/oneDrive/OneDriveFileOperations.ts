@@ -8,6 +8,7 @@ import * as fs from "fs-extra";
 import { OneDriveAccount } from "./OneDriveAccount";
 import { Logger } from "../../utils-std-ts/Logger";
 import { Folder } from "../../model/Folder";
+import { OneDriveInventory } from "./OneDriveInventory";
 
 const logger = new Logger("OneDriveFileOperations");
 export class OneDriveFileOperations {
@@ -71,39 +72,6 @@ export class OneDriveFileOperations {
     );
   }
 
-  public static async getFolderByPath(
-    context: Span,
-    oneDriveAccount: OneDriveAccount,
-    folderpath: string
-  ): Promise<Folder> {
-    const absoluteFolderPath = `${oneDriveAccount.getAccountDefinition().rootpath}/${folderpath.replace(
-      /\/+$/,
-      ""
-    )}`.replace(/\/+/g, "/");
-    const folderRaw = (
-      await axios
-        .get(`https://graph.microsoft.com/v1.0/me/drive/root:${encodeURI(absoluteFolderPath)}`, {
-          headers: {
-            Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-          },
-        })
-        .catch((err) => {
-          if (err.response.status !== 404) {
-            throw err;
-          }
-          return { data: {} };
-        })
-    ).data;
-    if (!folderRaw.id) {
-      return null;
-    }
-    const folder = new Folder();
-    folder.idCloud = folderRaw.id;
-    folder.folderpath = folderpath || "/";
-    folder.accountId = oneDriveAccount.getAccountDefinition().id;
-    return folder;
-  }
-
   public static async createFolder(
     context: Span,
     oneDriveAccount: OneDriveAccount,
@@ -138,12 +106,12 @@ export class OneDriveFileOperations {
     folderpath: string
   ): Promise<Folder> {
     let subfolderPath = "";
-    let parentFolder = await OneDriveFileOperations.getFolderByPath(context, oneDriveAccount, subfolderPath);
+    let parentFolder = await OneDriveInventory.getFolderByPath(context, oneDriveAccount, subfolderPath);
     for (const subFolderName of folderpath.split("/")) {
       if (subFolderName) {
         subfolderPath += `/${subFolderName}`;
         subfolderPath = subfolderPath.replace(/\/\//g, "/");
-        let subFolder = await OneDriveFileOperations.getFolderByPath(context, oneDriveAccount, subfolderPath);
+        let subFolder = await OneDriveInventory.getFolderByPath(context, oneDriveAccount, subfolderPath);
         if (!subFolder) {
           subFolder = await OneDriveFileOperations.createFolder(context, oneDriveAccount, parentFolder, subFolderName);
         }

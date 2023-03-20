@@ -6,7 +6,7 @@ export class File {
   public id: string;
   public idCloud: string;
   public filename: string;
-  public folderpath: string;
+  public folderId: string;
   public accountId: string;
   public dateSync: Date;
   public dateUpdated: Date;

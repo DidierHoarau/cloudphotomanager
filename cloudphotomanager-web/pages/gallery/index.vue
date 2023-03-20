@@ -66,21 +66,17 @@ export default {
     EventBus.on(EventTypes.FOLDER_SELECTED, (message) => {
       this.currentAccountId = message.accountId;
       this.currentFolderpath = message.folderpath;
-      this.fetchFiles(message.accountId, message.folderpath);
+      this.fetchFiles(message.accountId, message.folderId);
     });
   },
   methods: {
-    async fetchFiles(accountId, folderpath) {
+    async fetchFiles(accountId, folderId) {
       const requestEtag = new Date().toISOString();
       this.requestEtag = requestEtag;
       this.files = [];
       await axios
-        .post(
-          `${(await Config.get()).SERVER_URL}/accounts/${AccountsStore().accountSelected}/files/search`,
-          {
-            accountId,
-            folderpath,
-          },
+        .get(
+          `${(await Config.get()).SERVER_URL}/accounts/${accountId}/folders/${folderId}/files`,
           await AuthService.getAuthHeader()
         )
         .then((res) => {
@@ -94,7 +90,7 @@ export default {
         .catch(handleError);
     },
     onFolderSelected(event) {
-      this.fetchFiles(event.folder.accountId, event.folder.folderpath);
+      this.fetchFiles(event.folder.accountId, event.folder.id);
     },
     selectGalleryFile(file) {
       this.selectedFile = file;

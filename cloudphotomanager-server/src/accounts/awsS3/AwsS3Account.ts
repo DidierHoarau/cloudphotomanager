@@ -18,6 +18,12 @@ export class AwsS3Account implements Account {
   constructor(accountDefinition: AccountDefinition) {
     this.accountDefinition = accountDefinition;
   }
+  listFoldersInFolder(context: Span, folder: Folder): Promise<Folder[]> {
+    throw new Error("Method not implemented.");
+  }
+  getFolder(context: Span, folder: Folder): Promise<Folder> {
+    throw new Error("Method not implemented.");
+  }
   getFolderByPath(context: Span, folderpath: string): Promise<Folder> {
     throw new Error("Method not implemented.");
   }
@@ -27,7 +33,7 @@ export class AwsS3Account implements Account {
   listFolders(context: Span): Promise<Folder[]> {
     throw new Error("Method not implemented.");
   }
-  listFileInFolders(context: Span, folder: Folder): Promise<File[]> {
+  listFilesInFolder(context: Span, folder: Folder): Promise<File[]> {
     throw new Error("Method not implemented.");
   }
   updateFileMetadata(context: Span, file: File): Promise<void> {
@@ -42,7 +48,7 @@ export class AwsS3Account implements Account {
     const span = StandardTracer.startSpan("AwsS3Account_downloadFile", context);
     const params = {
       Bucket: this.accountDefinition.infoPrivate.bucket,
-      Key: `${file.folderpath}/${file.filename}`,
+      Key: `${file.folderId}/${file.filename}`,
     };
     const fileStream = (await this.getS3Client()).getObject(params).createReadStream();
     const writeStream = fs.createWriteStream(`${folder}/${filename}`);

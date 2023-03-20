@@ -18,12 +18,22 @@ CREATE TABLE IF NOT EXISTS accounts (
     infoPrivate TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS folders (
+    id VARCHAR(50) NOT NULL,
+    idCloud VARCHAR(5000) NOT NULL,
+    accountId VARCHAR(50) NOT NULL,
+    folderpath VARCHAR(5000) NOT NULL,
+    dateSync VARCHAR(100) NOT NULL,
+    dateUpdated VARCHAR(100) NOT NULL,
+    info TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS files (
     id VARCHAR(50) NOT NULL,
     idCloud VARCHAR(5000) NOT NULL,
     accountId VARCHAR(50) NOT NULL,
+    folderId VARCHAR(50) NOT NULL,
     filename VARCHAR(5000) NOT NULL,
-    folderpath VARCHAR(5000) NOT NULL,
     dateSync VARCHAR(100) NOT NULL,
     dateUpdated VARCHAR(100) NOT NULL,
     dateMedia VARCHAR(100),
@@ -31,3 +41,7 @@ CREATE TABLE IF NOT EXISTS files (
     info TEXT NOT NULL,
     metadata TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS files_accountId ON files(accountId);
+CREATE INDEX IF NOT EXISTS files_folderId ON files(folderId);
+

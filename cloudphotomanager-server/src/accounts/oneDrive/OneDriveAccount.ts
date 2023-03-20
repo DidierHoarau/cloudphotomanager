@@ -111,8 +111,12 @@ export class OneDriveAccount implements Account {
     return folders;
   }
 
-  public async listFileInFolders(context: Span, folder: Folder): Promise<File[]> {
+  public async listFilesInFolder(context: Span, folder: Folder): Promise<File[]> {
     return await OneDriveInventory.listFilesInFolder(context, this, folder);
+  }
+
+  public async listFoldersInFolder(context: Span, folder: Folder): Promise<Folder[]> {
+    return await OneDriveInventory.listFoldersInFolder(context, this, folder);
   }
 
   public async downloadFile(context: Span, file: File, folderpath: string, filename: string): Promise<void> {
@@ -123,7 +127,22 @@ export class OneDriveAccount implements Account {
     await OneDriveFileOperations.moveFile(context, this, file, folderpathDestination);
   }
 
+  public async getFolder(context: Span, folder: Folder): Promise<Folder> {
+    return await OneDriveInventory.getFolder(context, this, folder);
+  }
+
   public async getFolderByPath(context: Span, folderpath: string): Promise<Folder> {
-    return await OneDriveFileOperations.getFolderByPath(context, this, folderpath);
+    return await OneDriveInventory.getFolderByPath(context, this, folderpath);
+  }
+
+  public folderToEncodedAbsolute(relativePath: string): string {
+    return encodeURI(`${this.accountDefinition.rootpath}/${relativePath.replace(/\/+$/, "")}`.replace(/\/+/g, "/"));
+  }
+
+  public folderToDecodedRelative(absolutePath: string): string {
+    return decodeURI(absolutePath)
+      .replace(this.accountDefinition.rootpath, "/")
+      .replace("/drive/root:", "")
+      .replace(/\/+/g, "/");
   }
 }

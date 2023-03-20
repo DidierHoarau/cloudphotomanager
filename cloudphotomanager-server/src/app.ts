@@ -11,10 +11,9 @@ import { SqlDbutils } from "./utils-std-ts/SqlDbUtils";
 import { AccountRoutes } from "./accounts/AccountRoutes";
 import { Scheduler } from "./sync/Scheduler";
 import { FileRoutes } from "./files/FileRoutes";
-import { SyncFileMetadata } from "./sync/SyncFileMetadata";
 import { FileData } from "./files/FileData";
-import { FolderData } from "./files/FolderData";
-import { FolderRoutes } from "./files/FolderRoutes";
+import { FolderData } from "./folders/FolderData";
+import { FolderRoutes } from "./folders/FolderRoutes";
 import { SyncRoutes } from "./sync/SyncRoutes";
 import { FileOperationsRoutes } from "./files/FileOperationsRoutes";
 

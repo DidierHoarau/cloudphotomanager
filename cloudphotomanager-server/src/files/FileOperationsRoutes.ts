@@ -35,10 +35,10 @@ export class FileOperationsRoutes {
       const accountDefinition = await AccountData.get(span, req.params.accountId);
       const account = await AccountFactory.getAccountImplementation(accountDefinition);
       await account.moveFile(span, file, req.body.folderpath);
-      const originFolder = await account.getFolderByPath(span, file.folderpath);
-      const targetFolder = await account.getFolderByPath(span, req.body.folderpath);
-      SyncInventory.startSyncFoldertath(span, account, originFolder);
-      SyncInventory.startSyncFoldertath(span, account, targetFolder);
+      // const originFolder = await account.getFolderByPath(span, file.folderpath);
+      // const targetFolder = await account.getFolderByPath(span, req.body.folderpath);
+      // SyncInventory.startSyncFoldertath(span, account, originFolder);
+      // SyncInventory.startSyncFoldertath(span, account, targetFolder);
       // const files = await FileData.listAccountFolder(span, req.params.accountId, req.body.folderpath);
       return res.status(201).send({});
     });

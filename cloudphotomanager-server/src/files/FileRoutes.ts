@@ -3,29 +3,12 @@ import { Auth } from "../users/Auth";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { FileData } from "./FileData";
 import * as fs from "fs-extra";
+import { FolderData } from "../folders/FolderData";
 
 export class FileRoutes {
   //
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     //
-    interface PostFilesAccountIdRequest extends RequestGenericInterface {
-      Params: {
-        accountId: string;
-      };
-      Body: {
-        folderpath: string;
-      };
-    }
-    fastify.post<PostFilesAccountIdRequest>("/search", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
-      if (!userSession.isAuthenticated) {
-        return res.status(403).send({ error: "Access Denied" });
-      }
-      const files = await FileData.listAccountFolder(span, req.params.accountId, req.body.folderpath);
-      return res.status(200).send({ files });
-    });
-
     interface GetFilesAccountIdFileIdThumbnailRequest extends RequestGenericInterface {
       Params: {
         accountId: string;

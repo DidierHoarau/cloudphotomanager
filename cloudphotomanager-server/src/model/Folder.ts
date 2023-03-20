@@ -1,3 +1,4 @@
+import { Span } from "@opentelemetry/sdk-trace-base";
 import { v4 as uuidv4 } from "uuid";
 
 export class Folder {
@@ -7,6 +8,8 @@ export class Folder {
   public folderpath: string;
   public childrenCount: string;
   public accountId: string;
+  public dateSync: Date;
+  public dateUpdated: Date;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public info: any;
 

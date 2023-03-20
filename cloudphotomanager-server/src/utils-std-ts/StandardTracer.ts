@@ -42,7 +42,9 @@ export class StandardTracer {
     opentelemetry.context.setGlobalContextManager(contextManager);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public static getSpanFromRequest(req: any): Span {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (req as any).tracerSpanApi as Span;
   }
 
@@ -69,6 +71,7 @@ export class StandardTracer {
     return span;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public static getTracer(): any {
     if (!tracerInstance) {
       tracerInstance = opentelemetry.trace.getTracer(`${config.SERVICE_ID}-${config.VERSION}`);
@@ -76,6 +79,7 @@ export class StandardTracer {
     return tracerInstance;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public static appendHeader(context: Span, headers = {}): any {
     if (!headers) {
       headers = {};

@@ -1,8 +1,11 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
+import { LIMIT_COMPOUND_SELECT } from "sqlite3";
 import { AccountData } from "../accounts/AccountData";
 import { AccountFactory } from "../accounts/AccountFactory";
 import { Config } from "../Config";
+import { FolderData } from "../folders/FolderData";
 import { AccountDefinition } from "../model/AccountDefinition";
+import { Folder } from "../model/Folder";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { Timeout } from "../utils-std-ts/Timeout";
 import { SyncFileCache } from "./SyncFileCache";
@@ -10,6 +13,8 @@ import { SyncFileMetadata } from "./SyncFileMetadata";
 import { SyncInventory } from "./SyncInventory";
 
 let config: Config;
+
+const OUTDATED_AGE = 7 * 24 * 3600 * 1000;
 
 export class Scheduler {
   //
@@ -38,7 +43,26 @@ export class Scheduler {
   public static async startAccountSync(context: Span, accountDefinition: AccountDefinition) {
     const span = StandardTracer.startSpan("Scheduler_startAccountSync", context);
     const account = await AccountFactory.getAccountImplementation(accountDefinition);
-    await SyncInventory.startSync(span, account);
+
+    // Ensure root folder
+    const rootFolderCloud = await account.getFolderByPath(span, "/");
+    const rootFolderKnown = await FolderData.getByCloudId(span, rootFolderCloud.accountId, rootFolderCloud.idCloud);
+    if (!rootFolderKnown) {
+      rootFolderCloud.dateSync = new Date(0);
+      await FolderData.add(span, rootFolderCloud);
+    }
+
+    for (const folder of await FolderData.getOlderThan(
+      span,
+      account.getAccountDefinition().id,
+      new Date(new Date().getTime() - OUTDATED_AGE)
+    )) {
+      await SyncInventory.queueSyncFolder(span, account, folder);
+    }
+
     span.end();
+
+    await Timeout.wait(1);
+    SyncInventory.syncFolderProcessQueue();
   }
 }

@@ -32,6 +32,7 @@ export const FoldersStore = defineStore("FoldersStore", {
                   const newFolderTree = {
                     name: basePath.split("/").pop(),
                     folderpath: basePath,
+                    id: null,
                     accountId: account.id,
                     indentation: this.getIndentation(basePath),
                   };
@@ -42,6 +43,7 @@ export const FoldersStore = defineStore("FoldersStore", {
                 folders.push({
                   name: folder.folderpath.split("/").pop(),
                   type: "folder",
+                  id: folder.id,
                   accountId: account.id,
                   folderpath: folder.folderpath,
                   childrenCount: folder.childrenCount,

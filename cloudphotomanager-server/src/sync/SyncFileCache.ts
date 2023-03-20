@@ -25,7 +25,7 @@ export class SyncFileCache {
 
   public static async startSyncForFolder(context: Span, account: Account, folder: Folder) {
     const span = StandardTracer.startSpan("SchedulerFiles_SyncFileCache", context);
-    const files = await FileData.listAccountFolder(span, account.getAccountDefinition().id, folder.folderpath);
+    const files = await FileData.listByFolder(span, account.getAccountDefinition().id, folder.folderpath);
     for (const file of files) {
       const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
       if (

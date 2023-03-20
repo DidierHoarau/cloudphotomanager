@@ -31,12 +31,17 @@ export class FileData {
     return file;
   }
 
-  public static async getByPath(context: Span, accountId: string, folderpath: string, filename: string): Promise<File> {
-    const span = StandardTracer.startSpan("FileData_getByPath", context);
+  public static async getByFolderId(
+    context: Span,
+    accountId: string,
+    folderId: string,
+    filename: string
+  ): Promise<File> {
+    const span = StandardTracer.startSpan("FileData_folderId", context);
     const rawData = await SqlDbutils.querySQL(
       span,
-      "SELECT * FROM files WHERE accountId = ? AND folderpath = ? AND filename = ? ",
-      [accountId, folderpath, filename]
+      "SELECT * FROM files WHERE accountId = ? AND folderpath = folderId AND filename = ? ",
+      [accountId, folderId, filename]
     );
     if (rawData.length === 0) {
       return null;
@@ -57,11 +62,11 @@ export class FileData {
     return files;
   }
 
-  public static async listAccountFolder(context: Span, accountId: string, folderpath: string): Promise<File[]> {
+  public static async listByFolder(context: Span, accountId: string, folderId: string): Promise<File[]> {
     const span = StandardTracer.startSpan("FileData_listForAccount", context);
-    const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE accountId = ? AND folderpath = ?", [
+    const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE accountId = ? AND folderId = ?", [
       accountId,
-      folderpath,
+      folderId,
     ]);
     const files = [];
     rawData.forEach((fileRaw) => {
@@ -75,14 +80,14 @@ export class FileData {
     const span = StandardTracer.startSpan("FileData_add", context);
     await SqlDbutils.execSQL(
       span,
-      "INSERT INTO files (id, idCloud, accountId, filename, folderpath, hash, dateUpdated, dateSync, dateMedia, info, metadata) " +
+      "INSERT INTO files (id, idCloud, accountId, filename, folderId, hash, dateUpdated, dateSync, dateMedia, info, metadata) " +
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ",
       [
         file.id,
         file.idCloud,
         file.accountId,
         file.filename,
-        file.folderpath,
+        file.folderId,
         file.hash,
         file.dateUpdated.toISOString(),
         file.dateSync.toISOString(),
@@ -99,14 +104,14 @@ export class FileData {
     await SqlDbutils.execSQL(
       span,
       "UPDATE files " +
-        " SET idCloud = ?, accountId = ?, filename = ?, folderpath = ?, hash = ?, " +
+        " SET idCloud = ?, accountId = ?, filename = ?, folderId = ?, hash = ?, " +
         "     dateUpdated = ?, dateSync = ?, dateMedia = ?, info = ?, metadata = ? " +
         " WHERE id = ? ",
       [
         file.idCloud,
         file.accountId,
         file.filename,
-        file.folderpath,
+        file.folderId,
         file.hash,
         file.dateUpdated.toISOString(),
         file.dateSync.toISOString(),
@@ -133,7 +138,7 @@ function fromRaw(fileRaw: any): File {
   file.idCloud = fileRaw.idCloud;
   file.accountId = fileRaw.accountId;
   file.filename = fileRaw.filename;
-  file.folderpath = fileRaw.folderpath;
+  file.folderId = fileRaw.folderId;
   file.hash = fileRaw.hash;
   file.dateSync = new Date(fileRaw.dateSync);
   file.dateUpdated = new Date(fileRaw.dateUpdated);
