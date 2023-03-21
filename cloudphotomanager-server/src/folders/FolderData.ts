@@ -127,6 +127,37 @@ export class FolderData {
     return folders;
   }
 
+  public static async getOldestSync(context: Span, accountId: string, limit: number): Promise<Folder[]> {
+    const span = StandardTracer.startSpan("FolderData_getOlderThan", context);
+    const rawData = await SqlDbutils.querySQL(
+      span,
+      "SELECT * FROM folders WHERE accountId = ? ORDER BY dateSync ASC LIMIT ? ",
+      [accountId, limit]
+    );
+    const folders = [];
+    rawData.forEach((folderRaw) => {
+      folders.push(fromRaw(folderRaw));
+    });
+    span.end();
+    return folders;
+  }
+
+  public static async getNewstUpdate(context: Span, accountId: string, limit: number): Promise<Folder[]> {
+    const span = StandardTracer.startSpan("FolderData_getOlderThan", context);
+    const rawData = await SqlDbutils.querySQL(
+      span,
+      "SELECT * FROM folders WHERE accountId = ? " +
+        " AND id IN ( SELECT folderId FROM files WHERE accountId = ? ORDER BY dateUpdated DESC LIMIT ? ) ",
+      [accountId, accountId, limit]
+    );
+    const folders = [];
+    rawData.forEach((folderRaw) => {
+      folders.push(fromRaw(folderRaw));
+    });
+    span.end();
+    return folders;
+  }
+
   public static async deletePathRecursive(context: Span, accountId: string, folderpath: string) {
     const span = StandardTracer.startSpan("FolderData_deletePathRecursive", context);
     await SqlDbutils.execSQL(

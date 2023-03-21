@@ -1,15 +1,12 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import { LIMIT_COMPOUND_SELECT } from "sqlite3";
 import { AccountData } from "../accounts/AccountData";
 import { AccountFactory } from "../accounts/AccountFactory";
 import { Config } from "../Config";
 import { FolderData } from "../folders/FolderData";
 import { AccountDefinition } from "../model/AccountDefinition";
-import { Folder } from "../model/Folder";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { Timeout } from "../utils-std-ts/Timeout";
 import { SyncFileCache } from "./SyncFileCache";
-import { SyncFileMetadata } from "./SyncFileMetadata";
 import { SyncInventory } from "./SyncInventory";
 
 let config: Config;
@@ -22,7 +19,6 @@ export class Scheduler {
     const span = StandardTracer.startSpan("Scheduler_init", context);
     config = configIn;
     SyncFileCache.init(span, configIn);
-    SyncFileMetadata.init(span, configIn);
     SyncInventory.init(span, configIn);
     Scheduler.startSchedule();
     span.end();
@@ -44,7 +40,10 @@ export class Scheduler {
     const span = StandardTracer.startSpan("Scheduler_startAccountSync", context);
     const account = await AccountFactory.getAccountImplementation(accountDefinition);
 
-    // Ensure root folder
+    // Debug
+    // FolderData.deleteAccount(span, accountDefinition.id);
+
+    // // Ensure root folder
     const rootFolderCloud = await account.getFolderByPath(span, "/");
     const rootFolderKnown = await FolderData.getByCloudId(span, rootFolderCloud.accountId, rootFolderCloud.idCloud);
     if (!rootFolderKnown) {
@@ -52,17 +51,30 @@ export class Scheduler {
       await FolderData.add(span, rootFolderCloud);
     }
 
+    // Outdated Folder
     for (const folder of await FolderData.getOlderThan(
       span,
       account.getAccountDefinition().id,
       new Date(new Date().getTime() - OUTDATED_AGE)
     )) {
-      await SyncInventory.queueSyncFolder(span, account, folder);
+      await SyncInventory.syncFolder(span, account, folder);
+    }
+
+    // Top oldest sync folder
+    for (const folder of await FolderData.getOldestSync(span, account.getAccountDefinition().id, 10)) {
+      await SyncInventory.syncFolder(span, account, folder);
+    }
+
+    // Top oldest sync files
+    for (const folder of await FolderData.getNewstUpdate(span, account.getAccountDefinition().id, 10)) {
+      await SyncInventory.syncFolder(span, account, folder);
+    }
+
+    // Sync File Cache
+    for (const folder of await FolderData.listForAccount(span, accountDefinition.id)) {
+      await SyncFileCache.syncFolder(span, account, folder);
     }
 
     span.end();
-
-    await Timeout.wait(1);
-    SyncInventory.syncFolderProcessQueue();
   }
 }

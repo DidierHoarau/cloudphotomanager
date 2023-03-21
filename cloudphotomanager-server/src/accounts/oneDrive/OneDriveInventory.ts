@@ -79,7 +79,6 @@ export class OneDriveInventory {
     ).data.value;
     const folders: Folder[] = [];
     for (const child of children) {
-      console.log(child);
       if (child.folder) {
         folders.push(folderFromRaw(child, oneDriveAccount));
       }

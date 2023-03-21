@@ -14,6 +14,8 @@ import { Folder } from "../model/Folder";
 
 let config: Config;
 const logger = new Logger("SchedulerFiles");
+let inProgressSyncCount = 0;
+const MAX_PARALLEL_SYNC = 1;
 
 export class SyncFileCache {
   //
@@ -23,9 +25,9 @@ export class SyncFileCache {
     span.end();
   }
 
-  public static async startSyncForFolder(context: Span, account: Account, folder: Folder) {
+  public static async syncFolder(context: Span, account: Account, folder: Folder) {
     const span = StandardTracer.startSpan("SchedulerFiles_SyncFileCache", context);
-    const files = await FileData.listByFolder(span, account.getAccountDefinition().id, folder.folderpath);
+    const files = await FileData.listByFolder(span, account.getAccountDefinition().id, folder.id);
     for (const file of files) {
       const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
       if (
@@ -37,15 +39,21 @@ export class SyncFileCache {
       }
     }
     span.end();
-    SyncFileCache.processQueue();
+    SyncFileCache.syncFolderProcessQueue();
   }
 
-  private static async processQueue() {
+  public static async syncFolderProcessQueue() {
+    if (inProgressSyncCount >= MAX_PARALLEL_SYNC) {
+      return;
+    }
+
     const queuedItem = SyncQueue.pop(SyncQueue.TYPE_SYNC_FILE_CACHE);
     if (!queuedItem) {
       return;
     }
     const span = StandardTracer.startSpan("SchedulerFiles_SyncFileCacheProcessQueue");
+    inProgressSyncCount++;
+
     try {
       const file = queuedItem.file;
       const account = queuedItem.account;
@@ -66,7 +74,8 @@ export class SyncFileCache {
     } catch (err) {
       logger.error(err);
     }
+    inProgressSyncCount--;
     span.end();
-    SyncFileCache.processQueue();
+    SyncFileCache.syncFolderProcessQueue();
   }
 }

@@ -73,7 +73,6 @@ export class AwsS3Account implements Account {
       valid = true;
     } catch (err) {
       span.recordException(err);
-      console.log(err);
     }
     span.end();
     return valid;
