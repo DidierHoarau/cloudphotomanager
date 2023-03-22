@@ -93,10 +93,11 @@ export class OneDriveFileOperations {
         }
       )
     ).data;
-    const folder = new Folder();
+    const folder = new Folder(
+      oneDriveAccount.getAccountDefinition().id,
+      `${parentFolder.folderpath}/${foldername}`.replace(/\/+/g, "/")
+    );
     folder.idCloud = folderRaw.id;
-    folder.folderpath = `${parentFolder.folderpath}/${foldername}`.replace(/\/+/g, "/");
-    folder.accountId = oneDriveAccount.getAccountDefinition().id;
     return folder;
   }
 

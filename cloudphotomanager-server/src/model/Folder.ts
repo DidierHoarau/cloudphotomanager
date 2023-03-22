@@ -1,5 +1,4 @@
-import { Span } from "@opentelemetry/sdk-trace-base";
-import { v4 as uuidv4 } from "uuid";
+import * as md5 from "md5";
 
 export class Folder {
   //
@@ -13,8 +12,10 @@ export class Folder {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public info: any;
 
-  constructor() {
-    this.id = uuidv4();
+  constructor(accountId: string, folderpath: string) {
+    this.id = md5(encodeURI(`${accountId}/${folderpath}`));
+    this.accountId = accountId;
+    this.folderpath = folderpath;
     this.info = {};
   }
 }

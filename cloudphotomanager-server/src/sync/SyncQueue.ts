@@ -3,21 +3,18 @@ import * as _ from "lodash";
 
 const queue = {
   syncFileCache: [],
-  syncMetadada: [],
   syncInventory: [],
 };
 
 export class SyncQueue {
   //
   public static TYPE_SYNC_FILE_CACHE = "syncFileCache";
-  public static TYPE_SYNC_METADATA = "syncMetadada";
   public static TYPE_SYNC_INVENTORY = "syncInventory";
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public static getCounts(): any[] {
     return [
       { type: SyncQueue.TYPE_SYNC_FILE_CACHE, count: queue.syncFileCache.length },
-      { type: SyncQueue.TYPE_SYNC_METADATA, count: queue.syncMetadada.length },
       { type: SyncQueue.TYPE_SYNC_INVENTORY, count: queue.syncInventory.length },
     ];
   }

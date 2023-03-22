@@ -1,5 +1,6 @@
 <template>
   <div>
+    <input v-model="folderFilter" type="text" class="folder-filter" />
     <Loading v-if="foldersStore.loading" class="folder-list-layout" />
     <div v-for="(folder, index) in foldersStore.folders" v-bind:key="folder.name">
       <!-- v-if="folder.isVisible" -->
@@ -83,5 +84,9 @@ export default {
   grid-column: 3;
   opacity: 0.2;
   font-size: 0.9em;
+}
+.folder-filter {
+  font-size: 0.7em;
+  height: 3em;
 }
 </style>

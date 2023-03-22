@@ -176,11 +176,9 @@ export class FolderData {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fromRaw(folderRaw: any): Folder {
-  const folder = new Folder();
+  const folder = new Folder(folderRaw.accountId, folderRaw.folderpath);
   folder.id = folderRaw.id;
   folder.idCloud = folderRaw.idCloud;
-  folder.folderpath = folderRaw.folderpath;
-  folder.accountId = folderRaw.accountId;
   folder.dateSync = new Date(folderRaw.dateSync);
   folder.dateUpdated = new Date(folderRaw.dateUpdated);
   folder.info = folderRaw.info;

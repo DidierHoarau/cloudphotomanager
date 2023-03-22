@@ -25,7 +25,7 @@ export class SyncInventory {
   }
 
   public static async syncFolder(context: Span, account: Account, folder: Folder): Promise<void> {
-    SyncQueue.push(SyncQueue.TYPE_SYNC_INVENTORY, folder.idCloud, { folder, account });
+    SyncQueue.push(SyncQueue.TYPE_SYNC_INVENTORY, folder.id, { folder, account });
     await Timeout.wait(1);
     SyncInventory.syncFolderProcessQueue();
   }
@@ -39,6 +39,12 @@ export class SyncInventory {
     if (!queuedItem) {
       return;
     }
+    // Prevent duplicate
+    SyncQueue.push(SyncQueue.TYPE_SYNC_INVENTORY, queuedItem.folder.id, {
+      folder: queuedItem.folder,
+      account: queuedItem.account,
+    });
+
     const span = StandardTracer.startSpan("SyncInventory_syncFolder");
     inProgressSyncCount++;
     try {
@@ -53,7 +59,7 @@ export class SyncInventory {
 
       // New Folder
       for (const cloudSubFolder of cloudSubFolders) {
-        const knownSubFolder = _.find(knownSubFolders, { idCloud: cloudFolder.idCloud });
+        const knownSubFolder = _.find(knownSubFolders, { id: cloudFolder.id });
         if (!knownSubFolder) {
           await FolderData.add(span, cloudSubFolder);
           await SyncInventory.syncFolder(span, account, cloudSubFolder);
@@ -62,7 +68,7 @@ export class SyncInventory {
 
       // New Files
       for (const cloudSubFile of cloudSubFiles) {
-        const knownSubFile = _.find(knownSubFiles, { idCloud: cloudFolder.idCloud });
+        const knownSubFile = _.find(knownSubFiles, { id: cloudFolder.id });
         if (!knownSubFile) {
           cloudSubFile.folderId = knownFolder.id;
           await FileData.add(span, cloudSubFile);
@@ -71,7 +77,7 @@ export class SyncInventory {
 
       // Deleted Folders
       for (const knownSubFolder of knownSubFolders) {
-        const cloudSubFolder = _.find(cloudSubFolders, { idCloud: knownSubFolder.idCloud });
+        const cloudSubFolder = _.find(cloudSubFolders, { id: knownSubFolder.id });
         if (!cloudSubFolder) {
           await FolderData.deletePathRecursive(span, account.getAccountDefinition().id, knownSubFolder.folderpath);
         }
@@ -79,7 +85,7 @@ export class SyncInventory {
 
       // Deleted Files
       for (const knownSubFile of knownSubFiles) {
-        const cloudSubFile = _.find(cloudSubFiles, { idCloud: knownSubFile.idCloud });
+        const cloudSubFile = _.find(cloudSubFiles, { id: knownSubFile.id });
         if (!cloudSubFile) {
           await FileData.delete(span, knownSubFile.id);
         }
@@ -97,6 +103,7 @@ export class SyncInventory {
     }
 
     inProgressSyncCount--;
+    SyncQueue.popId(SyncQueue.TYPE_SYNC_INVENTORY, queuedItem.folder.id);
     span.end();
     await Timeout.wait(1);
     SyncInventory.syncFolderProcessQueue();

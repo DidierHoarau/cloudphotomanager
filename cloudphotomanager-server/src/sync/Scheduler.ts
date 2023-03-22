@@ -43,9 +43,9 @@ export class Scheduler {
     // Debug
     // FolderData.deleteAccount(span, accountDefinition.id);
 
-    // // Ensure root folder
+    // Ensure root folder
     const rootFolderCloud = await account.getFolderByPath(span, "/");
-    const rootFolderKnown = await FolderData.getByCloudId(span, rootFolderCloud.accountId, rootFolderCloud.idCloud);
+    const rootFolderKnown = await FolderData.get(span, rootFolderCloud.accountId, rootFolderCloud.id);
     if (!rootFolderKnown) {
       rootFolderCloud.dateSync = new Date(0);
       await FolderData.add(span, rootFolderCloud);
@@ -74,6 +74,10 @@ export class Scheduler {
     for (const folder of await FolderData.listForAccount(span, accountDefinition.id)) {
       await SyncFileCache.syncFolder(span, account, folder);
     }
+
+    // for (const folder of await FolderData.listForAccount(span, accountDefinition.id)) {
+    //   console.log(`${folder.folderpath} ${folder.idCloud} ${folder.id}`);
+    // }
 
     span.end();
   }

@@ -134,12 +134,9 @@ export class FileData {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fromRaw(fileRaw: any): File {
-  const file = new File();
+  const file = new File(fileRaw.accountId, fileRaw.folderId, fileRaw.filename);
   file.id = fileRaw.id;
   file.idCloud = fileRaw.idCloud;
-  file.accountId = fileRaw.accountId;
-  file.filename = fileRaw.filename;
-  file.folderId = fileRaw.folderId;
   file.hash = fileRaw.hash;
   file.dateSync = new Date(fileRaw.dateSync);
   file.dateUpdated = new Date(fileRaw.dateUpdated);

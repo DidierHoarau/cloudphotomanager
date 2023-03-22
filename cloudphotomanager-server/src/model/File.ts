@@ -1,5 +1,5 @@
 import { FileMediaType } from "./FileMediaType";
-import { v4 as uuidv4 } from "uuid";
+import * as md5 from "md5";
 
 export class File {
   //
@@ -18,8 +18,11 @@ export class File {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public metadata: any;
 
-  constructor() {
-    this.id = uuidv4();
+  constructor(accountId: string, folderId: string, filename: string) {
+    this.id = md5(encodeURI(`${accountId}/${folderId}/${filename}`));
+    this.accountId = accountId;
+    this.folderId = folderId;
+    this.filename = filename;
     this.info = {};
     this.metadata = {};
   }

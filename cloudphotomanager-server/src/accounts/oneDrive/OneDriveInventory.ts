@@ -35,31 +35,7 @@ export class OneDriveInventory {
     const files: File[] = [];
     for (const child of children) {
       if (!child.folder || File.getMediaType(child.name) !== FileMediaType.unknown) {
-        const file = new File();
-        file.accountId = oneDriveAccount.getAccountDefinition().id;
-        file.idCloud = child.id;
-        file.filename = child.name;
-        file.folderId = folder.id;
-        file.dateSync = new Date();
-        file.dateUpdated = new Date(child.lastModifiedDateTime);
-        if (child.photo && child.photo.takenDateTime) {
-          file.dateMedia = new Date(child.photo.takenDateTime);
-        } else {
-          file.dateMedia = new Date(child.fileSystemInfo.createdDateTime);
-        }
-        file.info = {};
-        file.metadata = {};
-        if (child.photo) {
-          file.metadata.photo = child.photo;
-        }
-        if (child.video) {
-          file.metadata.photo = child.photo;
-        }
-        if (child.image) {
-          file.metadata.image = child.image;
-        }
-        file.hash = child.file.hashes.sha256Hash;
-        files.push(file);
+        files.push(fileFromRaw(child, folderId, oneDriveAccount));
       }
     }
     return files;
@@ -144,23 +120,44 @@ export class OneDriveInventory {
         },
       })
     ).data;
-    const folder = new Folder();
-    folder.idCloud = folderRaw.id;
-    folder.accountId = oneDriveAccount.getAccountDefinition().id;
-    folder.folderpath = oneDriveAccount.folderToDecodedRelative(`${folderRaw.parentReference.path}/${folderRaw.name}`);
-    folder.dateSync = new Date();
-    folder.dateUpdated = new Date(folderRaw.lastModifiedDateTime);
-    return folder;
+    return folderFromRaw(folderRaw, oneDriveAccount);
   }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function folderFromRaw(data: any, oneDriveAccount: OneDriveAccount): Folder {
-  const folder = new Folder();
+  const folder = new Folder(
+    oneDriveAccount.getAccountDefinition().id,
+    oneDriveAccount.folderToDecodedRelative(`${data.parentReference.path}/${data.name}`)
+  );
   folder.idCloud = data.id;
-  folder.accountId = oneDriveAccount.getAccountDefinition().id;
-  folder.folderpath = oneDriveAccount.folderToDecodedRelative(`${data.parentReference.path}/${data.name}`);
   folder.dateSync = new Date();
   folder.dateUpdated = new Date(data.lastModifiedDateTime);
   return folder;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function fileFromRaw(data: any, folderId: string, oneDriveAccount: OneDriveAccount): File {
+  const file = new File(oneDriveAccount.getAccountDefinition().id, folderId, data.name);
+  file.idCloud = data.id;
+  file.dateSync = new Date();
+  file.dateUpdated = new Date(data.lastModifiedDateTime);
+  if (data.photo && data.photo.takenDateTime) {
+    file.dateMedia = new Date(data.photo.takenDateTime);
+  } else {
+    file.dateMedia = new Date(data.fileSystemInfo.createdDateTime);
+  }
+  file.info = {};
+  file.metadata = {};
+  if (data.photo) {
+    file.metadata.photo = data.photo;
+  }
+  if (data.video) {
+    file.metadata.photo = data.photo;
+  }
+  if (data.image) {
+    file.metadata.image = data.image;
+  }
+  file.hash = data.file.hashes.sha256Hash;
+  return file;
 }
