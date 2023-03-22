@@ -5,7 +5,6 @@ import { Folder } from "./Folder";
 
 export interface Account {
   validate(context: Span): Promise<boolean>;
-  listFolders(context: Span): Promise<Folder[]>;
   listFilesInFolder(context: Span, folder: Folder): Promise<File[]>;
   listFoldersInFolder(context: Span, folder: Folder): Promise<Folder[]>;
   downloadFile(context: Span, file: File, folder: string, filename: string): Promise<void>;

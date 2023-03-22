@@ -92,25 +92,6 @@ export class OneDriveAccount implements Account {
     return this.token;
   }
 
-  async listFolders(context: Span): Promise<Folder[]> {
-    const span = StandardTracer.startSpan("OneDriveAccount_listFiles", context);
-    const folders: Folder[] = [];
-    const rootFolderId = (
-      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/root:${encodeURI(this.accountDefinition.rootpath)}`, {
-        headers: {
-          Authorization: `Bearer ${await this.getToken(span)}`,
-        },
-      })
-    ).data.id;
-    const folder = new Folder();
-    folder.accountId = this.accountDefinition.id;
-    folder.folderpath = "/";
-    folders.push(folder);
-    await OneDriveInventory.listFolders(span, this, rootFolderId, folders);
-    span.end();
-    return folders;
-  }
-
   public async listFilesInFolder(context: Span, folder: Folder): Promise<File[]> {
     return await OneDriveInventory.listFilesInFolder(context, this, folder);
   }
