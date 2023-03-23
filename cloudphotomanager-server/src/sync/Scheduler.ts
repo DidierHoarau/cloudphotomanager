@@ -41,7 +41,7 @@ export class Scheduler {
     const account = await AccountFactory.getAccountImplementation(accountDefinition);
 
     // Debug
-    // FolderData.deleteAccount(span, accountDefinition.id);
+    FolderData.deleteAccount(span, accountDefinition.id);
 
     // Ensure root folder
     const rootFolderCloud = await account.getFolderByPath(span, "/");
