@@ -84,10 +84,12 @@ export class FolderData {
     const folders = [];
     accountfolders.forEach((candidateFolder) => {
       if (
-        (candidateFolder.folderpath.indexOf(parentFolder.folderpath) === 0 &&
-          candidateFolder.folderpath.split("/").length === parentFolder.folderpath.split("/").length + 1) ||
-        (parentFolder.folderpath === "/" && candidateFolder.folderpath.split("/").length === 2)
+        candidateFolder.id !== parentFolder.id &&
+        candidateFolder.folderpath.indexOf(parentFolder.folderpath) === 0 &&
+        (candidateFolder.folderpath.split("/").length === parentFolder.folderpath.split("/").length + 1 ||
+          (parentFolder.folderpath === "/" && candidateFolder.folderpath.split("/").length === 2))
       ) {
+        console.log(candidateFolder, parentFolder);
         folders.push(fromRaw(candidateFolder));
       }
     });

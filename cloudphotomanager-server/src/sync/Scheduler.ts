@@ -41,7 +41,7 @@ export class Scheduler {
     const account = await AccountFactory.getAccountImplementation(accountDefinition);
 
     // Debug
-    FolderData.deleteAccount(span, accountDefinition.id);
+    // FolderData.deleteAccount(span, accountDefinition.id);
 
     // Ensure root folder
     const rootFolderCloud = await account.getFolderByPath(span, "/");
@@ -74,10 +74,6 @@ export class Scheduler {
     for (const folder of await FolderData.listForAccount(span, accountDefinition.id)) {
       await SyncFileCache.syncFolder(span, account, folder);
     }
-
-    // for (const folder of await FolderData.listForAccount(span, accountDefinition.id)) {
-    //   console.log(`${folder.folderpath} ${folder.idCloud} ${folder.id}`);
-    // }
 
     span.end();
   }
