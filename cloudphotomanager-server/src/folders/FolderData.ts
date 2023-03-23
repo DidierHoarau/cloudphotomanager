@@ -78,14 +78,15 @@ export class FolderData {
     return fromRaw(folderRaw[0]);
   }
 
-  public static async listByParentFolder(context: Span, accountId: string, parentFolder: Folder): Promise<Folder[]> {
+  public static async listSubFolders(context: Span, accountId: string, parentFolder: Folder): Promise<Folder[]> {
     const span = StandardTracer.startSpan("FolderData_listByParentFolder", context);
     const accountfolders = await FolderData.listForAccount(span, accountId);
     const folders = [];
     accountfolders.forEach((candidateFolder) => {
       if (
-        candidateFolder.folderpath.indexOf(parentFolder.folderpath) === 0 &&
-        candidateFolder.folderpath.split("/").length === candidateFolder.folderpath.split("/").length + 1
+        (candidateFolder.folderpath.indexOf(parentFolder.folderpath) === 0 &&
+          candidateFolder.folderpath.split("/").length === parentFolder.folderpath.split("/").length + 1) ||
+        (parentFolder.folderpath === "/" && candidateFolder.folderpath.split("/").length === 2)
       ) {
         folders.push(fromRaw(candidateFolder));
       }

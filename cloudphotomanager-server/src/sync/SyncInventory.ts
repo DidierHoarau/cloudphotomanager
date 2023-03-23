@@ -55,7 +55,7 @@ export class SyncInventory {
       const cloudSubFolders = await account.listFoldersInFolder(span, cloudFolder);
       const cloudSubFiles = await account.listFilesInFolder(span, cloudFolder);
       const knownSubFiles = await FileData.listByFolder(span, account.getAccountDefinition().id, knownFolder.id);
-      const knownSubFolders = await FolderData.listByParentFolder(span, account.getAccountDefinition().id, knownFolder);
+      const knownSubFolders = await FolderData.listSubFolders(span, account.getAccountDefinition().id, knownFolder);
 
       // New Folder
       for (const cloudSubFolder of cloudSubFolders) {
@@ -68,7 +68,7 @@ export class SyncInventory {
 
       // New Files
       for (const cloudSubFile of cloudSubFiles) {
-        const knownSubFile = _.find(knownSubFiles, { id: cloudFolder.id });
+        const knownSubFile = _.find(knownSubFiles, { id: cloudSubFile.id });
         if (!knownSubFile) {
           cloudSubFile.folderId = knownFolder.id;
           await FileData.add(span, cloudSubFile);
