@@ -79,7 +79,6 @@ export default {
   width: 100%;
   min-width: 20em;
   height: 15em;
-  overflow-y: scroll;
 }
 .file-preview img {
   max-width: 100%;

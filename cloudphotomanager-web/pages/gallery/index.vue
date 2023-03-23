@@ -211,7 +211,7 @@ export default {
     grid-column-end: span 2;
   }
   .gallery-file-list {
-    overflow: scroll;
+    overflow: auto;
     grid-row: 4;
     grid-column-start: 1;
     grid-column-end: span 2;

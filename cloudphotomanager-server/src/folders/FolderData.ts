@@ -89,7 +89,6 @@ export class FolderData {
         (candidateFolder.folderpath.split("/").length === parentFolder.folderpath.split("/").length + 1 ||
           (parentFolder.folderpath === "/" && candidateFolder.folderpath.split("/").length === 2))
       ) {
-        console.log(candidateFolder, parentFolder);
         folders.push(fromRaw(candidateFolder));
       }
     });
@@ -167,11 +166,12 @@ export class FolderData {
       span,
       "DELETE FROM files " +
         " WHERE accountId = ? " +
-        ` AND folderId IN ( SELECT id FROM folders WHERE accountId = ? AND folderpath LIKE '${folderpath}%' ) `,
-      [accountId, accountId]
+        ` AND folderId IN ( SELECT id FROM folders WHERE accountId = ? AND folderpath LIKE ? ) `,
+      [accountId, accountId, `${folderpath}%`]
     );
-    await SqlDbutils.execSQL(span, `DELETE FROM folders WHERE accountId = ? AND folderpath LIKE '${folderpath}%' `, [
+    await SqlDbutils.execSQL(span, `DELETE FROM folders WHERE accountId = ? AND folderpath LIKE ? `, [
       accountId,
+      `${folderpath}%`,
     ]);
     span.end();
   }
