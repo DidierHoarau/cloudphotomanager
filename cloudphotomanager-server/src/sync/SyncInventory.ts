@@ -79,6 +79,7 @@ export class SyncInventory {
       for (const knownSubFolder of knownSubFolders) {
         const cloudSubFolder = _.find(cloudSubFolders, { id: knownSubFolder.id });
         if (!cloudSubFolder) {
+          console.log(knownFolder.folderpath, knownSubFolders[0]);
           await FolderData.deletePathRecursive(span, account.getAccountDefinition().id, knownSubFolder.folderpath);
         }
       }

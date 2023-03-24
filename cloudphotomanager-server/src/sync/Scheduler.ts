@@ -49,6 +49,7 @@ export class Scheduler {
     if (!rootFolderKnown) {
       rootFolderCloud.dateSync = new Date(0);
       await FolderData.add(span, rootFolderCloud);
+      await SyncInventory.syncFolder(span, account, rootFolderCloud);
     }
 
     // Outdated Folder
