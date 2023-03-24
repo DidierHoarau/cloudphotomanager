@@ -73,7 +73,7 @@ export class Scheduler {
 
     // Sync File Cache
     for (const folder of await FolderData.listForAccount(span, accountDefinition.id)) {
-      await SyncFileCache.syncFolder(span, account, folder);
+      // await SyncFileCache.syncFolder(span, account, folder);
     }
 
     span.end();
