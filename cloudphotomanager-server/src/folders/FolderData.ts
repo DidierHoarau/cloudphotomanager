@@ -82,15 +82,9 @@ export class FolderData {
     const span = StandardTracer.startSpan("FolderData_listByParentFolder", context);
     const accountfolders = await FolderData.listForAccount(span, accountId);
     const folders = [];
+
     accountfolders.forEach((candidateFolder) => {
-      if (
-        candidateFolder.folderpath.indexOf(parentFolder.folderpath) === 0 &&
-        candidateFolder.folderpath !== parentFolder.folderpath &&
-        ((parentFolder.folderpath === "/" &&
-          _.countBy(candidateFolder.folderpath)["/"] === _.countBy(parentFolder.folderpath)["/"]) ||
-          _.countBy(candidateFolder.folderpath)["/"] === _.countBy(parentFolder.folderpath)["/"] + 1)
-      ) {
-        console.log(parentFolder.folderpath, candidateFolder.folderpath, "Y");
+      if (path.relative(`${candidateFolder.folderpath}/`, parentFolder.folderpath) === "..") {
         folders.push(fromRaw(candidateFolder));
       }
     });

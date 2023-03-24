@@ -19,6 +19,10 @@ export class SyncQueue {
     ];
   }
 
+  public static getCount(type: string): number {
+    return queue[type].length;
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public static pop(type: string): any {
     if (queue[type].length === 0) {

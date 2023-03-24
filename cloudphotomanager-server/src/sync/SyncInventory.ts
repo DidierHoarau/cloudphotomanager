@@ -14,7 +14,7 @@ import { SyncFileCache } from "./SyncFileCache";
 let config: Config;
 const logger = new Logger("SyncInventory");
 let inProgressSyncCount = 0;
-const MAX_PARALLEL_SYNC = 1;
+const MAX_PARALLEL_SYNC = 3;
 
 export class SyncInventory {
   //
@@ -27,7 +27,9 @@ export class SyncInventory {
   public static async syncFolder(context: Span, account: Account, folder: Folder): Promise<void> {
     SyncQueue.push(SyncQueue.TYPE_SYNC_INVENTORY, folder.id, { folder, account });
     await Timeout.wait(1);
-    SyncInventory.syncFolderProcessQueue();
+    for (let i = 0; i < MAX_PARALLEL_SYNC; i++) {
+      SyncInventory.syncFolderProcessQueue();
+    }
   }
 
   public static async syncFolderProcessQueue(): Promise<void> {
@@ -39,11 +41,6 @@ export class SyncInventory {
     if (!queuedItem) {
       return;
     }
-    // Prevent duplicate
-    SyncQueue.push(SyncQueue.TYPE_SYNC_INVENTORY, queuedItem.folder.id, {
-      folder: queuedItem.folder,
-      account: queuedItem.account,
-    });
 
     const span = StandardTracer.startSpan("SyncInventory_syncFolder");
     inProgressSyncCount++;
@@ -59,7 +56,7 @@ export class SyncInventory {
 
       // New Folder
       for (const cloudSubFolder of cloudSubFolders) {
-        const knownSubFolder = _.find(knownSubFolders, { id: cloudFolder.id });
+        const knownSubFolder = _.find(knownSubFolders, { id: cloudSubFolder.id });
         if (!knownSubFolder) {
           await FolderData.add(span, cloudSubFolder);
           await SyncInventory.syncFolder(span, account, cloudSubFolder);
@@ -79,7 +76,6 @@ export class SyncInventory {
       for (const knownSubFolder of knownSubFolders) {
         const cloudSubFolder = _.find(cloudSubFolders, { id: knownSubFolder.id });
         if (!cloudSubFolder) {
-          console.log(knownFolder.folderpath, knownSubFolders[0]);
           await FolderData.deletePathRecursive(span, account.getAccountDefinition().id, knownSubFolder.folderpath);
         }
       }
@@ -104,7 +100,7 @@ export class SyncInventory {
     }
 
     inProgressSyncCount--;
-    SyncQueue.popId(SyncQueue.TYPE_SYNC_INVENTORY, queuedItem.folder.id);
+
     span.end();
     await Timeout.wait(1);
     SyncInventory.syncFolderProcessQueue();
