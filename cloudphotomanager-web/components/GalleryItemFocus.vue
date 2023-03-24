@@ -56,8 +56,10 @@ export default {
 }
 .file-preview img {
   max-width: 100%;
-  height: auto;
   max-height: 100%;
+  display: block;
+  height: auto;
+  margin: auto;
 }
 .file-preview .action {
   font-size: 1.5em;

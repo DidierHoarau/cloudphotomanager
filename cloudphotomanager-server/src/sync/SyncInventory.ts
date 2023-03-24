@@ -14,7 +14,7 @@ import { SyncFileCache } from "./SyncFileCache";
 let config: Config;
 const logger = new Logger("SyncInventory");
 let inProgressSyncCount = 0;
-const MAX_PARALLEL_SYNC = 3;
+const MAX_PARALLEL_SYNC = 2;
 
 export class SyncInventory {
   //

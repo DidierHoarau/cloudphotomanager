@@ -4,7 +4,8 @@ import Config from "~~/services/Config";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import axios from "axios";
 import * as _ from "lodash";
-import { PreferencesLabels } from "~~/services/PreferencesLabels";
+import { PreferencesFolders } from "~~/services/PreferencesFolders";
+import * as path from "path";
 
 export const FoldersStore = defineStore("FoldersStore", {
   state: () => ({
@@ -20,26 +21,12 @@ export const FoldersStore = defineStore("FoldersStore", {
       const folders: any[] = [];
       for (const accountIn of AccountsStore().accounts) {
         const account: any = accountIn;
-        folders.push({ name: account.name, folderpath: "/", depth: 0 });
+        folders.push({ name: account.name, accountId: account.id, folderpath: "/", depth: 0 });
         await axios
           .get(`${(await Config.get()).SERVER_URL}/accounts/${account.id}/folders`, await AuthService.getAuthHeader())
           .then((res) => {
             for (const folder of _.sortBy(res.data.folders, ["folderpath"])) {
               if (folder.folderpath !== "/") {
-                let basePath = "";
-                for (let i = 1; i < folder.folderpath.split("/").length - 1; i++) {
-                  basePath += "/" + folder.folderpath.split("/")[i];
-                  const newFolderTree = {
-                    name: basePath.split("/").pop(),
-                    folderpath: basePath,
-                    id: null,
-                    accountId: account.id,
-                    indentation: this.getIndentation(basePath),
-                  };
-                  if (!_.find(folders, { folderpath: newFolderTree.folderpath })) {
-                    folders.push(newFolderTree);
-                  }
-                }
                 folders.push({
                   name: folder.folderpath.split("/").pop(),
                   type: "folder",
@@ -48,11 +35,14 @@ export const FoldersStore = defineStore("FoldersStore", {
                   folderpath: folder.folderpath,
                   childrenCount: folder.childrenCount,
                   indentation: this.getIndentation(folder.folderpath),
+                  isCollapsed: PreferencesFolders.isCollapsed(folder.accountId, folder.id),
+                  isVisible: true,
                 });
               }
             }
           })
           .catch(handleError);
+        this.checkVisibility(folders, account.id);
       }
       (this.folders as any[]) = folders;
       this.loading = false;
@@ -66,6 +56,30 @@ export const FoldersStore = defineStore("FoldersStore", {
         indent += "&nbsp;&nbsp;&nbsp;&nbsp;";
       }
       return indent;
+    },
+    checkVisibility(folders: any[], accountId: string) {
+      let parentCollapsedPath = "";
+      for (let i = 0; i < folders.length; i++) {
+        const folder = folders[i] as any;
+        if (folder.accountId === accountId) {
+          if (parentCollapsedPath && `${folder.folderpath}/`.indexOf(parentCollapsedPath) === 0) {
+            folder.isVisible = false;
+          } else if (!folder.isCollapsed) {
+            folder.isVisible = true;
+          } else if (folder.isCollapsed) {
+            folder.isVisible = true;
+            parentCollapsedPath = folder.folderpath;
+          } else {
+            folder.isVisible = true;
+          }
+        }
+      }
+    },
+    toggleFolderCollapsed(index: number) {
+      const folder = this.folders[index] as any;
+      folder.isCollapsed = !folder.isCollapsed;
+      PreferencesFolders.toggleCollapsed(folder.accountId, folder.id);
+      this.checkVisibility(this.folders, folder.accountId);
     },
   },
 });

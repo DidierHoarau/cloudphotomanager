@@ -5,7 +5,10 @@ import { FileData } from "./FileData";
 import { AccountFactory } from "../accounts/AccountFactory";
 import { AccountData } from "../accounts/AccountData";
 import { SyncInventory } from "../sync/SyncInventory";
+import { FolderData } from "../folders/FolderData";
+import { Logger } from "../utils-std-ts/Logger";
 
+const logger = new Logger("FileOperationsRoutes");
 export class FileOperationsRoutes {
   //
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
@@ -35,11 +38,25 @@ export class FileOperationsRoutes {
       const accountDefinition = await AccountData.get(span, req.params.accountId);
       const account = await AccountFactory.getAccountImplementation(accountDefinition);
       await account.moveFile(span, file, req.body.folderpath);
-      // const originFolder = await account.getFolderByPath(span, file.folderpath);
-      // const targetFolder = await account.getFolderByPath(span, req.body.folderpath);
-      // SyncInventory.startSyncFoldertath(span, account, originFolder);
-      // SyncInventory.startSyncFoldertath(span, account, targetFolder);
-      // const files = await FileData.listAccountFolder(span, req.params.accountId, req.body.folderpath);
+
+      // Sync
+      await FileData.delete(span, file.id);
+      FolderData.get(span, req.params.accountId, file.folderId)
+        .then((folder) => {
+          SyncInventory.syncFolder(span, account, folder);
+        })
+        .catch((err) => {
+          logger.error(err);
+        });
+      account
+        .getFolderByPath(span, req.body.folderpath)
+        .then((folder) => {
+          SyncInventory.syncFolder(span, account, folder);
+        })
+        .catch((err) => {
+          logger.error(err);
+        });
+
       return res.status(201).send({});
     });
   }

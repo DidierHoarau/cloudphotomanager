@@ -53,7 +53,7 @@ export default {
       selectedFile: null,
       requestEtag: "",
       currentAccountId: "",
-      currentFolderpath: "",
+      currentFolderId: "",
     };
   },
   async created() {
@@ -64,14 +64,14 @@ export default {
       FoldersStore().fetch();
     }
     EventBus.on(EventTypes.FOLDER_SELECTED, (message) => {
-      this.currentAccountId = message.accountId;
-      this.currentFolderpath = message.folderpath;
       this.fetchFiles(message.accountId, message.folderId);
     });
   },
   methods: {
     async fetchFiles(accountId, folderId) {
       const requestEtag = new Date().toISOString();
+      this.currentAccountId = accountId;
+      this.currentFolderId = folderId;
       this.requestEtag = requestEtag;
       this.files = [];
       await axios
@@ -97,8 +97,9 @@ export default {
     },
     unselectGalleryFile(result) {
       this.selectedFile = null;
+      console.log(result, "gallery");
       if (result.status === "invalidated") {
-        this.fetchFiles(event.folder.accountId, event.folder.folderpath);
+        this.fetchFiles(this.currentAccountId, this.currentFolderId);
       }
     },
     openListMenu() {

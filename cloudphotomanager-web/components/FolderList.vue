@@ -4,14 +4,10 @@
     <Loading v-if="foldersStore.loading" class="folder-component-layout-list" />
     <div v-else class="folder-component-layout-list">
       <div v-for="(folder, index) in foldersStore.folders" v-bind:key="folder.name">
-        <div
-          v-if="matchFolderFilter(folder.name)"
-          class="folder-layout"
-          :class="{ 'source-active': selectFolderIndex == index }"
-        >
-          <span v-on:click="toggleLabelCollapsed(folder, index)" class="folder-layout-indent">
+        <div v-if="isVisible(folder)" class="folder-layout" :class="{ 'source-active': selectFolderIndex == index }">
+          <span v-on:click="toggleFolderCollapsed(folder, index)" class="folder-layout-indent">
             <span v-if="!folderFilter" v-html="folder.indentation"></span>
-            <i v-if="folder.isLabel && folder.isCollapsed" class="bi bi-caret-right-fill"></i>
+            <i v-if="folder.isCollapsed" class="bi bi-folder"></i>
             <i v-else class="bi bi-folder2-open"></i>
           </span>
           <div v-on:click="selectFolder(folder, index)" class="folder-layout-name">
@@ -55,11 +51,17 @@ export default {
       this.selectFolderIndex = index;
     },
     filterFolders() {},
-    matchFolderFilter(folderName) {
-      if (!this.folderFilter) {
+    isVisible(folder) {
+      if (this.folderFilter) {
+        return folder.folderpath.toLowerCase().indexOf(this.folderFilter.toLowerCase()) >= 0;
+      }
+      if (folder.folderpath === "/") {
         return true;
       }
-      return folderName.toLowerCase().indexOf(this.folderFilter.toLowerCase()) >= 0;
+      return folder.isVisible;
+    },
+    toggleFolderCollapsed(label, index) {
+      FoldersStore().toggleFolderCollapsed(index);
     },
   },
 };

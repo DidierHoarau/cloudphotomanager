@@ -15,7 +15,7 @@ import { Folder } from "../model/Folder";
 let config: Config;
 const logger = new Logger("SchedulerFiles");
 let inProgressSyncCount = 0;
-const MAX_PARALLEL_SYNC = 3;
+const MAX_PARALLEL_SYNC = 2;
 
 export class SyncFileCache {
   //
