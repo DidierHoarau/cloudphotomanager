@@ -4,10 +4,12 @@ import { AccountFactory } from "../accounts/AccountFactory";
 import { Config } from "../Config";
 import { FolderData } from "../folders/FolderData";
 import { AccountDefinition } from "../model/AccountDefinition";
+import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { Timeout } from "../utils-std-ts/Timeout";
 import { SyncFileCache } from "./SyncFileCache";
 import { SyncInventory } from "./SyncInventory";
+import { SyncQueue } from "./SyncQueue";
 
 let config: Config;
 
@@ -49,7 +51,13 @@ export class Scheduler {
     if (!rootFolderKnown) {
       rootFolderCloud.dateSync = new Date(0);
       await FolderData.add(span, rootFolderCloud);
-      await SyncInventory.syncFolder(span, account, rootFolderCloud);
+      await SyncQueue.queueItem(
+        account,
+        rootFolderCloud.id,
+        rootFolderCloud,
+        SyncInventory.syncFolder,
+        SyncQueueItemPriority.MEDIUM
+      );
     }
 
     // Outdated Folder
@@ -58,22 +66,17 @@ export class Scheduler {
       account.getAccountDefinition().id,
       new Date(new Date().getTime() - OUTDATED_AGE)
     )) {
-      await SyncInventory.syncFolder(span, account, folder);
+      await SyncQueue.queueItem(account, folder.id, folder, SyncInventory.syncFolder, SyncQueueItemPriority.MEDIUM);
     }
 
     // Top oldest sync folder
     for (const folder of await FolderData.getOldestSync(span, account.getAccountDefinition().id, 10)) {
-      await SyncInventory.syncFolder(span, account, folder);
+      await SyncQueue.queueItem(account, folder.id, folder, SyncInventory.syncFolder, SyncQueueItemPriority.MEDIUM);
     }
 
     // Top oldest sync files
     for (const folder of await FolderData.getNewstUpdate(span, account.getAccountDefinition().id, 10)) {
-      await SyncInventory.syncFolder(span, account, folder);
-    }
-
-    // Sync File Cache
-    for (const folder of await FolderData.listForAccount(span, accountDefinition.id)) {
-      // await SyncFileCache.syncFolder(span, account, folder);
+      await SyncQueue.queueItem(account, folder.id, folder, SyncInventory.syncFolder, SyncQueueItemPriority.MEDIUM);
     }
 
     span.end();

@@ -7,6 +7,8 @@ import { AccountData } from "../accounts/AccountData";
 import { SyncInventory } from "../sync/SyncInventory";
 import { FolderData } from "../folders/FolderData";
 import { Logger } from "../utils-std-ts/Logger";
+import { SyncQueue } from "../sync/SyncQueue";
+import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 
 const logger = new Logger("FileOperationsRoutes");
 export class FileOperationsRoutes {
@@ -43,7 +45,7 @@ export class FileOperationsRoutes {
       await FileData.delete(span, file.id);
       FolderData.get(span, req.params.accountId, file.folderId)
         .then((folder) => {
-          SyncInventory.syncFolder(span, account, folder);
+          SyncQueue.queueItem(account, folder.id, folder, SyncInventory.syncFolder, SyncQueueItemPriority.HIGH);
         })
         .catch((err) => {
           logger.error(err);
@@ -51,7 +53,7 @@ export class FileOperationsRoutes {
       account
         .getFolderByPath(span, req.body.folderpath)
         .then((folder) => {
-          SyncInventory.syncFolder(span, account, folder);
+          SyncQueue.queueItem(account, folder.id, folder, SyncInventory.syncFolder, SyncQueueItemPriority.HIGH);
         })
         .catch((err) => {
           logger.error(err);

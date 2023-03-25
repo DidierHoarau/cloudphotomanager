@@ -4,6 +4,10 @@ import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { FileData } from "./FileData";
 import * as fs from "fs-extra";
 import { FolderData } from "../folders/FolderData";
+import { File } from "../model/File";
+import { FileMediaType } from "../model/FileMediaType";
+import { SyncQueue } from "../sync/SyncQueue";
+import { AccountFactory } from "../accounts/AccountFactory";
 
 export class FileRoutes {
   //

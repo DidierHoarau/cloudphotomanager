@@ -9,13 +9,12 @@ import { FileMediaType } from "../model/FileMediaType";
 import { File } from "../model/File";
 import * as sharp from "sharp";
 import { SyncQueue } from "./SyncQueue";
-import { Timeout } from "../utils-std-ts/Timeout";
+
 import { Folder } from "../model/Folder";
+import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 
 let config: Config;
 const logger = new Logger("SchedulerFiles");
-let inProgressSyncCount = 0;
-const MAX_PARALLEL_SYNC = 2;
 
 export class SyncFileCache {
   //
@@ -25,7 +24,7 @@ export class SyncFileCache {
     span.end();
   }
 
-  public static async syncFolder(context: Span, account: Account, folder: Folder) {
+  public static async checkFolder(context: Span, account: Account, folder: Folder) {
     const span = StandardTracer.startSpan("SchedulerFiles_SyncFileCache", context);
     const files = await FileData.listByFolder(span, account.getAccountDefinition().id, folder.id);
     for (const file of files) {
@@ -34,50 +33,29 @@ export class SyncFileCache {
         File.getMediaType(file.filename) === FileMediaType.image &&
         (!fs.existsSync(`${cacheDir}/thumbnail.webp`) || !fs.existsSync(`${cacheDir}/preview.webp`))
       ) {
-        SyncQueue.push(SyncQueue.TYPE_SYNC_FILE_CACHE, file.id, { file, account });
-        await Timeout.wait(1);
+        await SyncQueue.queueItem(account, file.id, file, SyncFileCache.syncFile, SyncQueueItemPriority.LOW);
       }
     }
     span.end();
-    for (let i = 0; i < MAX_PARALLEL_SYNC; i++) {
-      SyncFileCache.syncFolderProcessQueue();
-    }
   }
 
-  public static async syncFolderProcessQueue() {
-    if (inProgressSyncCount >= MAX_PARALLEL_SYNC) {
-      return;
-    }
-
-    const queuedItem = SyncQueue.pop(SyncQueue.TYPE_SYNC_FILE_CACHE);
-    if (!queuedItem) {
-      return;
-    }
+  public static async syncFile(account: Account, file: File) {
     const span = StandardTracer.startSpan("SchedulerFiles_SyncFileCacheProcessQueue");
-    inProgressSyncCount++;
-
-    try {
-      const file = queuedItem.file;
-      const account = queuedItem.account;
-      const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
-      await fs.ensureDir(cacheDir);
-      await fs.ensureDir(`${cacheDir}/tmp`);
-      const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
-      await account
-        .downloadFile(span, file, `${cacheDir}/tmp`, tmpFileName)
-        .then(async () => {
-          await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 300 }).toFile(`${cacheDir}/thumbnail.webp`);
-          await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
-        })
-        .catch((err) => {
-          logger.error(err);
-        });
-      await fs.remove(`${cacheDir}/tmp`);
-    } catch (err) {
-      logger.error(err);
-    }
-    inProgressSyncCount--;
+    const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
+    await fs.ensureDir(cacheDir);
+    await fs.ensureDir(`${cacheDir}/tmp`);
+    const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
+    logger.info(`Caching file ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
+    await account
+      .downloadFile(span, file, `${cacheDir}/tmp`, tmpFileName)
+      .then(async () => {
+        await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 300 }).toFile(`${cacheDir}/thumbnail.webp`);
+        await sharp(`${cacheDir}/tmp/${tmpFileName}`).resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
+      })
+      .catch((err) => {
+        logger.error(err);
+      });
+    await fs.remove(`${cacheDir}/tmp`);
     span.end();
-    SyncFileCache.syncFolderProcessQueue();
   }
 }
