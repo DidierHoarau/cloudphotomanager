@@ -31,11 +31,10 @@ export class FileRoutes {
       const cacheDir = await FileData.getFileCacheDir(span, req.params.fileId);
       const filepath = `${cacheDir}/thumbnail.webp`;
       if (!fs.existsSync(filepath)) {
-        SyncQueue.queueItem(
+        SyncFileCache.checkFile(
+          span,
           await AccountFactory.getAccountImplementation(req.params.accountId),
-          req.params.fileId,
           await FileData.get(span, req.params.fileId),
-          SyncFileCache.syncFile,
           SyncQueueItemPriority.MEDIUM
         );
         return res.status(404).send({ error: "File Not Found" });

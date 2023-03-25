@@ -28,7 +28,7 @@ export class File {
   }
 
   public static getMediaType(name: string): FileMediaType {
-    const imageExtensions = ["jpg", "jpeg", "png", "gif"];
+    const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp"];
     const videoExtensions = ["mp4", "mov", "wmv", "avi", "mkv"];
     const extension = name.split(".").pop().toLowerCase();
     if (imageExtensions.includes(extension)) {
