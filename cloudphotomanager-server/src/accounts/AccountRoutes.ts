@@ -39,7 +39,7 @@ export class AccountRoutes {
       const accountDefinition = new AccountDefinition();
       accountDefinition.info = req.body.info;
       accountDefinition.infoPrivate = req.body.infoPrivate;
-      const account = await AccountFactory.getAccountImplementation(accountDefinition);
+      const account = await AccountFactory.getAccountFromDefinition(accountDefinition);
       if (await account.validate(span)) {
         return res.status(200).send({});
       }
@@ -69,7 +69,7 @@ export class AccountRoutes {
       accountDefinition.rootpath = req.body.rootpath;
       accountDefinition.info = req.body.info;
       accountDefinition.infoPrivate = req.body.infoPrivate;
-      const account = await AccountFactory.getAccountImplementation(accountDefinition);
+      const account = await AccountFactory.getAccountFromDefinition(accountDefinition);
       if (!(await account.validate(span))) {
         return res.status(400).send({ error: "Account Validation Failed" });
       }

@@ -40,7 +40,7 @@ export class Scheduler {
 
   public static async startAccountSync(context: Span, accountDefinition: AccountDefinition) {
     const span = StandardTracer.startSpan("Scheduler_startAccountSync", context);
-    const account = await AccountFactory.getAccountImplementation(accountDefinition);
+    const account = await AccountFactory.getAccountImplementation(accountDefinition.id);
 
     // Debug
     // FolderData.deleteAccount(span, accountDefinition.id);

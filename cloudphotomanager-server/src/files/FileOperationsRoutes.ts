@@ -37,8 +37,7 @@ export class FileOperationsRoutes {
       if (!file) {
         return res.status(404).send({ error: "File not found" });
       }
-      const accountDefinition = await AccountData.get(span, req.params.accountId);
-      const account = await AccountFactory.getAccountImplementation(accountDefinition);
+      const account = await AccountFactory.getAccountImplementation(req.params.accountId);
       await account.moveFile(span, file, req.body.folderpath);
 
       // Sync

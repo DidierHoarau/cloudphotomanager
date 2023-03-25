@@ -52,12 +52,15 @@ export class SyncQueue {
   }
 
   private static async processQueue() {
-    if (inProgressSyncCount >= MAX_PARALLEL_SYNC || queue.length === 0) {
+    if (
+      inProgressSyncCount >= MAX_PARALLEL_SYNC ||
+      _.filter(queue, { status: SyncQueueItemStatus.WAITING }).length === 0
+    ) {
       return;
     }
     inProgressSyncCount++;
-    const syncItem = _.sortBy(queue, ["priority"])[0];
-
+    const syncItem = _.sortBy(_.filter(queue, { status: SyncQueueItemStatus.WAITING }), ["priority"])[0];
+    syncItem.status = SyncQueueItemStatus.ACTIVE;
     syncItem
       .callbackExecution(syncItem.account, syncItem.data)
       .catch((err) => {
