@@ -4,7 +4,6 @@ import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 import { File } from "../model/File";
 import { Config } from "../Config";
-import { DiagConsoleLogger } from "@opentelemetry/api";
 
 let config: Config;
 

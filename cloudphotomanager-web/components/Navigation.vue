@@ -9,7 +9,10 @@
       <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink to="/gallery"><i class="bi bi-images"></i></NuxtLink>
       </li>
-      <li>
+      <li v-if="authenticationStore.isAuthenticated">
+        <NuxtLink to="/analysis"><i class="bi bi-clipboard-data-fill"></i></NuxtLink>
+      </li>
+      <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink to="/accounts"><i class="bi bi-clouds-fill"></i></NuxtLink>
       </li>
       <li>

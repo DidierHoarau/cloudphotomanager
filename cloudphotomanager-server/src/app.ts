@@ -16,6 +16,8 @@ import { FolderData } from "./folders/FolderData";
 import { FolderRoutes } from "./folders/FolderRoutes";
 import { SyncRoutes } from "./sync/SyncRoutes";
 import { FileOperationsRoutes } from "./files/FileOperationsRoutes";
+import { AnalysisData } from "./analysis/AnalysisData";
+import { AnalysisRoutes } from "./analysis/AnalysisRoutes";
 
 const logger = new Logger("app");
 
@@ -38,6 +40,7 @@ Promise.resolve().then(async () => {
   await Auth.init(span, config);
   await FileData.init(span, config);
   await FolderData.init(span, config);
+  await AnalysisData.init(span, config);
   await Scheduler.init(span, config);
 
   span.end();
@@ -79,6 +82,10 @@ Promise.resolve().then(async () => {
 
   fastify.register(new FileOperationsRoutes().getRoutes, {
     prefix: "/api/accounts/:accountId/files/:fileId/operations",
+  });
+
+  fastify.register(new AnalysisRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/analysis",
   });
 
   fastify.register(new SyncRoutes().getRoutes, {
