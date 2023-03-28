@@ -5,7 +5,6 @@ import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 import { File } from "../model/File";
 import { Config } from "../Config";
 import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
-import { Folder } from "../model/Folder";
 import { FolderData } from "../folders/FolderData";
 
 let config: Config;
@@ -25,13 +24,14 @@ export class AnalysisData {
       span,
       "SELECT * " +
         " FROM files " +
-        " WHERE hash IN " +
-        " ( SELECT hash FROM files GROUP BY hash HAVING count(*) > 1 ) " +
+        " WHERE accountId = ? AND hash IN " +
+        " ( SELECT hash FROM files WHERE accountId = ? GROUP BY hash HAVING count(*) > 1) " +
         " ORDER BY hash ",
-      []
+      [accountId, accountId]
     );
     const analysis: AnalysisDuplicate[] = [];
     let currentAnalysisDuplicate: AnalysisDuplicate = null;
+    const knownFolders = await FolderData.listForAccount(span, accountId);
     for (const fileRaw of rawData) {
       const file = fromRaw(fileRaw);
       if (!currentAnalysisDuplicate || currentAnalysisDuplicate.hash !== file.hash) {
@@ -44,7 +44,7 @@ export class AnalysisData {
         analysis.push(currentAnalysisDuplicate);
       }
       currentAnalysisDuplicate.files.push(file);
-      currentAnalysisDuplicate.folders.push(await FolderData.get(span, file.accountId, file.folderId));
+      currentAnalysisDuplicate.folders.push(_.find(knownFolders, { id: file.folderId }));
     }
     span.end();
     return analysis;

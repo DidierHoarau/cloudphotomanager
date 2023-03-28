@@ -1,8 +1,6 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { Auth } from "../users/Auth";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
-import * as fs from "fs-extra";
-import { File } from "../model/File";
 import { AnalysisData } from "./AnalysisData";
 
 export class AnalysisRoutes {

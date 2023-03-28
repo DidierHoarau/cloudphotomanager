@@ -1,6 +1,9 @@
 <template>
   <div class="gallery-layout page">
     <div class="gallery-layout-actions actions">
+      <div v-for="account in accountsStore.accounts" v-bind:key="account.id">
+        <span v-on:click="loadAccountDuplicate(account.id)">{{ account.name }}</span>
+      </div>
       <kbd v-if="syncStore.countTotal > 0">Sync: {{ syncStore.countTotal }}</kbd>
     </div>
     <div class="analysis-items-actions actions"></div>
@@ -14,16 +17,13 @@
           />
         </div>
         <div class="analysis-file-list">
-          <div class="analysis-file-file" v-for="file in item.files" v-bind:key="file.id">
-            <div>{{ displayFolderPath(item.folders, file.folderId) }}</div>
+          <div class="analysis-file-list-file" v-for="file in item.files" v-bind:key="file.id">
+            <div class="analysis-file-list-file-name">
+              {{ displayFolderPath(item.folders, file.folderId) }}/{{ file.filename }}
+            </div>
+            <div class="analysis-file-list-file-actions"><i class="bi bi-arrows-move"></i></div>
           </div>
         </div>
-        <!-- <div class="analysis-item-name">
-          {{ file.filename }}
-        </div>
-        <div class="analysis-item-info">
-          {{ relativeTime(file.dateMedia) }}
-        </div> -->
       </div>
     </div>
     <GalleryItemFocus
@@ -37,6 +37,7 @@
 
 <script setup>
 const syncStore = SyncStore();
+const accountsStore = AccountsStore();
 </script>
 
 <script>
@@ -61,17 +62,9 @@ export default {
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
     await AccountsStore().fetch();
-    SyncStore().fetch();
-    if (AccountsStore().accounts.length > 0) {
-      FoldersStore().fetch();
-      this.fetchFiles(AccountsStore().accounts[0]);
-    }
-    EventBus.on(EventTypes.FOLDER_SELECTED, (message) => {
-      this.fetchFiles(message.accountId, message.folderId);
-    });
   },
   methods: {
-    async fetchFiles(accountId) {
+    async loadAccountDuplicate(accountId) {
       const requestEtag = new Date().toISOString();
       this.requestEtag = requestEtag;
       this.analysis = [];
@@ -238,5 +231,28 @@ export default {
   right: 0;
   width: 100vw;
   height: 100vh;
+}
+.analysis-file-list-file {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 1fr auto;
+  margin-top: 0.5em;
+  border-top: 1px solid #333333aa;
+}
+.analysis-file-list-file-name {
+  word-break: break-all;
+}
+.analysis-file-list-file-actions {
+  padding-left: 0.5em;
+  padding-right: 0.5em;
+}
+.analysis-item {
+  margin-top: 1em;
+}
+
+.analysis-item-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20em, 1fr));
+  gap: 1em;
 }
 </style>
