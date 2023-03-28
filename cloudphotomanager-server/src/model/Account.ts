@@ -11,6 +11,7 @@ export interface Account {
   getAccountDefinition(): AccountDefinition;
   updateFileMetadata(context: Span, file: File): Promise<void>;
   moveFile(context: Span, file: File, folderpathDestination: string): Promise<void>;
+  deleteFile(context: Span, file: File): Promise<void>;
   getFolder(context: Span, folder: Folder): Promise<Folder>;
   getFolderByPath(context: Span, folderpath: string): Promise<Folder>;
 }

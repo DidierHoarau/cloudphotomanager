@@ -21,7 +21,9 @@
             <div class="analysis-file-list-file-name">
               {{ displayFolderPath(item.folders, file.folderId) }}/{{ file.filename }}
             </div>
-            <div class="analysis-file-list-file-actions"><i class="bi bi-arrows-move"></i></div>
+            <div class="analysis-file-list-file-actions">
+              <i v-on:click="deleteDuplicate(file)" class="bi bi-trash-fill"></i>
+            </div>
           </div>
         </div>
       </div>
@@ -82,6 +84,26 @@ export default {
           this.requestEtag = "";
         })
         .catch(handleError);
+    },
+    async deleteDuplicate(file) {
+      if (confirm(`Delete the file? (Can't be undone!)\n${file.filename}`) == true) {
+        await axios
+          .delete(
+            `${(await Config.get()).SERVER_URL}/accounts/${file.accountId}/files/${file.id}/operations/delete`,
+            await AuthService.getAuthHeader()
+          )
+          .then((res) => {
+            EventBus.emit(EventTypes.ALERT_MESSAGE, {
+              text: "File deleted",
+            });
+            const hashIndex = _.findIndex(this.analysis, { hash: file.hash });
+            this.analysis[hashIndex].files.splice(_.findIndex(this.analysis[hashIndex].files), 1);
+            if (this.analysis[hashIndex].files.length === 1) {
+              this.analysis.splice(hashIndex, 1);
+            }
+          })
+          .catch(handleError);
+      }
     },
     displayFolderPath(folders, folderId) {
       return _.find(folders, { id: folderId }).folderpath;

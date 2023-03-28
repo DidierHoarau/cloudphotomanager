@@ -10,6 +10,7 @@ import { SyncQueue } from "../sync/SyncQueue";
 import { AccountFactory } from "../accounts/AccountFactory";
 import { SyncFileCache } from "../sync/SyncFileCache";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
+import { SyncInventory } from "../sync/SyncInventory";
 
 export class FileRoutes {
   //

@@ -72,6 +72,14 @@ export class OneDriveFileOperations {
     );
   }
 
+  public static async deleteFile(context: Span, oneDriveAccount: OneDriveAccount, file: File): Promise<void> {
+    await axios.delete(`https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`, {
+      headers: {
+        Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+      },
+    });
+  }
+
   public static async createFolder(
     context: Span,
     oneDriveAccount: OneDriveAccount,

@@ -18,6 +18,9 @@ export class AwsS3Account implements Account {
   constructor(accountDefinition: AccountDefinition) {
     this.accountDefinition = accountDefinition;
   }
+  deleteFile(context: Span, file: File): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
   listFoldersInFolder(context: Span, folder: Folder): Promise<Folder[]> {
     throw new Error("Method not implemented.");
   }

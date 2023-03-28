@@ -49,6 +49,7 @@ export class FileOperationsRoutes {
         .catch((err) => {
           logger.error(err);
         });
+
       account
         .getFolderByPath(span, req.body.folderpath)
         .then((folder) => {
@@ -59,6 +60,38 @@ export class FileOperationsRoutes {
         });
 
       return res.status(201).send({});
+    });
+
+    interface DeleteFilesAccountIdFileIdPreviewRequest extends RequestGenericInterface {
+      Params: {
+        accountId: string;
+        fileId: string;
+      };
+    }
+    fastify.delete<DeleteFilesAccountIdFileIdPreviewRequest>("/delete", async (req, res) => {
+      const span = StandardTracer.getSpanFromRequest(req);
+      const userSession = await Auth.getUserSession(req);
+      if (!userSession.isAuthenticated) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+
+      const file = await FileData.get(span, req.params.fileId);
+      if (!file) {
+        return res.status(404).send({ error: "File Not Found" });
+      }
+
+      const account = await AccountFactory.getAccountImplementation(req.params.accountId);
+      await account.deleteFile(span, file);
+
+      FolderData.get(span, req.params.accountId, file.folderId)
+        .then(async (folder) => {
+          SyncQueue.queueItem(account, file.folderId, folder, SyncInventory.syncFolder, SyncQueueItemPriority.HIGH);
+        })
+        .catch((err) => {
+          logger.error(err);
+        });
+
+      return res.status(202).send({});
     });
   }
 }

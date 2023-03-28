@@ -108,6 +108,10 @@ export class OneDriveAccount implements Account {
     await OneDriveFileOperations.moveFile(context, this, file, folderpathDestination);
   }
 
+  public async deleteFile(context: Span, file: File): Promise<void> {
+    await OneDriveFileOperations.deleteFile(context, this, file);
+  }
+
   public async getFolder(context: Span, folder: Folder): Promise<Folder> {
     return await OneDriveInventory.getFolder(context, this, folder);
   }
