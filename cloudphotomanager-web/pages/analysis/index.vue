@@ -4,7 +4,7 @@
       <div v-for="account in accountsStore.accounts" v-bind:key="account.id">
         <span v-on:click="loadAccountDuplicate(account.id)">{{ account.name }}</span>
       </div>
-      <kbd v-if="syncStore.countTotal > 0">Sync: {{ syncStore.countTotal }}</kbd>
+      <kbd v-if="analysis.length > 0">Duplicates Found: {{ analysis.length }}</kbd>
     </div>
     <div class="analysis-items-actions actions"></div>
     <div class="analysis-item-list">
@@ -22,6 +22,7 @@
               {{ displayFolderPath(item.folders, file.folderId) }}/{{ file.filename }}
             </div>
             <div class="analysis-file-list-file-actions">
+              <i class="bi bi-arrows-move"></i>
               <i v-on:click="deleteDuplicate(file)" class="bi bi-trash-fill"></i>
             </div>
           </div>
@@ -98,7 +99,7 @@ export default {
             });
             const hashIndex = _.findIndex(this.analysis, { hash: file.hash });
             this.analysis[hashIndex].files.splice(_.findIndex(this.analysis[hashIndex].files), 1);
-            if (this.analysis[hashIndex].files.length === 1) {
+            if (this.analysis[hashIndex].files.length === 0) {
               this.analysis.splice(hashIndex, 1);
             }
           })
@@ -264,7 +265,7 @@ export default {
 .analysis-file-list-file-name {
   word-break: break-all;
 }
-.analysis-file-list-file-actions {
+.analysis-file-list-file-actions i {
   padding-left: 0.5em;
   padding-right: 0.5em;
 }
