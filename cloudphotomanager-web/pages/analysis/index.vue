@@ -2,14 +2,15 @@
   <div class="gallery-layout page">
     <div class="gallery-layout-actions actions">
       <div v-for="account in accountsStore.accounts" v-bind:key="account.id">
-        <span v-on:click="loadAccountDuplicate(account.id)">{{ account.name }}</span>
+        <button v-on:click="loadAccountDuplicate(account.id)">{{ account.name }}</button>
       </div>
-      <kbd v-if="analysis.length > 0">Duplicates Found: {{ analysis.length }}</kbd>
+      <input v-if="analysis.length > 0" v-model="analysisFilter" type="text" v-on:input="analysisFilterChanged" />
+      <kbd v-if="analysis.length > 0">Duplicates Found: {{ analysisFiltered.length }}</kbd>
     </div>
     <div class="analysis-items-actions actions"></div>
     <div class="analysis-item-list">
       <Loading v-if="requestEtag" />
-      <div class="card analysis-item" v-for="item in analysis" v-bind:key="item.hash">
+      <article class="card analysis-item" v-for="item in analysisFiltered" v-bind:key="item.hash">
         <div class="analysis-item-image">
           <img
             :src="serverUrl + '/accounts/' + item.files[0].accountId + '/files/' + item.files[0].id + '/thumbnail'"
@@ -23,11 +24,11 @@
             </div>
             <div class="analysis-file-list-file-actions">
               <i class="bi bi-arrows-move"></i>
-              <i v-on:click="deleteDuplicate(file)" class="bi bi-trash-fill"></i>
+              <i v-on:click="deleteDuplicate(file, item.folders)" class="bi bi-trash-fill"></i>
             </div>
           </div>
         </div>
-      </div>
+      </article>
     </div>
     <GalleryItemFocus
       v-if="selectedFile"
@@ -53,6 +54,7 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 export default {
   data() {
     return {
+      analysisFiltered: [],
       analysis: [],
       menuOpened: true,
       serverUrl: "",
@@ -60,6 +62,7 @@ export default {
       requestEtag: "",
       currentAccountId: "",
       currentFolderId: "",
+      analysisFilter: "",
     };
   },
   async created() {
@@ -79,6 +82,7 @@ export default {
         .then((res) => {
           if (this.requestEtag === requestEtag) {
             this.analysis = res.data.duplicates;
+            this.analysisFilterChanged();
           }
         })
         .finally(() => {
@@ -86,8 +90,15 @@ export default {
         })
         .catch(handleError);
     },
-    async deleteDuplicate(file) {
-      if (confirm(`Delete the file? (Can't be undone!)\n${file.filename}`) == true) {
+    async deleteDuplicate(file, folders) {
+      if (
+        confirm(
+          `Delete the file? (Can't be undone!)\nFile: ${file.filename} \nFolder: ${this.displayFolderPath(
+            folders,
+            file.folderId
+          )}`
+        ) == true
+      ) {
         await axios
           .delete(
             `${(await Config.get()).SERVER_URL}/accounts/${file.accountId}/files/${file.id}/operations/delete`,
@@ -109,28 +120,29 @@ export default {
     displayFolderPath(folders, folderId) {
       return _.find(folders, { id: folderId }).folderpath;
     },
-    onFolderSelected(event) {
-      this.fetchFiles(event.folder.accountId, event.folder.id);
-    },
-    selectGalleryFile(file) {
-      this.selectedFile = file;
-    },
-    unselectGalleryFile(result) {
-      this.selectedFile = null;
-      console.log(result, "gallery");
-      if (result.status === "invalidated") {
-        this.fetchFiles(this.currentAccountId, this.currentFolderId);
+    analysisFilterChanged: _.debounce(async function (e) {
+      if (!this.analysisFilter) {
+        this.analysisFiltered = this.analysis;
+        return;
       }
-    },
-    openListMenu() {
-      this.menuOpened = !this.menuOpened;
-    },
-    relativeTime(date) {
-      if (!date || new Date(date).getTime() === 0) {
-        return "";
+      this.analysisFiltered = [];
+      for (const analysis of this.analysis) {
+        let added = false;
+        for (const file of analysis.files) {
+          if (!added && file.filename.toLowerCase().indexOf(this.analysisFilter.toLowerCase()) >= 0) {
+            added = true;
+          }
+        }
+        for (const folder of analysis.folders) {
+          if (!added && folder.folderpath.toLowerCase().indexOf(this.analysisFilter.toLowerCase()) >= 0) {
+            added = true;
+          }
+        }
+        if (added) {
+          this.analysisFiltered.push(analysis);
+        }
       }
-      return new Date(date).toLocaleString();
-    },
+    }, 500),
   },
 };
 </script>
@@ -171,7 +183,7 @@ export default {
 @media (min-width: 701px) {
   .gallery-layout {
     display: grid;
-    grid-template-rows: 2.5em 2.5em 1fr;
+    grid-template-rows: auto 2.5em 1fr;
     grid-template-columns: auto 1fr;
     column-gap: 1em;
   }
@@ -207,7 +219,7 @@ export default {
 @media (max-width: 700px) {
   .gallery-layout {
     display: grid;
-    grid-template-rows: 2.5em 2.5em 1fr;
+    grid-template-rows: auto 2.5em 1fr;
     grid-template-columns: 1fr;
     column-gap: 1em;
   }
@@ -260,13 +272,15 @@ export default {
   width: 100%;
   grid-template-columns: 1fr auto;
   margin-top: 0.5em;
+  padding-top: 0.6em;
+  padding-bottom: 0.6em;
   border-top: 1px solid #333333aa;
 }
 .analysis-file-list-file-name {
   word-break: break-all;
 }
 .analysis-file-list-file-actions i {
-  padding-left: 0.5em;
+  padding-left: 0.9em;
   padding-right: 0.5em;
 }
 .analysis-item {

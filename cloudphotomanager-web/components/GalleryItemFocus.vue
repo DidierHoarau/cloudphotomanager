@@ -2,7 +2,8 @@
   <div class="file-preview">
     <i class="bi bi-x-circle action" v-on:click="clickedClose()"></i>
     <div class="file-preview-operations">
-      <button class="secondary outline" v-on:click="clickedMove()">Move...</button>
+      <button class="secondary outline" v-on:click="clickedDelete()"><i class="bi bi-trash-fill"></i> Delete</button>
+      <button class="secondary outline" v-on:click="clickedMove()"><i class="bi bi-arrows-move"></i> Move...</button>
     </div>
     <DialogMove v-if="activeOperation == 'move'" :file="file" @onDone="onOperationDone" />
     <img :src="serverUrl + '/accounts/' + file.accountId + '/files/' + file.id + '/preview'" />
@@ -35,12 +36,30 @@ export default {
     clickedMove() {
       this.activeOperation = "move";
     },
+    async clickedDelete() {
+      if (confirm(`Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`) == true) {
+        await axios
+          .delete(
+            `${(await Config.get()).SERVER_URL}/accounts/${this.file.accountId}/files/${
+              this.file.id
+            }/operations/delete`,
+            await AuthService.getAuthHeader()
+          )
+          .then((res) => {
+            EventBus.emit(EventTypes.ALERT_MESSAGE, {
+              text: "File deleted",
+            });
+            this.onOperationDone({ status: "invalidated" });
+          })
+          .catch(handleError);
+      }
+    },
     onOperationDone(result) {
       if (result.status === "invalidated") {
         this.$emit("onFileClosed", { status: "invalidated" });
-        this.$emit("onFileClosed", { status: "invalidated" });
       }
       this.activeOperation = "";
+      EventBus.emit(EventTypes.FOLDERS_UPDATED, {});
     },
   },
 };
