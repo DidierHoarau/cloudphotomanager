@@ -59,7 +59,8 @@ export default {
         this.$emit("onFileClosed", { status: "invalidated" });
       }
       this.activeOperation = "";
-      EventBus.emit(EventTypes.FOLDERS_UPDATED, {});
+      EventBus.emit(EventTypes.FOLDER_UPDATED, {});
+      EventBus.emit(EventTypes.FILE_UPDATED, {});
     },
   },
 };

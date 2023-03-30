@@ -10,7 +10,7 @@
       <span v-if="currentFolderId" v-on:click="clickedRefresh()"> <i class="bi bi-arrow-clockwise"></i> Refresh </span>
     </div>
     <div class="gallery-file-list">
-      <Loading v-if="requestEtag" />
+      <Loading v-if="loadding" />
       <div class="card gallery-file" v-on:click="selectGalleryFile(file)" v-for="file in files" v-bind:key="file.id">
         <div class="gallery-file-image">
           <img
@@ -56,6 +56,7 @@ export default {
       requestEtag: "",
       currentAccountId: "",
       currentFolderId: "",
+      loadding: false,
     };
   },
   async created() {
@@ -65,17 +66,26 @@ export default {
     if (AccountsStore().accounts.length > 0) {
       FoldersStore().fetch();
     }
+    EventBus.on(EventTypes.FOLDER_UPDATED, (message) => {
+      FoldersStore().fetch();
+    });
+    EventBus.on(EventTypes.FILE_UPDATED, (message) => {
+      FoldersStore().fetch();
+    });
     EventBus.on(EventTypes.FOLDER_SELECTED, (message) => {
-      this.fetchFiles(message.accountId, message.folderId);
+      this.fetchFiles(message.accountId, message.folderId, true);
     });
   },
   methods: {
-    async fetchFiles(accountId, folderId) {
+    async fetchFiles(accountId, folderId, forceLoading = false) {
       const requestEtag = new Date().toISOString();
-      this.currentAccountId = accountId;
-      this.currentFolderId = folderId;
+      if (forceLoading || this.currentAccountId !== accountId || this.currentFolderId !== folderId) {
+        this.currentAccountId = accountId;
+        this.currentFolderId = folderId;
+        this.files = [];
+        this.loadding = true;
+      }
       this.requestEtag = requestEtag;
-      this.files = [];
       await axios
         .get(
           `${(await Config.get()).SERVER_URL}/accounts/${accountId}/folders/${folderId}/files`,
@@ -86,13 +96,13 @@ export default {
             this.files = _.sortBy(res.data.files, ["name"]);
           }
         })
+        .catch(handleError)
         .finally(() => {
           this.requestEtag = "";
-        })
-        .catch(handleError);
+          this.loadding = false;
+        });
     },
     async clickedRefresh() {
-      console.log(this.currentAccountId, this.currentFolderId);
       await axios
         .put(
           `${(await Config.get()).SERVER_URL}/accounts/${this.currentAccountId}/folders/${this.currentFolderId}/sync`,
@@ -100,10 +110,11 @@ export default {
           await AuthService.getAuthHeader()
         )
         .catch(handleError);
+      this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
+      EventBus.emit(EventTypes.FOLDER_UPDATED, {});
+      EventBus.emit(EventTypes.FILE_UPDATED, {});
     },
     onFolderSelected(event) {
-      this.currentAccountId = event.folder.accountId;
-      this.currentFolderId = event.folder.id;
       this.fetchFiles(event.folder.accountId, event.folder.id);
     },
     selectGalleryFile(file) {
@@ -111,7 +122,6 @@ export default {
     },
     unselectGalleryFile(result) {
       this.selectedFile = null;
-      console.log(result, "gallery");
       if (result.status === "invalidated") {
         this.fetchFiles(this.currentAccountId, this.currentFolderId);
       }

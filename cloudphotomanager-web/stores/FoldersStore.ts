@@ -38,6 +38,8 @@ export const FoldersStore = defineStore("FoldersStore", {
                   isCollapsed: PreferencesFolders.isCollapsed(folder.accountId, folder.id),
                   isVisible: true,
                 });
+              } else {
+                folders[0].id = folder.id;
               }
             }
           })

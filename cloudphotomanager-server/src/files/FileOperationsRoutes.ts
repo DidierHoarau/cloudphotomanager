@@ -82,6 +82,7 @@ export class FileOperationsRoutes {
 
       const account = await AccountFactory.getAccountImplementation(req.params.accountId);
       await account.deleteFile(span, file);
+      await FileData.delete(span, file.id);
 
       FolderData.get(span, req.params.accountId, file.folderId)
         .then(async (folder) => {

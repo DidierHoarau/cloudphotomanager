@@ -66,6 +66,7 @@ main {
     color: #bcc6ce;
   }
 }
+
 @media (prefers-color-scheme: light) {
   .actions i {
     color: #1d2832;

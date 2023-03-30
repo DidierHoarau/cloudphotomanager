@@ -2,8 +2,8 @@ import mitt from "mitt";
 export const EventBus = mitt();
 
 export enum EventTypes {
-  ITEMS_UPDATED = "ITEMS_UPDATED",
-  SOURCES_UPDATED = "SOURCES_UPDATED",
+  FILE_UPDATED = "FILE_UPDATED",
+  FOLDER_UPDATED = "FOLDER_UPDATED",
   AUTH_UPDATED = "AUTH_UPDATED",
   ALERT_MESSAGE = "ALERT_MESSAGE",
   AUTH_CODE = "AUTH_CODE",

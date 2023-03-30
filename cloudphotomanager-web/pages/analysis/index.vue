@@ -116,6 +116,8 @@ export default {
             if (this.analysis[hashIndex].files.length === 0) {
               this.analysis.splice(hashIndex, 1);
             }
+            EventBus.emit(EventTypes.FOLDER_UPDATED, {});
+            EventBus.emit(EventTypes.FILE_UPDATED, {});
           })
           .catch(handleError);
       }
