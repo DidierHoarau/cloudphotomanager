@@ -9,7 +9,7 @@
     </div>
     <div class="analysis-items-actions actions"></div>
     <div class="analysis-item-list">
-      <Loading v-if="requestEtag" />
+      <Loading v-if="loading" />
       <article class="card analysis-item" v-for="item in analysisFiltered" v-bind:key="item.hash">
         <div class="analysis-item-image">
           <img
@@ -59,6 +59,7 @@ export default {
       menuOpened: true,
       serverUrl: "",
       selectedFile: null,
+      loading: false,
       requestEtag: "",
       currentAccountId: "",
       currentFolderId: "",
@@ -73,6 +74,7 @@ export default {
     async loadAccountDuplicate(accountId) {
       const requestEtag = new Date().toISOString();
       this.requestEtag = requestEtag;
+      this.loading = true;
       this.analysis = [];
       await axios
         .get(
@@ -87,6 +89,7 @@ export default {
         })
         .finally(() => {
           this.requestEtag = "";
+          this.loading = false;
         })
         .catch(handleError);
     },

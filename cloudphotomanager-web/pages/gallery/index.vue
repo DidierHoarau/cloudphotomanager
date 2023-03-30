@@ -6,7 +6,9 @@
     <div class="gallery-folders" :class="{ 'gallery-folders-closed': !menuOpened }">
       <FolderList @onFolderSelected="onFolderSelected" />
     </div>
-    <div class="gallery-files-actions actions"></div>
+    <div class="gallery-files-actions actions-secondary">
+      <span v-if="currentFolderId" v-on:click="clickedRefresh()"> <i class="bi bi-arrow-clockwise"></i> Refresh </span>
+    </div>
     <div class="gallery-file-list">
       <Loading v-if="requestEtag" />
       <div class="card gallery-file" v-on:click="selectGalleryFile(file)" v-for="file in files" v-bind:key="file.id">
@@ -89,7 +91,19 @@ export default {
         })
         .catch(handleError);
     },
+    async clickedRefresh() {
+      console.log(this.currentAccountId, this.currentFolderId);
+      await axios
+        .put(
+          `${(await Config.get()).SERVER_URL}/accounts/${this.currentAccountId}/folders/${this.currentFolderId}/sync`,
+          {},
+          await AuthService.getAuthHeader()
+        )
+        .catch(handleError);
+    },
     onFolderSelected(event) {
+      this.currentAccountId = event.folder.accountId;
+      this.currentFolderId = event.folder.id;
       this.fetchFiles(event.folder.accountId, event.folder.id);
     },
     selectGalleryFile(file) {
@@ -163,6 +177,7 @@ export default {
     grid-row-start: 1;
   }
   .gallery-files-actions {
+    padding-top: 0.5em;
     grid-row: 2;
     grid-column-start: 2;
     grid-column-end: span 2;
@@ -207,6 +222,7 @@ export default {
     grid-row: 1;
   }
   .gallery-files-actions {
+    padding-top: 0.5em;
     grid-row: 3;
     grid-column-start: 1;
     grid-column-end: span 2;

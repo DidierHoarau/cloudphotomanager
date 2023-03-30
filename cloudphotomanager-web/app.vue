@@ -48,8 +48,17 @@ main {
   margin-right: 0.5em;
 }
 
-.actions {
+.actions,
+.actions-secondary {
   text-align: right;
+}
+
+.actions-secondary,
+.actions-secondary i {
+  font-size: 0.9em;
+  cursor: pointer;
+  margin-left: 0.5em;
+  margin-right: 0.5em;
 }
 
 @media (prefers-color-scheme: dark) {
