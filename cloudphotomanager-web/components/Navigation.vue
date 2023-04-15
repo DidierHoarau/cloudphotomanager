@@ -7,16 +7,24 @@
     </ul>
     <ul class="menu-links">
       <li v-if="authenticationStore.isAuthenticated">
-        <NuxtLink to="/gallery"><i class="bi bi-images"></i></NuxtLink>
+        <NuxtLink to="/gallery" :class="baseFolder === 'gallery' ? 'active' : 'inactive'"
+          ><i class="bi bi-images"></i
+        ></NuxtLink>
       </li>
       <li v-if="authenticationStore.isAuthenticated">
-        <NuxtLink to="/analysis"><i class="bi bi-clipboard-data-fill"></i></NuxtLink>
+        <NuxtLink to="/analysis" :class="baseFolder === 'analysis' ? 'active' : 'inactive'"
+          ><i class="bi bi-clipboard-data-fill"></i
+        ></NuxtLink>
       </li>
       <li v-if="authenticationStore.isAuthenticated">
-        <NuxtLink to="/accounts"><i class="bi bi-clouds-fill"></i></NuxtLink>
+        <NuxtLink to="/accounts" :class="baseFolder === 'accounts' ? 'active' : 'inactive'"
+          ><i class="bi bi-clouds-fill"></i
+        ></NuxtLink>
       </li>
       <li>
-        <NuxtLink to="/users"><i class="bi bi-people-fill"></i></NuxtLink>
+        <NuxtLink to="/users" :class="baseFolder === 'users' ? 'active' : 'inactive'"
+          ><i class="bi bi-people-fill"></i
+        ></NuxtLink>
       </li>
     </ul>
   </nav>
@@ -32,6 +40,16 @@ import axios from "axios";
 import Config from "~~/services/Config.ts";
 
 export default {
+  watch: {
+    $route(to, from) {
+      this.baseFolder = to.fullPath.split("/")[1];
+    },
+  },
+  data() {
+    return {
+      baseFolder: "",
+    };
+  },
   async created() {
     if (await AuthenticationStore().ensureAuthenticated()) {
       setTimeout(async () => {
@@ -43,6 +61,7 @@ export default {
           });
       }, 10000);
     }
+    this.baseFolder = this.$route.fullPath.split("/")[1];
   },
 };
 </script>
@@ -51,5 +70,8 @@ export default {
 .menu-links li {
   padding-right: 1em;
   font-size: 1.2em;
+}
+.inactive {
+  opacity: 0.4;
 }
 </style>
