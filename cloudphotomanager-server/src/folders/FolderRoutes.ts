@@ -27,6 +27,21 @@ export class FolderRoutes {
       return res.status(200).send({ folders });
     });
 
+    interface GetFoldersCountAccountIdRequest extends RequestGenericInterface {
+      Params: {
+        accountId: string;
+      };
+    }
+    fastify.get<GetFoldersCountAccountIdRequest>("/counts", async (req, res) => {
+      const span = StandardTracer.getSpanFromRequest(req);
+      const userSession = await Auth.getUserSession(req);
+      if (!userSession.isAuthenticated) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const counts = await FolderData.listCountsForAccount(span, req.params.accountId);
+      return res.status(200).send({ counts });
+    });
+
     interface GetAccountIdFolderIdFilesRequest extends RequestGenericInterface {
       Params: {
         accountId: string;

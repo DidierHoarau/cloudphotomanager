@@ -21,8 +21,9 @@
         <div class="gallery-file-name">
           {{ file.filename }}
         </div>
-        <div class="gallery-file-info">
-          {{ relativeTime(file.dateMedia) }}
+        <div class="gallery-file-date">{{ displayDate(file.dateMedia) }}</div>
+        <div class="gallery-file-size">
+          {{ displaySize(file.info.size) }}
         </div>
       </div>
     </div>
@@ -129,11 +130,30 @@ export default {
     openListMenu() {
       this.menuOpened = !this.menuOpened;
     },
-    relativeTime(date) {
+    displayDate(date) {
       if (!date || new Date(date).getTime() === 0) {
         return "";
       }
       return new Date(date).toLocaleString();
+    },
+    displaySize(size) {
+      if (!size) {
+        return "";
+      }
+      try {
+        if (size > 1000000000) {
+          return (Number(size) / 1000000000).toFixed(1) + " GB";
+        }
+        if (size > 1000000) {
+          return (Number(size) / 1000000).toFixed(1) + " MB";
+        }
+        if (size > 1000) {
+          return (Number(size) / 1000).toFixed(1) + " KB";
+        }
+        return size + " B";
+      } catch (err) {
+        return "";
+      }
     },
   },
 };
@@ -147,18 +167,22 @@ export default {
 }
 .gallery-file {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr auto;
   grid-template-rows: auto auto auto;
   height: 11em;
 }
 .gallery-file-name {
   grid-row: 2;
+  grid-column-start: 1;
+  grid-column-end: span 2;
   font-size: 0.7em;
   word-break: break-all;
   opacity: 0.8;
 }
 .gallery-file-image {
   grid-row: 1;
+  grid-column-start: 1;
+  grid-column-end: span 2;
   word-break: break-all;
 }
 .gallery-file-image img {
@@ -166,8 +190,17 @@ export default {
   height: 8em;
   object-fit: cover;
 }
-.gallery-file-info {
+.gallery-file-date {
   height: 2em;
+  grid-column: 1;
+  grid-row: 3;
+  font-size: 0.6em;
+  word-break: break-all;
+  opacity: 0.4;
+}
+.gallery-file-size {
+  height: 2em;
+  grid-column: 2;
   grid-row: 3;
   font-size: 0.6em;
   word-break: break-all;

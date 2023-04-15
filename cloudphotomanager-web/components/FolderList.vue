@@ -16,7 +16,7 @@
             <span v-else>{{ folder.folderpath }}</span>
           </div>
           <div v-on:click="selectFolder(folder, index)" class="folder-layout-count">
-            {{ folder.childrenCount }}
+            {{ folder.counts }}
           </div>
         </div>
       </div>

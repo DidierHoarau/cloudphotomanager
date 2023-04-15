@@ -105,6 +105,24 @@ export class FolderData {
     return folders;
   }
 
+  public static async listCountsForAccount(
+    context: Span,
+    accountId: string
+  ): Promise<{ folderId: string; count: number }[]> {
+    const span = StandardTracer.startSpan("FolderData_listForAccount", context);
+    const rawData = await SqlDbutils.querySQL(
+      span,
+      "SELECT count(*) as counts, folderId FROM files WHERE accountId = ? GROUP BY folderId ",
+      [accountId]
+    );
+    const counts = [];
+    rawData.forEach((folderRaw) => {
+      counts.push({ folderId: folderRaw.folderId, counts: folderRaw.counts });
+    });
+    span.end();
+    return counts;
+  }
+
   public static async deleteForAccount(context: Span, accountId: string, folderpath: string): Promise<void> {
     const span = StandardTracer.startSpan("FolderData_listForAccount", context);
     await SqlDbutils.execSQL(span, "DELETE FROM files WHERE accountId = ? AND folderpath = ?", [accountId, folderpath]);

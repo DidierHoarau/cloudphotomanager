@@ -25,19 +25,23 @@ export class OneDriveInventory {
         },
       })
     ).data.id;
-    const children = (
-      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${folderId}/children`, {
-        headers: {
-          Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-        },
-      })
-    ).data.value;
     const files: File[] = [];
-    for (const child of children) {
-      if (!child.folder || File.getMediaType(child.name) !== FileMediaType.unknown) {
-        files.push(fileFromRaw(child, folderId, oneDriveAccount));
+    let queryUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${folderId}/children`;
+    do {
+      const children = (
+        await axios.get(queryUrl, {
+          headers: {
+            Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+          },
+        })
+      ).data;
+      for (const child of children.value) {
+        if (!child.folder || File.getMediaType(child.name) !== FileMediaType.unknown) {
+          files.push(fileFromRaw(child, folderId, oneDriveAccount));
+        }
       }
-    }
+      queryUrl = children["@odata.nextLink"];
+    } while (queryUrl);
     return files;
   }
 
@@ -46,19 +50,23 @@ export class OneDriveInventory {
     oneDriveAccount: OneDriveAccount,
     folder: Folder
   ): Promise<Folder[]> {
-    const children = (
-      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${folder.idCloud}/children`, {
-        headers: {
-          Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-        },
-      })
-    ).data.value;
+    let queryUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${folder.idCloud}/children`;
     const folders: Folder[] = [];
-    for (const child of children) {
-      if (child.folder) {
-        folders.push(folderFromRaw(child, oneDriveAccount));
+    do {
+      const children = (
+        await axios.get(queryUrl, {
+          headers: {
+            Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+          },
+        })
+      ).data;
+      for (const child of children.value) {
+        if (child.folder) {
+          folders.push(folderFromRaw(child, oneDriveAccount));
+        }
       }
-    }
+      queryUrl = children["@odata.nextLink"];
+    } while (queryUrl);
     return folders;
   }
 
@@ -147,7 +155,9 @@ function fileFromRaw(data: any, folderId: string, oneDriveAccount: OneDriveAccou
   } else {
     file.dateMedia = new Date(data.fileSystemInfo.createdDateTime);
   }
-  file.info = {};
+  file.info = {
+    size: data.size,
+  };
   file.metadata = {};
   if (data.photo) {
     file.metadata.photo = data.photo;

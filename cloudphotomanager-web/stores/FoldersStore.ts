@@ -1,11 +1,9 @@
-import { Timeout } from "~~/services/Timeout";
 import { AuthService } from "~~/services/AuthService";
 import Config from "~~/services/Config";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import axios from "axios";
 import * as _ from "lodash";
 import { PreferencesFolders } from "~~/services/PreferencesFolders";
-import * as path from "path";
 
 export const FoldersStore = defineStore("FoldersStore", {
   state: () => ({
@@ -17,7 +15,9 @@ export const FoldersStore = defineStore("FoldersStore", {
 
   actions: {
     async fetch(accountId: string) {
-      this.loading = true;
+      if (this.folders.length === 0) {
+        this.loading = true;
+      }
       const folders: any[] = [];
       for (const accountIn of AccountsStore().accounts) {
         const account: any = accountIn;
@@ -45,6 +45,7 @@ export const FoldersStore = defineStore("FoldersStore", {
           })
           .catch(handleError);
         this.checkVisibility(folders, account.id);
+        this.fetchCounts(account.id);
       }
       (this.folders as any[]) = folders;
       this.loading = false;
@@ -77,6 +78,21 @@ export const FoldersStore = defineStore("FoldersStore", {
         }
       }
     },
+    async fetchCounts(accountId: string) {
+      const counts = (
+        await axios.get(
+          `${(await Config.get()).SERVER_URL}/accounts/${accountId}/folders/counts`,
+          await AuthService.getAuthHeader()
+        )
+      ).data.counts;
+      counts.forEach((element: any) => {
+        const folder = _.find(this.folders, { id: element.folderId });
+        if (folder) {
+          folder.counts = element.counts;
+        }
+      });
+    },
+
     toggleFolderCollapsed(index: number) {
       const folder = this.folders[index] as any;
       folder.isCollapsed = !folder.isCollapsed;
