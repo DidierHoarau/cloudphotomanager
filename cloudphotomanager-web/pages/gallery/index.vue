@@ -6,13 +6,22 @@
     <div class="gallery-folders" :class="{ 'gallery-folders-closed': !menuOpened }">
       <FolderList @onFolderSelected="onFolderSelected" />
     </div>
-    <div class="gallery-files-actions actions-secondary">
-      <kbd v-if="selected.length > 0">Selecyed: {{ selected.length }}</kbd>
-      <span v-if="currentFolderId" v-on:click="clickedRefresh()"> <i class="bi bi-arrow-clockwise"></i> Refresh </span>
+    <button></button>
+    <div class="gallery-files-actions">
+      <button class="secondary outline" v-on:click="clickedRefresh()">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </button>
+      <kbd v-if="selectedFiles.length > 0">Selected: {{ selectedFiles.length }}</kbd>
+      <button v-if="selectedFiles.length > 0" class="secondary outline" v-on:click="clickedDelete()">
+        <i class="bi bi-trash-fill"></i> Delete
+      </button>
+      <button v-if="selectedFiles.length > 0" class="secondary outline" v-on:click="clickedMove()">
+        <i class="bi bi-arrows-move"></i> Move...
+      </button>
     </div>
     <div class="gallery-file-list">
-      <Loading v-if="loadding" />
-      <div class="card gallery-file" v-for="file in files" v-bind:key="file.id">
+      <Loading v-if="loading" />
+      <div v-else class="card gallery-file" v-for="file in files" v-bind:key="file.id">
         <div class="gallery-file-image" v-on:click="selectGalleryFile(file)">
           <img
             :src="serverUrl + '/accounts/' + file.accountId + '/files/' + file.id + '/thumbnail'"
@@ -20,7 +29,7 @@
           />
         </div>
         <div class="gallery-file-selected">
-          <input v-on:input="onFileSelected(file.accountId, file.id)" type="checkbox" />
+          <input v-on:input="onFileSelected(file)" type="checkbox" />
         </div>
         <div class="gallery-file-name">
           {{ file.filename }}
@@ -37,6 +46,7 @@
       class="gallery-item-focus"
       @onFileClosed="unselectGalleryFile"
     />
+    <DialogMove v-if="activeOperation == 'move'" :target="{ files: selectedFiles }" @onDone="onOperationDone" />
   </div>
 </template>
 
@@ -58,11 +68,12 @@ export default {
       menuOpened: true,
       serverUrl: "",
       selectedFile: null,
+      selectedFiles: [],
       requestEtag: "",
       currentAccountId: "",
       currentFolderId: "",
-      loadding: false,
-      selected: [],
+      loading: false,
+      activeOperation: "",
     };
   },
   async created() {
@@ -89,7 +100,7 @@ export default {
         this.currentAccountId = accountId;
         this.currentFolderId = folderId;
         this.files = [];
-        this.loadding = true;
+        this.loading = true;
       }
       this.requestEtag = requestEtag;
       await axios
@@ -105,7 +116,7 @@ export default {
         .catch(handleError)
         .finally(() => {
           this.requestEtag = "";
-          this.loadding = false;
+          this.loading = false;
         });
     },
     async clickedRefresh() {
@@ -120,12 +131,12 @@ export default {
       EventBus.emit(EventTypes.FOLDER_UPDATED, {});
       EventBus.emit(EventTypes.FILE_UPDATED, {});
     },
-    onFileSelected(accountId, fileId) {
-      const selectedIndex = _.findIndex(this.selected, { fileId, accountId });
+    onFileSelected(file) {
+      const selectedIndex = _.findIndex(this.selectedFiles, { id: file.id });
       if (selectedIndex < 0) {
-        this.selected.push({ fileId, accountId });
+        this.selectedFiles.push(file);
       } else {
-        this.selected.splice(selectedIndex, 1);
+        this.selectedFiles.splice(selectedIndex, 1);
       }
     },
     onFolderSelected(event) {
@@ -166,6 +177,40 @@ export default {
         return size + " B";
       } catch (err) {
         return "";
+      }
+    },
+    onOperationDone(result) {
+      this.selectedFiles = [];
+      this.activeOperation = "";
+      EventBus.emit(EventTypes.FOLDER_UPDATED, {});
+      EventBus.emit(EventTypes.FILE_UPDATED, {});
+      this.clickedRefresh();
+    },
+    clickedMove() {
+      this.activeOperation = "move";
+    },
+    async clickedDelete() {
+      let message = `Delete the ${this.selectedFiles.length} selected files? (Can't be undone!)\n`;
+      if (this.selectedFiles.length === 1) {
+        message = `Delete the file? (Can't be undone!)\nFile: ${this.selectedFiles[0].filename} \n`;
+      }
+      if (confirm(message) == true) {
+        this.loading = true;
+        for (const file of this.selectedFiles) {
+          await axios
+            .delete(
+              `${(await Config.get()).SERVER_URL}/accounts/${file.accountId}/files/${file.id}/operations/delete`,
+              await AuthService.getAuthHeader()
+            )
+            .then((res) => {
+              EventBus.emit(EventTypes.ALERT_MESSAGE, {
+                text: "File deleted",
+              });
+              this.onOperationDone({ status: "invalidated" });
+            })
+            .catch(handleError);
+        }
+        this.loading = false;
       }
     },
   },
@@ -226,10 +271,25 @@ export default {
   padding-right: 0.3em;
 }
 
+.gallery-files-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7em, 1fr));
+  grid-gap: 0.3em;
+}
+.gallery-files-actions button,
+.gallery-files-actions kbd {
+  padding: 0.3em 0.7em;
+  font-size: 0.8em;
+}
+
+.gallery-files-actions kbd {
+  height: 2.2em;
+}
+
 @media (min-width: 701px) {
   .gallery-layout {
     display: grid;
-    grid-template-rows: 2.5em 2.5em 1fr;
+    grid-template-rows: 2.5em auto 1fr;
     grid-template-columns: auto 1fr 1fr;
     column-gap: 1em;
   }
@@ -275,7 +335,7 @@ export default {
 @media (max-width: 700px) {
   .gallery-layout {
     display: grid;
-    grid-template-rows: 2.5em 1fr 2.5em 2fr;
+    grid-template-rows: 2.5em 1fr auto 2fr;
     grid-template-columns: 1fr;
     column-gap: 1em;
   }

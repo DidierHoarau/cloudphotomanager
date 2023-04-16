@@ -5,7 +5,7 @@
       <button class="secondary outline" v-on:click="clickedDelete()"><i class="bi bi-trash-fill"></i> Delete</button>
       <button class="secondary outline" v-on:click="clickedMove()"><i class="bi bi-arrows-move"></i> Move...</button>
     </div>
-    <DialogMove v-if="activeOperation == 'move'" :file="file" @onDone="onOperationDone" />
+    <DialogMove v-if="activeOperation == 'move'" :target="{ files: [file] }" @onDone="onOperationDone" />
     <img :src="serverUrl + '/accounts/' + file.accountId + '/files/' + file.id + '/preview'" />
   </div>
 </template>

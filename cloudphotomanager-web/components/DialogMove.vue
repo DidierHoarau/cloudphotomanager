@@ -25,7 +25,7 @@ import { AuthService } from "~~/services/AuthService";
 
 export default {
   props: {
-    file: {},
+    target: {},
   },
   data() {
     return {
@@ -42,7 +42,7 @@ export default {
       this.$emit("onDone", {});
     },
     onFolderSelected(event) {
-      if (event.folder.accountId !== this.file.accountId) {
+      if (event.folder.accountId !== this.target.files[0].accountId) {
         EventBus.emit(EventTypes.ALERT_MESSAGE, {
           type: "error",
           text: "Destination must be in the same account",
@@ -53,22 +53,22 @@ export default {
     },
     async doAction() {
       this.loading = true;
-      await axios
-        .put(
-          `${(await Config.get()).SERVER_URL}/accounts/${this.file.accountId}/files/${this.file.id}/operations/folder`,
-          {
-            folderpath: this.selectedFolderpath,
-          },
-          await AuthService.getAuthHeader()
-        )
-        .then((res) => {
-          this.$emit("onDone", { status: "invalidated" });
-          EventBus.emit(EventTypes.FOLDERS_UPDATED, {});
-        })
-        .catch(handleError)
-        .finally(() => {
-          this.loading = false;
-        });
+      for (const file of this.target.files) {
+        await axios
+          .put(
+            `${(await Config.get()).SERVER_URL}/accounts/${file.accountId}/files/${file.id}/operations/folder`,
+            {
+              folderpath: this.selectedFolderpath,
+            },
+            await AuthService.getAuthHeader()
+          )
+          .then((res) => {
+            this.$emit("onDone", { status: "invalidated" });
+            EventBus.emit(EventTypes.FOLDERS_UPDATED, {});
+          })
+          .catch(handleError);
+      }
+      this.loading = false;
     },
   },
 };
