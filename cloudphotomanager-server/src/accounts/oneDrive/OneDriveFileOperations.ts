@@ -49,6 +49,51 @@ export class OneDriveFileOperations {
     });
   }
 
+  public static async downloadThumbnail(
+    context: Span,
+    oneDriveAccount: OneDriveAccount,
+    file: File,
+    folder: string,
+    filename: string
+  ): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+      const span = StandardTracer.startSpan("OneDriveFileOperations_downloadFile", context);
+      axios({
+        url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/thumbnails`,
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+        },
+      })
+        .then(async (response) => {
+          return axios({
+            url: `${response.data.value[0].large.url}`,
+            method: "GET",
+            responseType: "stream",
+            headers: {
+              Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+            },
+          });
+        })
+        .then((response) => {
+          const writer = fs.createWriteStream(`${folder}/${filename}`);
+          response.data.pipe(writer);
+          writer.on("finish", () => {
+            resolve();
+          });
+          writer.on("error", (error) => {
+            reject(error);
+          });
+        })
+        .catch((error) => {
+          reject(error);
+        })
+        .finally(() => {
+          span.end();
+        });
+    });
+  }
+
   public static async moveFile(
     context: Span,
     oneDriveAccount: OneDriveAccount,

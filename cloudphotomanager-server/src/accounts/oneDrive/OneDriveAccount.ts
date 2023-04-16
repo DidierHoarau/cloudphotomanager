@@ -10,6 +10,7 @@ import { Logger } from "../../utils-std-ts/Logger";
 import { Folder } from "../../model/Folder";
 import { OneDriveFileOperations } from "./OneDriveFileOperations";
 import { OneDriveInventory } from "./OneDriveInventory";
+import { AccountCapabilities } from "../../model/AccountCapabilities";
 
 const logger = new Logger("OneDriveAccount");
 
@@ -27,6 +28,15 @@ export class OneDriveAccount implements Account {
 
   public getAccountDefinition(): AccountDefinition {
     return this.accountDefinition;
+  }
+
+  public getCapabilities(): AccountCapabilities {
+    return {
+      downloadPhotoThumbnail: true,
+      downloadPhotoPreview: false,
+      downloadVideoThumbnail: true,
+      downloadVideoPreview: false,
+    };
   }
 
   public async updateFileMetadata(context: Span, file: File): Promise<void> {
@@ -102,6 +112,14 @@ export class OneDriveAccount implements Account {
 
   public async downloadFile(context: Span, file: File, folderpath: string, filename: string): Promise<void> {
     await OneDriveFileOperations.downloadFile(context, this, file, folderpath, filename);
+  }
+
+  public async downloadPreview(context: Span, file: File, folder: string, filename: string): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  public async downloadThumbnail(context: Span, file: File, folderpath: string, filename: string): Promise<void> {
+    await OneDriveFileOperations.downloadThumbnail(context, this, file, folderpath, filename);
   }
 
   public async moveFile(context: Span, file: File, folderpathDestination: string): Promise<void> {

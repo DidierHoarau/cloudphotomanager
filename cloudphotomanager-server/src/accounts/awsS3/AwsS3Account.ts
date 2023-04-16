@@ -7,6 +7,7 @@ import { S3 } from "aws-sdk";
 import { File } from "../../model/File";
 import * as fs from "fs-extra";
 import { Folder } from "../../model/Folder";
+import { AccountCapabilities } from "../../model/AccountCapabilities";
 
 export class AwsS3Account implements Account {
   //
@@ -17,6 +18,14 @@ export class AwsS3Account implements Account {
 
   constructor(accountDefinition: AccountDefinition) {
     this.accountDefinition = accountDefinition;
+  }
+  getCapabilities(): AccountCapabilities {
+    return {
+      downloadPhotoThumbnail: false,
+      downloadPhotoPreview: false,
+      downloadVideoThumbnail: false,
+      downloadVideoPreview: false,
+    };
   }
   deleteFile(context: Span, file: File): Promise<void> {
     throw new Error("Method not implemented.");
@@ -40,6 +49,12 @@ export class AwsS3Account implements Account {
     throw new Error("Method not implemented.");
   }
   updateFileMetadata(context: Span, file: File): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+  downloadPreview(context: Span, file: File, folder: string, filename: string): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+  downloadThumbnail(context: Span, file: File, folder: string, filename: string): Promise<void> {
     throw new Error("Method not implemented.");
   }
 

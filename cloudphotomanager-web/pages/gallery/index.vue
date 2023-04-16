@@ -7,16 +7,20 @@
       <FolderList @onFolderSelected="onFolderSelected" />
     </div>
     <div class="gallery-files-actions actions-secondary">
+      <kbd v-if="selected.length > 0">Selecyed: {{ selected.length }}</kbd>
       <span v-if="currentFolderId" v-on:click="clickedRefresh()"> <i class="bi bi-arrow-clockwise"></i> Refresh </span>
     </div>
     <div class="gallery-file-list">
       <Loading v-if="loadding" />
-      <div class="card gallery-file" v-on:click="selectGalleryFile(file)" v-for="file in files" v-bind:key="file.id">
-        <div class="gallery-file-image">
+      <div class="card gallery-file" v-for="file in files" v-bind:key="file.id">
+        <div class="gallery-file-image" v-on:click="selectGalleryFile(file)">
           <img
             :src="serverUrl + '/accounts/' + file.accountId + '/files/' + file.id + '/thumbnail'"
             onerror="this.onerror=null; this.src='/images/file-sync-in-progress.webp'"
           />
+        </div>
+        <div class="gallery-file-selected">
+          <input v-on:input="onFileSelected(file.accountId, file.id)" type="checkbox" />
         </div>
         <div class="gallery-file-name">
           {{ file.filename }}
@@ -58,6 +62,7 @@ export default {
       currentAccountId: "",
       currentFolderId: "",
       loadding: false,
+      selected: [],
     };
   },
   async created() {
@@ -115,6 +120,14 @@ export default {
       EventBus.emit(EventTypes.FOLDER_UPDATED, {});
       EventBus.emit(EventTypes.FILE_UPDATED, {});
     },
+    onFileSelected(accountId, fileId) {
+      const selectedIndex = _.findIndex(this.selected, { fileId, accountId });
+      if (selectedIndex < 0) {
+        this.selected.push({ fileId, accountId });
+      } else {
+        this.selected.splice(selectedIndex, 1);
+      }
+    },
     onFolderSelected(event) {
       this.fetchFiles(event.folder.accountId, event.folder.id);
     },
@@ -167,13 +180,13 @@ export default {
 }
 .gallery-file {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   grid-template-rows: auto auto auto;
   height: 11em;
 }
 .gallery-file-name {
   grid-row: 2;
-  grid-column-start: 1;
+  grid-column-start: 2;
   grid-column-end: span 2;
   font-size: 0.7em;
   word-break: break-all;
@@ -182,7 +195,7 @@ export default {
 .gallery-file-image {
   grid-row: 1;
   grid-column-start: 1;
-  grid-column-end: span 2;
+  grid-column-end: span 3;
   word-break: break-all;
 }
 .gallery-file-image img {
@@ -192,7 +205,7 @@ export default {
 }
 .gallery-file-date {
   height: 2em;
-  grid-column: 1;
+  grid-column: 2;
   grid-row: 3;
   font-size: 0.6em;
   word-break: break-all;
@@ -200,11 +213,17 @@ export default {
 }
 .gallery-file-size {
   height: 2em;
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 3;
   font-size: 0.6em;
   word-break: break-all;
   opacity: 0.4;
+}
+.gallery-file-selected {
+  grid-column: 1;
+  grid-row-start: 2;
+  grid-row-end: span 2;
+  padding-right: 0.3em;
 }
 
 @media (min-width: 701px) {
