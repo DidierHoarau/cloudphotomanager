@@ -5,6 +5,7 @@ export class User {
   public id: string;
   public name: string;
   public passwordEncrypted: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
   constructor() {
     this.id = uuidv4();

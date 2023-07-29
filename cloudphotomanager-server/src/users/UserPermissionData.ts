@@ -4,6 +4,7 @@ import { User } from "../model/User";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 import { UserPermission } from "../model/UserPermission";
+import { Folder } from "../model/Folder";
 
 export class UserPermissionData {
   //
@@ -28,6 +29,29 @@ export class UserPermissionData {
     ]);
     span.end();
   }
+
+  public static async deleteForUser(context: Span, userId: string): Promise<void> {
+    const span = StandardTracer.startSpan("UserPermissionData_deleteForUser", context);
+    SqlDbutils.execSQL(span, "DELETE FROM users_permissions WHERE userId = ?", [userId]);
+    span.end();
+  }
+
+  public static async filterFoldersForUser(context: Span, folders: Folder[], userId: string): Promise<Folder[]> {
+    const span = StandardTracer.startSpan("UserPermissionData_filterFoldersForUser", context);
+    const filteredFolders = [];
+    const userPermissions = await UserPermissionData.getForUser(span, userId);
+    if (userPermissions.info.isAdmin) {
+      return folders;
+    }
+    for (const folderPermitted of userPermissions.info.folders) {
+      const knownFolder = _.find(folders, { id: folderPermitted.folderId });
+      if (knownFolder) {
+        filteredFolders.push(knownFolder);
+      }
+    }
+    span.end();
+    return filteredFolders;
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,7 +65,6 @@ function fromRaw(json: any): UserPermission {
   }
   permission.id = json.id;
   permission.userId = json.userId;
-  const info = JSON.parse(json.info);
-  permission.isAdmin = info.isAdmin;
+  permission.info = JSON.parse(json.info);
   return permission;
 }

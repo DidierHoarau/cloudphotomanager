@@ -14,6 +14,7 @@ export class Config implements ConfigInterface {
   public JWT_VALIDITY_DURATION: number = 31 * 24 * 3600;
   public CORS_POLICY_ORIGIN: string;
   public DATA_DIR = process.env.DATA_DIR || "/data";
+  public TMP_DIR = process.env.CACHE_DIR || "/tmp";
   public JWT_KEY: string = uuidv4();
   public LOG_LEVEL = "info";
   public SOURCE_FETCH_FREQUENCY = 30 * 60 * 1000;
@@ -39,6 +40,7 @@ export class Config implements ConfigInterface {
     setIfSet("JWT_VALIDITY_DURATION");
     setIfSet("CORS_POLICY_ORIGIN");
     setIfSet("DATA_DIR");
+    setIfSet("CACHE_DIR");
     setIfSet("JWT_KEY", false);
     setIfSet("LOG_LEVEL");
     setIfSet("SOURCE_FETCH_FREQUENCY");

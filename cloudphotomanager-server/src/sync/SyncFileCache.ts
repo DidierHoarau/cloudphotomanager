@@ -35,8 +35,7 @@ export class SyncFileCache {
 
   public static async checkFile(context: Span, account: Account, file: File, priority = SyncQueueItemPriority.LOW) {
     const span = StandardTracer.startSpan("SyncFileCache_checkFile", context);
-    const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
-
+    const cacheDir = await FileData.getFileCacheDir(span, file.id);
     const isImage = File.getMediaType(file.filename) === FileMediaType.image;
     const isVideo = File.getMediaType(file.filename) === FileMediaType.video;
     const hasThumbnail = fs.existsSync(`${cacheDir}/thumbnail.webp`);
@@ -60,20 +59,17 @@ export class SyncFileCache {
 
   public static async syncPhotoFromFull(account: Account, file: File) {
     const span = StandardTracer.startSpan("SyncFileCache_syncPhotoFromFull");
-    const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
+    const cacheDir = await FileData.getFileCacheDir(span, file.id);
+    const tmpDir = await FileData.getFileTmpDir(span, file.id);
     await fs.ensureDir(cacheDir);
-    await fs.ensureDir(`${cacheDir}/tmp_preview`);
+    await fs.ensureDir(`${tmpDir}/tmp_preview`);
     const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
     logger.info(`Caching photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
     await account
-      .downloadFile(span, file, `${cacheDir}/tmp_preview`, tmpFileName)
+      .downloadFile(span, file, `${tmpDir}/tmp_preview`, tmpFileName)
       .then(async () => {
-        await sharp(`${cacheDir}/tmp_preview/${tmpFileName}`)
-          .resize({ width: 300 })
-          .toFile(`${cacheDir}/thumbnail.webp`);
-        await sharp(`${cacheDir}/tmp_preview/${tmpFileName}`)
-          .resize({ width: 2000 })
-          .toFile(`${cacheDir}/preview.webp`);
+        await sharp(`${tmpDir}/tmp_preview/${tmpFileName}`).resize({ width: 300 }).toFile(`${cacheDir}/thumbnail.webp`);
+        await sharp(`${tmpDir}/tmp_preview/${tmpFileName}`).resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
       })
       .catch((err) => {
         logger.error(err);
@@ -84,15 +80,16 @@ export class SyncFileCache {
 
   public static async syncThumbnail(account: Account, file: File) {
     const span = StandardTracer.startSpan("SyncFileCache_syncThumbnail");
-    const cacheDir = `${config.DATA_DIR}/cache/${file.id[0]}/${file.id[1]}/${file.id}`;
+    const cacheDir = await FileData.getFileCacheDir(span, file.id);
+    const tmpDir = await FileData.getFileTmpDir(span, file.id);
     await fs.ensureDir(cacheDir);
-    await fs.ensureDir(`${cacheDir}/tmp_tumbnail`);
+    await fs.ensureDir(`${tmpDir}/tmp_tumbnail`);
     const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
     logger.info(`Caching thumbnail ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
     await account
-      .downloadThumbnail(span, file, `${cacheDir}/tmp_tumbnail`, tmpFileName)
+      .downloadThumbnail(span, file, `${tmpDir}/tmp_tumbnail`, tmpFileName)
       .then(async () => {
-        await sharp(`${cacheDir}/tmp_tumbnail/${tmpFileName}`)
+        await sharp(`${tmpDir}/tmp_tumbnail/${tmpFileName}`)
           .resize({ width: 300 })
           .toFile(`${cacheDir}/thumbnail.webp`);
       })

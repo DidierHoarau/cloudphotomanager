@@ -7,6 +7,7 @@ import { SyncQueue } from "../sync/SyncQueue";
 import { Auth } from "../users/Auth";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { FolderData } from "./FolderData";
+import { UserPermissionData } from "../users/UserPermissionData";
 
 export class FolderRoutes {
   //
@@ -23,7 +24,11 @@ export class FolderRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const folders = await FolderData.listForAccount(span, req.params.accountId);
+      const folders = await UserPermissionData.filterFoldersForUser(
+        span,
+        await FolderData.listForAccount(span, req.params.accountId),
+        userSession.userId
+      );
       return res.status(200).send({ folders });
     });
 

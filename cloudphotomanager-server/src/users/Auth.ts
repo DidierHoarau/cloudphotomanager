@@ -39,7 +39,7 @@ export class Auth {
         exp: Math.floor(Date.now() / 1000) + config.JWT_VALIDITY_DURATION,
         userId: user.id,
         userName: user.name,
-        permissions: userPermission.toJson().info,
+        permissions: { isAdmin: userPermission.info.isAdmin },
       },
       config.JWT_KEY
     );
@@ -70,6 +70,7 @@ export class Auth {
         const info = jwt.verify(req.headers.authorization.split(" ")[1], config.JWT_KEY);
         userSession.userId = info.userId;
         userSession.isAuthenticated = true;
+        userSession.permissions = info.permissions;
       } catch (err) {
         logger.error(err);
       }

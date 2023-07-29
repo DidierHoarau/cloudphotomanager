@@ -32,7 +32,7 @@ export class Scheduler {
       const span = StandardTracer.startSpan("Scheduler_startSchedule");
       const accountDefinitions = await AccountData.list(span);
       accountDefinitions.forEach(async (accountDefinition) => {
-        // Scheduler.startAccountSync(span, accountDefinition);
+        Scheduler.startAccountSync(span, accountDefinition);
       });
       await Timeout.wait(config.SOURCE_FETCH_FREQUENCY);
     }

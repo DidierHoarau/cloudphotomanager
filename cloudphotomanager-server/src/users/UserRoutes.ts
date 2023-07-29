@@ -53,6 +53,15 @@ export class UserRoutes {
       }
     });
 
+    fastify.get("/", async (req, res) => {
+      const span = StandardTracer.getSpanFromRequest(req);
+      const userSession = await Auth.getUserSession(req);
+      if (!userSession.isAuthenticated && userSession.permissions.isAdmin) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      res.status(201).send({ users: await UserData.list(span) });
+    });
+
     interface PostUser extends RequestGenericInterface {
       Body: {
         name: string;
@@ -66,7 +75,7 @@ export class UserRoutes {
         isInitialized = false;
       }
       const userSession = await Auth.getUserSession(req);
-      if (isInitialized && !userSession.isAuthenticated) {
+      if (isInitialized && !userSession.isAuthenticated && userSession.permissions.isAdmin) {
         return res.status(403).send({ error: "Access Denied" });
       }
       const newUser = new User();
@@ -87,10 +96,29 @@ export class UserRoutes {
       await UserPassword.setPassword(span, newUser, req.body.password);
       const userPermission = new UserPermission();
       userPermission.userId = newUser.id;
-      userPermission.isAdmin = isAdmin;
+      userPermission.info.isAdmin = isAdmin;
       await UserData.add(span, newUser);
       await UserPermissionData.updateForUser(span, newUser.id, userPermission);
       res.status(201).send({});
+    });
+
+    interface DeletetUser extends RequestGenericInterface {
+      Params: {
+        userId: string;
+      };
+    }
+    fastify.delete<DeletetUser>("/:userId", async (req, res) => {
+      const span = StandardTracer.getSpanFromRequest(req);
+      const userSession = await Auth.getUserSession(req);
+      if (!userSession.isAuthenticated && userSession.permissions.isAdmin) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      if (!(await UserData.get(span, req.params.userId))) {
+        return res.status(404).send({ error: "Not Found" });
+      }
+      await UserData.delete(span, req.params.userId);
+      await UserPermissionData.deleteForUser(span, req.params.userId);
+      res.status(202).send({});
     });
 
     interface PutNewPassword extends RequestGenericInterface {
@@ -114,6 +142,47 @@ export class UserRoutes {
       }
       await UserPassword.setPassword(span, user, req.body.password);
       await UserData.update(span, user);
+      res.status(201).send({});
+    });
+
+    interface GetUserIdPermissions extends RequestGenericInterface {
+      Params: {
+        userId: string;
+      };
+    }
+    fastify.get<GetUserIdPermissions>("/:userId/permissions", async (req, res) => {
+      const span = StandardTracer.getSpanFromRequest(req);
+      const userSession = await Auth.getUserSession(req);
+      if (!userSession.isAuthenticated && userSession.permissions.isAdmin) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      if (!(await UserData.get(span, req.params.userId))) {
+        return res.status(404).send({ error: "Not Found" });
+      }
+      res.status(200).send(await UserPermissionData.getForUser(span, req.params.userId));
+    });
+
+    interface PutUserIdPermissions extends RequestGenericInterface {
+      Params: {
+        userId: string;
+      };
+      Body: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        info: any;
+      };
+    }
+    fastify.put<PutUserIdPermissions>("/:userId/permissions", async (req, res) => {
+      const span = StandardTracer.getSpanFromRequest(req);
+      const userSession = await Auth.getUserSession(req);
+      if (!userSession.isAuthenticated && userSession.permissions.isAdmin) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      if (!(await UserData.get(span, req.params.userId))) {
+        return res.status(404).send({ error: "Not Found" });
+      }
+      const permissions = await UserPermissionData.getForUser(span, req.params.userId);
+      permissions.info = req.body.info;
+      await UserPermissionData.updateForUser(span, req.params.userId, permissions);
       res.status(201).send({});
     });
   }

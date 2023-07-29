@@ -1,29 +1,22 @@
 <template>
   <div class="page">
-    <div v-if="!authenticationStore.isAuthenticated">
-      <h1 v-if="isInitialized">Login</h1>
-      <h1 v-else>New User</h1>
-      <label>Name</label>
-      <input id="username" v-model="user.name" type="text" />
-      <label>Password</label>
-      <input id="passwrd" v-model="user.password" type="password" />
-      <button v-if="!authenticationStore.isAuthenticated && !isInitialized" v-on:click="saveNew()">Create</button>
-      <button v-if="!authenticationStore.isAuthenticated && isInitialized" v-on:click="login()">Login</button>
-    </div>
-    <div v-else>
-      <h1>Authentication</h1>
-      <button v-on:click="logout()">Logout</button>
-      <button v-if="!isChangePasswordStarted" v-on:click="changePasswordStart(true)">Change Password</button>
-      <article v-else>
-        <h1>Change Password</h1>
-        <label>Old Password</label>
-        <input id="password" v-model="user.passwordOld" type="password" />
-        <label>New Password</label>
-        <input id="passwordOld" v-model="user.password" type="password" />
-        <button v-on:click="changePassword()">Change</button>
-        <button v-on:click="changePasswordStart(false)">Cancel</button>
-      </article>
-    </div>
+    <h1>Profile</h1>
+    <button v-on:click="logout()">Logout</button>
+    <button v-if="!isChangePasswordStarted" v-on:click="changePasswordStart(true)">Change Password</button>
+    <NuxtLink
+      v-if="authenticationStore.userInfo.permissions && authenticationStore.userInfo.permissions.isAdmin"
+      to="/users/management"
+      ><button>Users</button></NuxtLink
+    >
+    <article v-else>
+      <h1>Change Password</h1>
+      <label>Old Password</label>
+      <input id="password" v-model="user.passwordOld" type="password" />
+      <label>New Password</label>
+      <input id="passwordOld" v-model="user.password" type="password" />
+      <button v-on:click="changePassword()">Change</button>
+      <button v-on:click="changePasswordStart(false)">Cancel</button>
+    </article>
   </div>
 </template>
 
@@ -42,35 +35,18 @@ export default {
   data() {
     return {
       user: {},
-      isInitialized: true,
       isChangePasswordStarted: false,
     };
   },
   async created() {
-    this.isInitialized = await UserService.isInitialized();
-    AuthenticationStore().isAuthenticated = await AuthService.isAuthenticated();
+    if (!(await UserService.isInitialized())) {
+      useRouter().push({ path: "/users/new" });
+    }
+    if (!(await AuthService.isAuthenticated())) {
+      useRouter().push({ path: "/users/login" });
+    }
   },
   methods: {
-    async saveNew() {
-      if (this.user.name && this.user.password) {
-        await axios
-          .post(`${(await Config.get()).SERVER_URL}/users`, this.user, await AuthService.getAuthHeader())
-          .then((res) => {
-            EventBus.emit(EventTypes.ALERT_MESSAGE, {
-              type: "info",
-              text: "User created",
-            });
-            this.isInitialized = true;
-            this.login();
-          })
-          .catch(handleError);
-      } else {
-        EventBus.emit(EventTypes.ALERT_MESSAGE, {
-          type: "error",
-          text: "Username or password missing",
-        });
-      }
-    },
     async login() {
       if (this.user.name && this.user.password) {
         await axios
@@ -115,6 +91,7 @@ export default {
     async logout() {
       AuthService.removeToken();
       AuthenticationStore().isAuthenticated = false;
+      useRouter().push({ path: "/users/login" });
     },
     changePasswordStart(enable) {
       this.isChangePasswordStarted = enable;

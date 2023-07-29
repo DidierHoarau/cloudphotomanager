@@ -11,12 +11,24 @@
           ><i class="bi bi-images"></i
         ></NuxtLink>
       </li>
-      <li v-if="authenticationStore.isAuthenticated">
+      <li
+        v-if="
+          authenticationStore.isAuthenticated &&
+          authenticationStore.userInfo.permissions &&
+          authenticationStore.userInfo.permissions.isAdmin
+        "
+      >
         <NuxtLink to="/analysis" :class="baseFolder === 'analysis' ? 'active' : 'inactive'"
           ><i class="bi bi-clipboard-data-fill"></i
         ></NuxtLink>
       </li>
-      <li v-if="authenticationStore.isAuthenticated">
+      <li
+        v-if="
+          authenticationStore.isAuthenticated &&
+          authenticationStore.userInfo.permissions &&
+          authenticationStore.userInfo.permissions.isAdmin
+        "
+      >
         <NuxtLink to="/accounts" :class="baseFolder === 'accounts' ? 'active' : 'inactive'"
           ><i class="bi bi-clouds-fill"></i
         ></NuxtLink>

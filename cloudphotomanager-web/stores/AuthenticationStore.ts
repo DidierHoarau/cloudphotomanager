@@ -3,6 +3,7 @@ import { AuthService } from "~~/services/AuthService";
 export const AuthenticationStore = defineStore("AuthenticationStore", {
   state: () => ({
     isAuthenticated: false,
+    userInfo: {},
   }),
 
   getters: {},
@@ -10,6 +11,7 @@ export const AuthenticationStore = defineStore("AuthenticationStore", {
   actions: {
     async ensureAuthenticated(): Promise<boolean> {
       this.isAuthenticated = await AuthService.isAuthenticated();
+      this.userInfo = (await AuthService.getTokenInfo()) as any;
       return this.isAuthenticated;
     },
   },

@@ -35,6 +35,15 @@ export class AuthService {
     }
   }
 
+  public static async getTokenInfo() {
+    const storedKey = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (storedKey) {
+      return jwtDecode(storedKey);
+    } else {
+      return null;
+    }
+  }
+
   public static async getAuthHeader(): Promise<any> {
     try {
       const token = await AuthService.getToken();

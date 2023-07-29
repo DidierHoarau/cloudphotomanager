@@ -20,6 +20,11 @@ export class FileData {
     return cacheDir;
   }
 
+  public static async getFileTmpDir(context: Span, fileId: string): Promise<string> {
+    const cacheDir = `${config.TMP_DIR}/cache/${fileId[0]}/${fileId[1]}/${fileId}`;
+    return cacheDir;
+  }
+
   public static async get(context: Span, id: string): Promise<File> {
     const span = StandardTracer.startSpan("FileData_getByPath", context);
     const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE id = ? ", [id]);

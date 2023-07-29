@@ -33,7 +33,7 @@ export class UserData {
     const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM users");
     const users = [];
     for (const userRaw of rawData) {
-      users.push(UserData.fromRaw(userRaw));
+      users.push(UserData.fromRaw(userRaw, false));
     }
     span.end();
     return users;
@@ -58,12 +58,20 @@ export class UserData {
     span.end();
   }
 
+  public static async delete(context: Span, id: string): Promise<void> {
+    const span = StandardTracer.startSpan("UserData_delete", context);
+    await SqlDbutils.execSQL(span, "DELETE FROM users WHERE id = ? ", [id]);
+    span.end();
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private static fromRaw(userRaw: any): User {
+  private static fromRaw(userRaw: any, includePasswordEncrypted = true): User {
     const user = new User();
     user.id = userRaw.id;
     user.name = userRaw.name;
-    user.passwordEncrypted = userRaw.passwordEncrypted;
+    if (includePasswordEncrypted) {
+      user.passwordEncrypted = userRaw.passwordEncrypted;
+    }
     return user;
   }
 }
