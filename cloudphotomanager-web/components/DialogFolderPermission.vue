@@ -68,22 +68,6 @@ export default {
           this.$emit("onDone", { status: "invalidated" });
         })
         .catch(handleError);
-
-      // for (const file of this.target.files) {
-      //   await axios
-      //     .put(
-      //       `${(await Config.get()).SERVER_URL}/accounts/${file.accountId}/files/${file.id}/operations/folder`,
-      //       {
-      //         folderpath: this.selectedFolderpath,
-      //       },
-      //       await AuthService.getAuthHeader()
-      //     )
-      //     .then((res) => {
-      //       this.$emit("onDone", { status: "invalidated" });
-      //       EventBus.emit(EventTypes.FOLDERS_UPDATED, {});
-      //     })
-      //     .catch(handleError);
-      // }
       this.loading = false;
     },
   },
