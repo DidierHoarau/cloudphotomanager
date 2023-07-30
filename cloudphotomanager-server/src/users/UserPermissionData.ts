@@ -12,7 +12,9 @@ export class UserPermissionData {
     const span = StandardTracer.startSpan("UserPermissionData_get", context);
     const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM users_permissions WHERE userId=?", [userId]);
     if (rawData.length === 0) {
-      return null;
+      const emptyPermission = new UserPermission();
+      emptyPermission.userId = userId;
+      return emptyPermission;
     }
     const userPermission = fromRaw(rawData[0]);
     span.end();
@@ -34,23 +36,6 @@ export class UserPermissionData {
     const span = StandardTracer.startSpan("UserPermissionData_deleteForUser", context);
     SqlDbutils.execSQL(span, "DELETE FROM users_permissions WHERE userId = ?", [userId]);
     span.end();
-  }
-
-  public static async filterFoldersForUser(context: Span, folders: Folder[], userId: string): Promise<Folder[]> {
-    const span = StandardTracer.startSpan("UserPermissionData_filterFoldersForUser", context);
-    const filteredFolders = [];
-    const userPermissions = await UserPermissionData.getForUser(span, userId);
-    if (userPermissions.info.isAdmin) {
-      return folders;
-    }
-    for (const folderPermitted of userPermissions.info.folders) {
-      const knownFolder = _.find(folders, { id: folderPermitted.folderId });
-      if (knownFolder) {
-        filteredFolders.push(knownFolder);
-      }
-    }
-    span.end();
-    return filteredFolders;
   }
 }
 

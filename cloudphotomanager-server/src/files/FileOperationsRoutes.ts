@@ -42,7 +42,7 @@ export class FileOperationsRoutes {
 
       // Sync
       await FileData.delete(span, file.id);
-      FolderData.get(span, req.params.accountId, file.folderId)
+      FolderData.get(span, file.folderId)
         .then((folder) => {
           SyncQueue.queueItem(account, folder.id, folder, SyncInventory.syncFolder, SyncQueueItemPriority.HIGH);
         })
@@ -84,7 +84,7 @@ export class FileOperationsRoutes {
       await account.deleteFile(span, file);
       await FileData.delete(span, file.id);
 
-      FolderData.get(span, req.params.accountId, file.folderId)
+      FolderData.get(span, file.folderId)
         .then(async (folder) => {
           SyncQueue.queueItem(account, file.folderId, folder, SyncInventory.syncFolder, SyncQueueItemPriority.HIGH);
         })

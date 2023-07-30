@@ -22,6 +22,7 @@ export class Config implements ConfigInterface {
   public OPENTELEMETRY_COLLECTOR_AWS = process.env.OPENTELEMETRY_COLLECTOR_AWS === "true";
   public PROCESSORS_SYSTEM = "processors-system";
   public PROCESSORS_USER = "processors-user";
+  public AUTO_SYNC = process.env.AUTO_SYNC !== "N";
 
   public async reload(): Promise<void> {
     const content = await fse.readJson(this.CONFIG_FILE);

@@ -8,6 +8,7 @@ import { Auth } from "../users/Auth";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { FolderData } from "./FolderData";
 import { UserPermissionData } from "../users/UserPermissionData";
+import { UserPermissionCheck } from "../users/UserPermissionCheck";
 
 export class FolderRoutes {
   //
@@ -24,7 +25,7 @@ export class FolderRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const folders = await UserPermissionData.filterFoldersForUser(
+      const folders = await UserPermissionCheck.filterFoldersForUser(
         span,
         await FolderData.listForAccount(span, req.params.accountId),
         userSession.userId
@@ -59,7 +60,7 @@ export class FolderRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const folder = await FolderData.get(span, req.params.accountId, req.params.folderId);
+      const folder = await FolderData.get(span, req.params.folderId);
       if (!folder) {
         return res.status(200).send({ files: [] });
       }
@@ -79,7 +80,7 @@ export class FolderRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const folder = await FolderData.get(span, req.params.accountId, req.params.folderId);
+      const folder = await FolderData.get(span, req.params.folderId);
       if (!folder) {
         return res.status(200).send({ files: [] });
       }

@@ -32,7 +32,9 @@ export class Scheduler {
       const span = StandardTracer.startSpan("Scheduler_startSchedule");
       const accountDefinitions = await AccountData.list(span);
       accountDefinitions.forEach(async (accountDefinition) => {
-        Scheduler.startAccountSync(span, accountDefinition);
+        if (config.AUTO_SYNC) {
+          Scheduler.startAccountSync(span, accountDefinition);
+        }
       });
       await Timeout.wait(config.SOURCE_FETCH_FREQUENCY);
     }
@@ -47,7 +49,7 @@ export class Scheduler {
 
     // Ensure root folder
     const rootFolderCloud = await account.getFolderByPath(span, "/");
-    const rootFolderKnown = await FolderData.get(span, rootFolderCloud.accountId, rootFolderCloud.id);
+    const rootFolderKnown = await FolderData.get(span, rootFolderCloud.id);
     if (!rootFolderKnown) {
       rootFolderCloud.dateSync = new Date(0);
       await FolderData.add(span, rootFolderCloud);

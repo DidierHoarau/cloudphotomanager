@@ -3,11 +3,15 @@
     <article>
       <header>
         <a href="#close" aria-label="Close" class="close" v-on:click="clickedClose()"></a>
-        Move File
+        Folder Permissions
       </header>
       <label>Add Folder Permission</label>
       <FolderList class="dialog-folder-selection" @onFolderSelected="onFolderSelected" />
       <input id="name" v-model="selectedFolderpath" type="text" />
+      <label for="recursive">
+        <input type="checkbox" id="recursive" name="recursive" v-model="isRecursive" />
+        Recursive
+      </label>
       <button :disabled="loading || selectedFolderpath === ''" v-on:click="doAction()">Add</button>
     </article>
   </dialog>
@@ -34,6 +38,7 @@ export default {
       selectedFolderpath: "",
       selectedFolder: null,
       loading: false,
+      isRecursive: false,
     };
   },
   async created() {
@@ -58,7 +63,11 @@ export default {
           }
           const folderPermission = _.find(permissions.folders, { folderId: this.selectedFolder.id });
           if (!folderPermission) {
-            permissions.info.folders.push({ folderId: this.selectedFolder.id, scope: "ro" });
+            let scope = "ro";
+            if (this.isRecursive) {
+              scope = "ro_recursive";
+            }
+            permissions.info.folders.push({ folderId: this.selectedFolder.id, scope });
           }
           await axios.put(
             `${(await Config.get()).SERVER_URL}/users/${this.userId}/permissions`,

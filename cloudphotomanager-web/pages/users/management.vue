@@ -16,7 +16,8 @@
             <div v-if="user.permissions && user.permissions.isAdmin">Admin</div>
             <div v-else-if="user.permissions">
               <div v-for="folder in user.permissions.folders" v-bind:key="folder.id">
-                <i class="bi bi-trash-fill"></i>&nbsp;&nbsp;({{ folder.accountName }})&nbsp;{{ folder.folderpath }}
+                <i v-on:click="clickedPermissionsUserRemoveFolder(user, folder)" class="bi bi-trash-fill"></i
+                >&nbsp;&nbsp;({{ folder.accountName }})&nbsp;{{ folder.folderpath }}&nbsp;({{ folder.scope_tag }})
               </div>
               <div v-on:click="clickedPermissionsUserAddFolder(user)"><i class="bi bi-folder-plus"></i> Add Folder</div>
             </div>
@@ -85,6 +86,10 @@ export default {
                 for (const folder of user.permissions.folders || []) {
                   const folderKnown = _.find(FoldersStore().folders, { id: folder.folderId });
                   const accountKnown = _.find(AccountsStore().accounts, { id: folderKnown.accountId });
+                  folder.scope_tag = "RO";
+                  if (folder.scope === "ro_recursive") {
+                    folder.scope_tag = "RO Recursive";
+                  }
                   folder.accountName = accountKnown.name || "Unknown Folder";
                   folder.folderpath = folderKnown.folderpath || "Unknown Folder";
                 }
@@ -103,6 +108,24 @@ export default {
           })
           .catch(handleError);
       }
+    },
+    async clickedPermissionsUserRemoveFolder(user, folder) {
+      await axios
+        .get(`${(await Config.get()).SERVER_URL}/users/${user.id}/permissions`, await AuthService.getAuthHeader())
+        .then(async (res) => {
+          const permissions = res.data;
+          const folderToRemove = _.findIndex(permissions.info.folders, { folderId: folder.folderId });
+          if (folderToRemove >= 0) {
+            permissions.info.folders.splice(folderToRemove, 1);
+            await axios.put(
+              `${(await Config.get()).SERVER_URL}/users/${user.id}/permissions`,
+              permissions,
+              await AuthService.getAuthHeader()
+            );
+          }
+          this.fetch();
+        })
+        .catch(handleError);
     },
     async clickedPermissionsUserAddFolder(user) {
       this.activeOperation = "userIdAddPermission";

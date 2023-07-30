@@ -16,13 +16,6 @@ export class FolderData {
     span.end();
   }
 
-  public static async deleteAccount(context: Span, accountId: string): Promise<void> {
-    const span = StandardTracer.startSpan("FolderData_deleteAccount", context);
-    await SqlDbutils.execSQL(span, "DELETE FROM folders WHERE accountId = ? ", [accountId]);
-    await SqlDbutils.execSQL(span, "DELETE FROM files WHERE accountId = ? ", [accountId]);
-    span.end();
-  }
-
   public static async add(context: Span, folder: Folder): Promise<void> {
     const span = StandardTracer.startSpan("FolderData_add", context);
     await SqlDbutils.execSQL(
@@ -42,12 +35,9 @@ export class FolderData {
     span.end();
   }
 
-  public static async get(context: Span, accountId: string, id: string): Promise<Folder> {
+  public static async get(context: Span, id: string): Promise<Folder> {
     const span = StandardTracer.startSpan("FolderData_get", context);
-    const folderRaw = await SqlDbutils.querySQL(span, "SELECT * FROM folders WHERE accountId = ? AND  id = ?", [
-      accountId,
-      id,
-    ]);
+    const folderRaw = await SqlDbutils.querySQL(span, "SELECT * FROM folders WHERE id = ?", [id]);
     if (folderRaw.length === 0) {
       return null;
     }
@@ -78,9 +68,9 @@ export class FolderData {
     return fromRaw(folderRaw[0]);
   }
 
-  public static async listSubFolders(context: Span, accountId: string, parentFolder: Folder): Promise<Folder[]> {
-    const span = StandardTracer.startSpan("FolderData_listByParentFolder", context);
-    const accountfolders = await FolderData.listForAccount(span, accountId);
+  public static async listSubFolders(context: Span, parentFolder: Folder): Promise<Folder[]> {
+    const span = StandardTracer.startSpan("FolderData_listSubFolders", context);
+    const accountfolders = await FolderData.listForAccount(span, parentFolder.accountId);
     const folders = [];
 
     accountfolders.forEach((candidateFolder) => {
