@@ -137,7 +137,7 @@ export class OneDriveFileOperations {
     logger.info(`Creating folder: ${foldername} in ${parentFolder.folderpath} / ${absoluteFolderPath}`);
     const folderRaw = (
       await axios.post(
-        `https://graph.microsoft.com/v1.0/me/drive/items/${parentFolder.id}/children`,
+        `https://graph.microsoft.com/v1.0/me/drive/items/${parentFolder.idCloud}/children`,
         { name: foldername, folder: {} },
         {
           headers: {
