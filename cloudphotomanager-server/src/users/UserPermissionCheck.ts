@@ -21,14 +21,18 @@ export class UserPermissionCheck {
       return folders;
     }
     const folderPermissions = [];
+    const includeSubfolders = async (folder: Folder) => {
+      const subfolders = await FolderData.listSubFolders(span, folder);
+      for (const subfolder of subfolders) {
+        folderPermissions.push(subfolder);
+        await includeSubfolders(subfolder);
+      }
+    };
     for (const folderPermitted of userPermissions.info.folders) {
       const baseFolderPermitted = await FolderData.get(span, folderPermitted.folderId);
       folderPermissions.push(baseFolderPermitted);
       if (folderPermitted.scope === "ro_recursive") {
-        const subfolders = await FolderData.listSubFolders(span, baseFolderPermitted);
-        for (const subfolder of subfolders) {
-          folderPermissions.push(subfolder);
-        }
+        await includeSubfolders(baseFolderPermitted);
       }
     }
     for (const folderPermitted of folderPermissions) {
