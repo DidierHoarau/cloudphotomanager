@@ -27,7 +27,7 @@ export class FileOperationsRoutes {
     fastify.put<PostFilesAccountIdRequest>("/folder", async (req, res) => {
       const span = StandardTracer.getSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
-      if (!userSession.isAuthenticated) {
+      if (!userSession.isAuthenticated && userSession.permissions.isAdmin) {
         return res.status(403).send({ error: "Access Denied" });
       }
       if (!req.body.folderpath) {
@@ -62,16 +62,16 @@ export class FileOperationsRoutes {
       return res.status(201).send({});
     });
 
-    interface DeleteFilesAccountIdFileIdPreviewRequest extends RequestGenericInterface {
+    interface DeleteFilesAccountIdFileId extends RequestGenericInterface {
       Params: {
         accountId: string;
         fileId: string;
       };
     }
-    fastify.delete<DeleteFilesAccountIdFileIdPreviewRequest>("/delete", async (req, res) => {
+    fastify.delete<DeleteFilesAccountIdFileId>("/delete", async (req, res) => {
       const span = StandardTracer.getSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
-      if (!userSession.isAuthenticated) {
+      if (!userSession.isAuthenticated && userSession.permissions.isAdmin) {
         return res.status(403).send({ error: "Access Denied" });
       }
 
