@@ -14,6 +14,6 @@ docker rm -f cloudphotomanager || true
 
 SERVICE_VERSION=$(cat ${REPO_DIR}/package.json | jq -r '.version')
 
-docker run -p 80:8080 -d --name cloudphotomanager didierhoarau/cloudphotomanager:${SERVICE_VERSION}
+docker run -p 80:80 -d --name cloudphotomanager didierhoarau/cloudphotomanager:${SERVICE_VERSION}
 
 docker logs -f cloudphotomanager
