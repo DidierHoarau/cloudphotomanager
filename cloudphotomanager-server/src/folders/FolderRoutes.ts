@@ -27,7 +27,7 @@ export class FolderRoutes {
       }
       const folders = await UserPermissionCheck.filterFoldersForUser(
         span,
-        await FolderData.listForAccount(span, req.params.accountId),
+        await FolderData.listForAccount(span, req.params.accountId, true),
         userSession.userId
       );
       return res.status(200).send({ folders });
@@ -44,7 +44,7 @@ export class FolderRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const counts = await FolderData.listCountsForAccount(span, req.params.accountId);
+      const counts = await FolderData.listCountsForAccount(span, req.params.accountId, true);
       return res.status(200).send({ counts });
     });
 

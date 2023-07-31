@@ -1,15 +1,9 @@
-import * as path from "path";
-import { Config } from "../Config";
-import { Logger } from "../utils-std-ts/Logger";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { UserPermissionData } from "./UserPermissionData";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { Folder } from "../model/Folder";
 import * as _ from "lodash";
 import { FolderData } from "../folders/FolderData";
-
-const logger = new Logger(path.basename(__filename));
-let config: Config;
 
 export class UserPermissionCheck {
   //
@@ -20,25 +14,29 @@ export class UserPermissionCheck {
     if (userPermissions.info.isAdmin) {
       return folders;
     }
-    const folderPermissions = [];
-    const includeSubfolders = async (folder: Folder) => {
-      const subfolders = await FolderData.listSubFolders(span, folder);
-      for (const subfolder of subfolders) {
-        folderPermissions.push(subfolder);
-        await includeSubfolders(subfolder);
-      }
-    };
-    for (const folderPermitted of userPermissions.info.folders) {
-      const baseFolderPermitted = await FolderData.get(span, folderPermitted.folderId);
-      folderPermissions.push(baseFolderPermitted);
-      if (folderPermitted.scope === "ro_recursive") {
-        await includeSubfolders(baseFolderPermitted);
+    const folderPermittedList: Folder[] = [];
+
+    for (const folderPermittedIteration of userPermissions.info.folders) {
+      const folderPermittedDefinition = await FolderData.get(span, folderPermittedIteration.folderId);
+      if (folderPermittedDefinition) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (folderPermittedDefinition as any).scope = folderPermittedIteration.scope;
+        folderPermittedList.push(folderPermittedDefinition);
       }
     }
-    for (const folderPermitted of folderPermissions) {
-      const knownFolder = _.find(folders, { id: folderPermitted.id });
-      if (knownFolder) {
-        filteredFolders.push(knownFolder);
+
+    for (const folder of folders) {
+      for (const folderPermitted of folderPermittedList) {
+        if (folderPermitted.id === folder.id) {
+          filteredFolders.push(folder);
+        } else if (
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (folderPermitted as any).scope === "ro_recursive" &&
+          folderPermitted.accountId === folder.accountId &&
+          folder.folderpath.lastIndexOf(`${folderPermitted.folderpath}/`) === 0
+        ) {
+          filteredFolders.push(folder);
+        }
       }
     }
     span.end();

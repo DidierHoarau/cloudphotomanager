@@ -5,14 +5,23 @@ import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 import { Config } from "../Config";
 import { Folder } from "../model/Folder";
+import { AccountData } from "../accounts/AccountData";
 
 let config: Config;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let cacheAccountsFolders: any[] = [];
+let cacheAccountsFoldersInProgess = 0;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let cacheAccountsFoldersCounts: any[] = [];
+let cacheAccountsFoldersCountsInProgess = 0;
 
 export class FolderData {
   //
   public static async init(context: Span, configIn: Config) {
     const span = StandardTracer.startSpan("FolderData_init", context);
     config = configIn;
+    FolderData.refreshCacheFolders();
     span.end();
   }
 
@@ -33,6 +42,7 @@ export class FolderData {
       ]
     );
     span.end();
+    FolderData.refreshCacheFolders();
   }
 
   public static async get(context: Span, id: string): Promise<Folder> {
@@ -54,6 +64,7 @@ export class FolderData {
       folder.accountId,
     ]);
     span.end();
+    FolderData.refreshCacheFolders();
   }
 
   public static async getByCloudId(context: Span, accountId: string, idCloud: string): Promise<Folder> {
@@ -82,8 +93,13 @@ export class FolderData {
     return folders;
   }
 
-  public static async listForAccount(context: Span, accountId: string): Promise<Folder[]> {
+  public static async listForAccount(context: Span, accountId: string, getCache = false): Promise<Folder[]> {
     const span = StandardTracer.startSpan("FolderData_listForAccount", context);
+    if (getCache) {
+      span.addEvent("Cached");
+      span.end();
+      return cacheAccountsFolders[accountId];
+    }
     const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM folders WHERE accountId = ? ORDER BY folderpath ", [
       accountId,
     ]);
@@ -97,9 +113,15 @@ export class FolderData {
 
   public static async listCountsForAccount(
     context: Span,
-    accountId: string
+    accountId: string,
+    getCache = false
   ): Promise<{ folderId: string; count: number }[]> {
     const span = StandardTracer.startSpan("FolderData_listForAccount", context);
+    if (getCache) {
+      span.addEvent("Cached");
+      span.end();
+      return cacheAccountsFoldersCounts[accountId];
+    }
     const rawData = await SqlDbutils.querySQL(
       span,
       "SELECT count(*) as counts, folderId FROM files WHERE accountId = ? GROUP BY folderId ",
@@ -178,6 +200,53 @@ export class FolderData {
       `${folderpath}%`,
     ]);
     span.end();
+  }
+
+  public static async refreshCacheFolders(): Promise<void> {
+    if (cacheAccountsFoldersInProgess > 1) {
+      return;
+    }
+    cacheAccountsFoldersInProgess++;
+    if (cacheAccountsFoldersInProgess > 1) {
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const newCache: any = {};
+    const span = StandardTracer.startSpan("FolderData_refreshCacheFolders");
+    const accounts = await AccountData.list(span);
+    for (const account of accounts) {
+      newCache[account.id] = FolderData.listForAccount(span, account.id);
+    }
+    cacheAccountsFolders = newCache;
+    span.end();
+    cacheAccountsFoldersInProgess--;
+    FolderData.refreshCacheFoldersCounts();
+    setTimeout(() => {
+      FolderData.refreshCacheFolders();
+    }, 1000);
+  }
+
+  public static async refreshCacheFoldersCounts(): Promise<void> {
+    if (cacheAccountsFoldersCountsInProgess > 1) {
+      return;
+    }
+    cacheAccountsFoldersCountsInProgess++;
+    if (cacheAccountsFoldersCountsInProgess > 1) {
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const newCache: any = {};
+    const span = StandardTracer.startSpan("FolderData_refreshCacheFoldersCounts");
+    const accounts = await AccountData.list(span);
+    for (const account of accounts) {
+      newCache[account.id] = FolderData.listCountsForAccount(span, account.id);
+    }
+    cacheAccountsFoldersCounts = newCache;
+    span.end();
+    cacheAccountsFoldersCountsInProgess--;
+    setTimeout(() => {
+      FolderData.refreshCacheFoldersCounts();
+    }, 1000);
   }
 }
 

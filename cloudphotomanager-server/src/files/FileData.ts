@@ -4,6 +4,7 @@ import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 import { File } from "../model/File";
 import { Config } from "../Config";
+import { FolderData } from "../folders/FolderData";
 
 let config: Config;
 
@@ -102,6 +103,7 @@ export class FileData {
       ]
     );
     span.end();
+    FolderData.refreshCacheFoldersCounts();
   }
 
   public static async update(context: Span, file: File): Promise<void> {
@@ -127,12 +129,14 @@ export class FileData {
       ]
     );
     span.end();
+    FolderData.refreshCacheFoldersCounts();
   }
 
   public static async delete(context: Span, id: string): Promise<void> {
     const span = StandardTracer.startSpan("FileData_delete", context);
     await SqlDbutils.execSQL(span, "DELETE FROM files WHERE id = ?", [id]);
     span.end();
+    FolderData.refreshCacheFoldersCounts();
   }
 }
 

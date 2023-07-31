@@ -3,6 +3,7 @@ import * as _ from "lodash";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
+import { FolderData } from "../folders/FolderData";
 
 export class AccountData {
   //
@@ -42,6 +43,7 @@ export class AccountData {
       ]
     );
     span.end();
+    FolderData.refreshCacheFolders();
   }
 }
 

@@ -1,10 +1,8 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
 import * as _ from "lodash";
-import { User } from "../model/User";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 import { UserPermission } from "../model/UserPermission";
-import { Folder } from "../model/Folder";
 
 export class UserPermissionData {
   //
