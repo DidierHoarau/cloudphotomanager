@@ -6,7 +6,7 @@
       <button class="secondary outline" v-on:click="clickedMove()"><i class="bi bi-arrows-move"></i> Move...</button>
     </div>
     <DialogMove v-if="activeOperation == 'move'" :target="{ files: [file] }" @onDone="onOperationDone" />
-    <img :src="serverUrl + '/accounts/' + file.accountId + '/files/' + file.id + '/preview'" />
+    <img :src="staticUrl + '/' + file.id[0] + '/' + file.id[1] + '/' + file.id + '/preview.webp'" />
   </div>
 </template>
 
@@ -23,11 +23,13 @@ export default {
   data() {
     return {
       serverUrl: "",
+      staticUrl: "",
       activeOperation: "",
     };
   },
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
+    this.staticUrl = (await Config.get()).STATIC_URL;
   },
   methods: {
     clickedClose() {

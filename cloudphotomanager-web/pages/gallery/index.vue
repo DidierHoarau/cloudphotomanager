@@ -24,7 +24,7 @@
       <div v-else class="card gallery-file" v-for="file in files" v-bind:key="file.id">
         <div class="gallery-file-image" v-on:click="selectGalleryFile(file)">
           <img
-            :src="serverUrl + '/accounts/' + file.accountId + '/files/' + file.id + '/thumbnail'"
+            :src="staticUrl + '/' + file.id[0] + '/' + file.id[1] + '/' + file.id + '/thumbnail.webp'"
             onerror="this.onerror=null; this.src='/images/file-sync-in-progress.webp'"
           />
         </div>
@@ -67,6 +67,7 @@ export default {
       files: [],
       menuOpened: true,
       serverUrl: "",
+      staticUrl: "",
       selectedFile: null,
       selectedFiles: [],
       requestEtag: "",
@@ -78,6 +79,7 @@ export default {
   },
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
+    this.staticUrl = (await Config.get()).STATIC_URL;
     await AccountsStore().fetch();
     SyncStore().fetch();
     if (AccountsStore().accounts.length > 0) {

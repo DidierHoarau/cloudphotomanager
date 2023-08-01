@@ -6,6 +6,9 @@ http:
     server:
       service: service-server
       rule: PathPrefix(`/api/`)
+    static:
+      service: service-server
+      rule: PathPrefix(`/static/`)
 
   services:
     service-web:

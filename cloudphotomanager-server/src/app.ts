@@ -92,11 +92,13 @@ Promise.resolve().then(async () => {
     prefix: "/api/sync",
   });
 
-  /* eslint-disable-next-line */
-  fastify.register(require("@fastify/static"), {
-    root: path.join(__dirname, "../web"),
-    prefix: "/",
-  });
+  if (process.env.DEV_MODE) {
+    /* eslint-disable-next-line */
+    fastify.register(require("@fastify/static"), {
+      root: path.resolve(path.join(config.DATA_DIR, "/cache/")),
+      prefix: "/static",
+    });
+  }
 
   fastify.listen({ port: config.API_PORT, host: "0.0.0.0" }, (err) => {
     if (err) {
