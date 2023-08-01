@@ -23,15 +23,5 @@ module.exports = {
         AUTO_SYNC: "N",
       },
     },
-    {
-      name: "cloudphotomanager-web",
-      cwd: "cloudphotomanager-web",
-      script: "npm",
-      args: "run dev",
-      autorestart: false,
-      env_development: {
-        DEV_MODE: "true",
-      },
-    },
   ],
 };

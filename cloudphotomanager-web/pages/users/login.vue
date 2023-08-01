@@ -29,7 +29,7 @@ export default {
   },
   async created() {
     if (!(await UserService.isInitialized())) {
-      useRouter().push({ path: "/users/initialize" });
+      useRouter().push({ path: "/users/new" });
     }
     if (await AuthService.isAuthenticated()) {
       useRouter().push({ path: "/users" });
