@@ -6,7 +6,13 @@
       <button class="secondary outline" v-on:click="clickedMove()"><i class="bi bi-arrows-move"></i> Move...</button>
     </div>
     <DialogMove v-if="activeOperation == 'move'" :target="{ files: [file] }" @onDone="onOperationDone" />
-    <img :src="staticUrl + '/' + file.id[0] + '/' + file.id[1] + '/' + file.id + '/preview.webp'" />
+    <div id="media-container">
+      <img
+        class="media-content"
+        v-if="file"
+        :src="staticUrl + '/' + file.id[0] + '/' + file.id[1] + '/' + file.id + '/preview.webp'"
+      />
+    </div>
   </div>
 </template>
 
@@ -19,21 +25,40 @@ import axios from "axios";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
+import * as Hammer from "hammerjs";
 
 export default {
   props: {
-    file: {},
+    inputFiles: {},
   },
   data() {
     return {
       serverUrl: "",
       staticUrl: "",
       activeOperation: "",
+      file: null,
+      files: [],
+      position: 0,
     };
   },
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
     this.staticUrl = (await Config.get()).STATIC_URL;
+
+    this.files = this.inputFiles.files;
+    this.position = this.inputFiles.position;
+    this.file = this.files[this.position];
+
+    const mediaContainer = document.querySelector("#media-container");
+    const gestureManager = new Hammer.Manager(mediaContainer);
+    gestureManager.add(new Hammer.Swipe());
+    gestureManager.on("swipe", (event) => {
+      if (event.offsetDirection === 2) {
+        this.nextMedia();
+      } else if (event.offsetDirection === 4) {
+        this.previousMedia();
+      }
+    });
   },
   methods: {
     clickedClose() {
@@ -67,6 +92,40 @@ export default {
       this.activeOperation = "";
       EventBus.emit(EventTypes.FOLDER_UPDATED, {});
       EventBus.emit(EventTypes.FILE_UPDATED, {});
+    },
+    previousMedia() {
+      if (this.files.length === 0 || this.position === 0) {
+        return;
+      }
+      const mediaDomElement = document.querySelector(".media-content");
+      mediaDomElement.classList.add("animate-media-out-right");
+      setTimeout(() => {
+        this.position--;
+        this.file = this.files[this.position];
+        mediaDomElement.classList.remove("animate-media-out-right");
+        mediaDomElement.classList.add("animate-media-in-left");
+      }, 300);
+      setTimeout(() => {
+        mediaDomElement.classList.remove("animate-media-in-left");
+        mediaDomElement.classList.remove("animate-media-in-right");
+      }, 700);
+    },
+    nextMedia() {
+      if (this.files.length === 0 || this.position === this.files.size - 1) {
+        return;
+      }
+      const mediaDomElement = document.querySelector(".media-content");
+      mediaDomElement.classList.add("animate-media-out-left");
+      setTimeout(() => {
+        this.position++;
+        this.file = this.files[this.position];
+        mediaDomElement.classList.remove("animate-media-out-left");
+        mediaDomElement.classList.add("animate-media-in-right");
+      }, 300);
+      setTimeout(() => {
+        mediaDomElement.classList.remove("animate-media-in-right");
+        mediaDomElement.classList.remove("animate-media-in-left");
+      }, 700);
     },
   },
 };
@@ -105,5 +164,61 @@ export default {
   padding: 0.3em 0.7em;
   font-size: 0.5em;
   opacity: 0.5;
+}
+.animate-media-out-left {
+  animation-duration: 0.3s;
+  opacity: 0;
+  transition: 0.3s all ease-in-out;
+  transform: translate(-100px, 0px);
+}
+.animate-media-out-right {
+  animation-duration: 0.3s;
+  opacity: 0;
+  transition: 0.3s all ease-in-out;
+  transform: translate(100px, 0px);
+}
+.animate-media-in-left {
+  animation-duration: 0.3s;
+  opacity: 1;
+  transition: 0.3s all ease-in-out;
+  animation-name: slidein-left;
+}
+.animate-media-in-right {
+  animation-duration: 0.3s;
+  opacity: 1;
+  transition: 0.3s all ease-in-out;
+  animation-name: slidein-right;
+}
+@keyframes slidein-left {
+  from {
+    transform: translate(-100px, 0px);
+  }
+  to {
+    transform: translate(0px, 0px);
+  }
+}
+@keyframes slidein-right {
+  from {
+    transform: translate(100px, 0px);
+  }
+  to {
+    transform: translate(0px, 0px);
+  }
+}
+@keyframes slideout-left {
+  from {
+    transform: translate(100px, 0px);
+  }
+  to {
+    transform: translate(0px, 0px);
+  }
+}
+@keyframes slideout-right {
+  from {
+    transform: translate(100px, 0px);
+  }
+  to {
+    transform: translate(0px, 0px);
+  }
 }
 </style>

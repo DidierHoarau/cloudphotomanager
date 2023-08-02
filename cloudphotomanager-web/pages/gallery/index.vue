@@ -30,7 +30,7 @@
     <div class="gallery-file-list">
       <Loading v-if="loading" />
       <div v-else class="card gallery-file" v-for="file in files" v-bind:key="file.id">
-        <div class="gallery-file-image" v-on:click="selectGalleryFile(file)">
+        <div class="gallery-file-image" v-on:click="focusGalleryItem(file)">
           <img
             :src="staticUrl + '/' + file.id[0] + '/' + file.id[1] + '/' + file.id + '/thumbnail.webp'"
             onerror="this.onerror=null; this.src='/images/file-sync-in-progress.webp'"
@@ -49,10 +49,10 @@
       </div>
     </div>
     <GalleryItemFocus
-      v-if="selectedFile"
-      :file="selectedFile"
+      v-if="displayFullScreen"
+      :inputFiles="{ files, position: positionFocus }"
       class="gallery-item-focus"
-      @onFileClosed="unselectGalleryFile"
+      @onFileClosed="unFocusGalleryItem"
     />
     <DialogMove v-if="activeOperation == 'move'" :target="{ files: selectedFiles }" @onDone="onOperationDone" />
   </div>
@@ -84,6 +84,8 @@ export default {
       currentFolderId: "",
       loading: false,
       activeOperation: "",
+      displayFullScreen: false,
+      positionFocus: 0,
     };
   },
   async created() {
@@ -153,11 +155,12 @@ export default {
     onFolderSelected(event) {
       this.fetchFiles(event.folder.accountId, event.folder.id);
     },
-    selectGalleryFile(file) {
-      this.selectedFile = file;
+    focusGalleryItem(file) {
+      this.displayFullScreen = true;
+      this.positionFocus = _.findIndex(this.files, { id: file.id });
     },
-    unselectGalleryFile(result) {
-      this.selectedFile = null;
+    unFocusGalleryItem(result) {
+      this.displayFullScreen = false;
       if (result.status === "invalidated") {
         this.fetchFiles(this.currentAccountId, this.currentFolderId);
       }
