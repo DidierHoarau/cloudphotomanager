@@ -77,4 +77,11 @@ export class Auth {
     }
     return userSession;
   }
+
+  public static isAdmin(userSession: UserSession): boolean {
+    if (userSession.permissions && userSession.permissions.isAdmin) {
+      return true;
+    }
+    return false;
+  }
 }

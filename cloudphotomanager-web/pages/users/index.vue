@@ -3,11 +3,7 @@
     <h1>Profile</h1>
     <button v-on:click="logout()">Logout</button>
     <button v-if="!isChangePasswordStarted" v-on:click="changePasswordStart(true)">Change Password</button>
-    <NuxtLink
-      v-if="authenticationStore.userInfo.permissions && authenticationStore.userInfo.permissions.isAdmin"
-      to="/users/management"
-      ><button>Users</button></NuxtLink
-    >
+    <NuxtLink v-if="authenticationStore.isAdmin" to="/users/management"><button>Users</button></NuxtLink>
     <article v-else>
       <h1>Change Password</h1>
       <label>Old Password</label>

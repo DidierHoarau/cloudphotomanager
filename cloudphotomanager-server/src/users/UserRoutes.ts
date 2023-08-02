@@ -56,7 +56,7 @@ export class UserRoutes {
     fastify.get("/", async (req, res) => {
       const span = StandardTracer.getSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
-      if (!userSession.isAuthenticated && userSession.permissions.isAdmin) {
+      if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       res.status(201).send({ users: await UserData.list(span) });
@@ -75,7 +75,7 @@ export class UserRoutes {
         isInitialized = false;
       }
       const userSession = await Auth.getUserSession(req);
-      if (isInitialized && !userSession.isAuthenticated && userSession.permissions.isAdmin) {
+      if (isInitialized && !Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       const newUser = new User();
@@ -110,7 +110,7 @@ export class UserRoutes {
     fastify.delete<DeletetUser>("/:userId", async (req, res) => {
       const span = StandardTracer.getSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
-      if (!userSession.isAuthenticated && userSession.permissions.isAdmin) {
+      if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       if (!(await UserData.get(span, req.params.userId))) {
@@ -153,7 +153,7 @@ export class UserRoutes {
     fastify.get<GetUserIdPermissions>("/:userId/permissions", async (req, res) => {
       const span = StandardTracer.getSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
-      if (!userSession.isAuthenticated && userSession.permissions.isAdmin) {
+      if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       if (!(await UserData.get(span, req.params.userId))) {
@@ -174,7 +174,7 @@ export class UserRoutes {
     fastify.put<PutUserIdPermissions>("/:userId/permissions", async (req, res) => {
       const span = StandardTracer.getSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
-      if (!userSession.isAuthenticated && userSession.permissions.isAdmin) {
+      if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       if (!(await UserData.get(span, req.params.userId))) {

@@ -12,10 +12,18 @@
         <i class="bi bi-arrow-clockwise"></i> Refresh
       </button>
       <kbd v-if="selectedFiles.length > 0">Selected: {{ selectedFiles.length }}</kbd>
-      <button v-if="selectedFiles.length > 0" class="secondary outline" v-on:click="clickedDelete()">
+      <button
+        v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
+        class="secondary outline"
+        v-on:click="clickedDelete()"
+      >
         <i class="bi bi-trash-fill"></i> Delete
       </button>
-      <button v-if="selectedFiles.length > 0" class="secondary outline" v-on:click="clickedMove()">
+      <button
+        v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
+        class="secondary outline"
+        v-on:click="clickedMove()"
+      >
         <i class="bi bi-arrows-move"></i> Move...
       </button>
     </div>
@@ -52,6 +60,7 @@
 
 <script setup>
 const syncStore = SyncStore();
+const authenticationStore = AuthenticationStore();
 </script>
 
 <script>

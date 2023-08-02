@@ -1,7 +1,7 @@
 <template>
   <div class="file-preview">
     <i class="bi bi-x-circle action" v-on:click="clickedClose()"></i>
-    <div class="file-preview-operations">
+    <div v-if="authenticationStore.isAdmin" class="file-preview-operations">
       <button class="secondary outline" v-on:click="clickedDelete()"><i class="bi bi-trash-fill"></i> Delete</button>
       <button class="secondary outline" v-on:click="clickedMove()"><i class="bi bi-arrows-move"></i> Move...</button>
     </div>
@@ -9,6 +9,10 @@
     <img :src="staticUrl + '/' + file.id[0] + '/' + file.id[1] + '/' + file.id + '/preview.webp'" />
   </div>
 </template>
+
+<script setup>
+const authenticationStore = AuthenticationStore();
+</script>
 
 <script>
 import axios from "axios";

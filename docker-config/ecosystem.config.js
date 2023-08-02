@@ -15,12 +15,5 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
-    {
-      name: "web",
-      script: "web/server/index.mjs",
-      env: {
-        NODE_ENV: "production",
-      },
-    },
   ],
 };

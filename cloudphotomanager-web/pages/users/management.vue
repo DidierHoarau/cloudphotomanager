@@ -67,7 +67,7 @@ export default {
     SyncStore().fetch();
     FoldersStore().fetch();
     await AuthenticationStore().ensureAuthenticated();
-    if (!(await AuthenticationStore()).userInfo.permissions.isAdmin) {
+    if (!(await AuthenticationStore()).isAdmin) {
       useRouter().push({ path: "/users" });
     }
     this.fetch();

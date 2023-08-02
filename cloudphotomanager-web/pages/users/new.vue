@@ -27,7 +27,7 @@ export default {
     };
   },
   async created() {
-    if ((await UserService.isInitialized()) && !(await AuthenticationStore()).userInfo.permissions.isAdmin) {
+    if ((await UserService.isInitialized()) && !(await AuthenticationStore()).isAdmin) {
       useRouter().push({ path: "/users/" });
     }
     AuthenticationStore().isAuthenticated = await AuthService.isAuthenticated();
