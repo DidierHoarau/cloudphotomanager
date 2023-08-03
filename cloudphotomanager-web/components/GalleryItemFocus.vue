@@ -7,11 +7,11 @@
     </div>
     <DialogMove v-if="activeOperation == 'move'" :target="{ files: [file] }" @onDone="onOperationDone" />
     <div id="media-container">
-      <img
-        class="media-content"
-        v-if="file"
-        :src="staticUrl + '/' + file.id[0] + '/' + file.id[1] + '/' + file.id + '/preview.webp'"
-      />
+      <img class="media-content" v-if="file" :src="getMediaSource(file)" />
+    </div>
+    <div id="media-preload">
+      <img v-if="position > 0" :src="getMediaSource(files[position - 1])" />
+      <img v-if="position + 1 < files.length - 1" :src="getMediaSource(files[position + 1])" />
     </div>
   </div>
 </template>
@@ -26,6 +26,7 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import * as Hammer from "hammerjs";
+import * as _ from "lodash";
 
 export default {
   props: {
@@ -47,7 +48,7 @@ export default {
 
     this.files = this.inputFiles.files;
     this.position = this.inputFiles.position;
-    this.file = this.files[this.position];
+    this.loadMedia();
 
     const mediaContainer = document.querySelector("#media-container");
     const gestureManager = new Hammer.Manager(mediaContainer);
@@ -59,6 +60,20 @@ export default {
         this.previousMedia();
       }
     });
+
+    if (useRoute().query.fileId) {
+      this.position = _.findIndex(this.files, { id: useRoute().query.fileId });
+      this.loadMedia();
+    }
+    watch(
+      () => useRoute().query.fileId,
+      () => {
+        if (useRoute().query.fileId) {
+          this.position = _.findIndex(this.files, { id: useRoute().query.fileId });
+          this.loadMedia();
+        }
+      }
+    );
   },
   methods: {
     clickedClose() {
@@ -101,6 +116,7 @@ export default {
       mediaDomElement.classList.add("animate-media-out-right");
       setTimeout(() => {
         this.position--;
+        this.loadMedia();
         this.file = this.files[this.position];
         mediaDomElement.classList.remove("animate-media-out-right");
         mediaDomElement.classList.add("animate-media-in-left");
@@ -118,7 +134,7 @@ export default {
       mediaDomElement.classList.add("animate-media-out-left");
       setTimeout(() => {
         this.position++;
-        this.file = this.files[this.position];
+        this.loadMedia();
         mediaDomElement.classList.remove("animate-media-out-left");
         mediaDomElement.classList.add("animate-media-in-right");
       }, 300);
@@ -126,6 +142,19 @@ export default {
         mediaDomElement.classList.remove("animate-media-in-right");
         mediaDomElement.classList.remove("animate-media-in-left");
       }, 700);
+    },
+    loadMedia() {
+      this.file = this.files[this.position];
+      useRouter().push({
+        query: { accountId: this.file.accountId, folderId: this.file.folderId, fileId: this.file.id },
+      });
+    },
+    preloadFile(file) {
+      const img = new Image();
+      img.src = this.getMediaSource(file);
+    },
+    getMediaSource(file) {
+      return this.staticUrl + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.webp";
     },
   },
 };
@@ -139,12 +168,21 @@ export default {
   display: flex;
   align-items: center;
 }
-.file-preview img {
-  max-width: 100%;
-  max-height: 100%;
-  display: block;
+#media-container {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: 1fr auto 1fr;
+  width: 100vw;
+  height: 100vh;
+}
+#media-container img {
+  grid-column: 2;
+  grid-row: 2;
+  max-width: 100vw;
+  max-height: 100vh;
+  width: auto;
   height: auto;
-  margin: auto;
+  display: flex;
 }
 .file-preview .action {
   font-size: 1.5em;
@@ -220,5 +258,13 @@ export default {
   to {
     transform: translate(0px, 0px);
   }
+}
+#media-preload {
+  width: 0px;
+  height: 0px;
+}
+#media-preload img {
+  width: 0px;
+  height: 0px;
 }
 </style>

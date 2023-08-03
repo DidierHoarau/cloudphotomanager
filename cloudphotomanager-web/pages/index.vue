@@ -5,11 +5,17 @@
 </template>
 
 <script>
+import { AuthService } from "~~/services/AuthService";
+
 export default {
   data() {
     return {};
   },
-  async created() {},
+  async created() {
+    if (await AuthService.isAuthenticated()) {
+      useRouter().push({ path: "/gallery" });
+    }
+  },
 };
 </script>
 

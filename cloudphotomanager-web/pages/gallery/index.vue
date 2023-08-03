@@ -105,6 +105,33 @@ export default {
     EventBus.on(EventTypes.FOLDER_SELECTED, (message) => {
       this.fetchFiles(message.accountId, message.folderId, true);
     });
+    if (useRoute().query.accountId && useRoute().query.folderId && useRoute().query.fileId) {
+      await this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
+      this.focusGalleryItem(_.find(this.files, { id: useRoute().query.fileId }));
+    } else if (useRoute().query.accountId && useRoute().query.folderId) {
+      this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
+    }
+    watch(
+      () => useRoute().query.folderId,
+      () => {
+        if (this.currentFolderId !== useRoute().query.folderId) {
+          this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
+        }
+      }
+    );
+    watch(
+      () => useRoute().query.fileId,
+      () => {
+        setTimeout(async () => {
+          if (useRoute().query.fileId) {
+            await this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
+            this.focusGalleryItem(_.find(this.files, { id: useRoute().query.fileId }));
+          } else {
+            this.displayFullScreen = false;
+          }
+        }, 500);
+      }
+    );
   },
   methods: {
     async fetchFiles(accountId, folderId, forceLoading = false) {
@@ -153,6 +180,7 @@ export default {
       }
     },
     onFolderSelected(event) {
+      useRouter().push({ query: { accountId: event.folder.accountId, folderId: event.folder.id } });
       this.fetchFiles(event.folder.accountId, event.folder.id);
     },
     focusGalleryItem(file) {
@@ -160,6 +188,7 @@ export default {
       this.positionFocus = _.findIndex(this.files, { id: file.id });
     },
     unFocusGalleryItem(result) {
+      useRouter().push({ query: { accountId: this.currentAccountId, folderId: this.currentFolderId } });
       this.displayFullScreen = false;
       if (result.status === "invalidated") {
         this.fetchFiles(this.currentAccountId, this.currentFolderId);
