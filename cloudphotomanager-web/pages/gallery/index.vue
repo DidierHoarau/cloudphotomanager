@@ -1,8 +1,5 @@
 <template>
   <div class="gallery-layout page">
-    <div class="gallery-layout-actions actions">
-      <kbd v-if="syncStore.countTotal > 0">Sync: {{ syncStore.countTotal }}</kbd>
-    </div>
     <div class="gallery-folders" :class="{ 'gallery-folders-closed': !menuOpened }">
       <FolderList monitorRoute="true" @onFolderSelected="onFolderSelected" />
     </div>
@@ -58,7 +55,6 @@
 </template>
 
 <script setup>
-const syncStore = SyncStore();
 const authenticationStore = AuthenticationStore();
 </script>
 
@@ -91,7 +87,6 @@ export default {
     this.serverUrl = (await Config.get()).SERVER_URL;
     this.staticUrl = (await Config.get()).STATIC_URL;
     await AccountsStore().fetch();
-    SyncStore().fetch();
     if (AccountsStore().accounts.length > 0) {
       FoldersStore().fetch();
     }
@@ -331,24 +326,19 @@ export default {
 @media (min-width: 701px) {
   .gallery-layout {
     display: grid;
-    grid-template-rows: 2.5em auto 1fr;
+    grid-template-rows: auto 1fr;
     grid-template-columns: auto 1fr 1fr;
     column-gap: 1em;
   }
-  .gallery-layout-actions {
-    grid-column-start: 1;
-    grid-column-end: span 3;
-    grid-row-start: 1;
-  }
   .gallery-files-actions {
     padding-top: 0.5em;
-    grid-row: 2;
+    grid-row: 1;
     grid-column-start: 2;
     grid-column-end: span 2;
   }
   .gallery-file-list {
     overflow: auto;
-    grid-row: 3;
+    grid-row: 2;
     grid-column-start: 2;
     grid-column-end: span 2;
   }
@@ -362,7 +352,7 @@ export default {
     max-width: 20em;
     overflow: auto;
     height: auto;
-    grid-row-start: 2;
+    grid-row-start: 1;
     grid-row-end: span 2;
     grid-column: 1;
   }
@@ -377,30 +367,26 @@ export default {
 @media (max-width: 700px) {
   .gallery-layout {
     display: grid;
-    grid-template-rows: 2em 1fr auto 2fr;
+    grid-template-rows: 1fr auto 2fr;
     grid-template-columns: 1fr;
     column-gap: 1em;
   }
-  .gallery-layout-actions {
-    grid-column: 1;
-    grid-row: 1;
-  }
   .gallery-files-actions {
     padding-top: 0.5em;
-    grid-row: 3;
+    grid-row: 2;
     grid-column-start: 1;
     grid-column-end: span 2;
   }
   .gallery-file-list {
     overflow: auto;
-    grid-row: 4;
+    grid-row: 3;
     grid-column-start: 1;
     grid-column-end: span 2;
   }
   .gallery-folders {
     overflow: auto;
     height: 30vh;
-    grid-row: 2;
+    grid-row: 1;
     grid-column-start: 1;
     grid-column-end: span 2;
   }
@@ -432,5 +418,9 @@ export default {
   right: 0;
   width: 100vw;
   height: 100vh;
+}
+.sync-status {
+  position: absolute;
+  right: 2em;
 }
 </style>

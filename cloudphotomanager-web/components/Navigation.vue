@@ -6,6 +6,9 @@
       </li>
     </ul>
     <ul class="menu-links">
+      <li v-if="syncStore.countTotal > 0">
+        <kbd>Sync: {{ syncStore.countTotal }}</kbd>
+      </li>
       <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink to="/gallery" :class="baseFolder === 'gallery' ? 'active' : 'inactive'"
           ><i class="bi bi-images"></i
@@ -33,6 +36,7 @@
 <script setup>
 import { AuthService } from "~~/services/AuthService";
 const authenticationStore = AuthenticationStore();
+const syncStore = SyncStore();
 </script>
 
 <script>
@@ -52,6 +56,7 @@ export default {
   },
   async created() {
     if (await AuthenticationStore().ensureAuthenticated()) {
+      SyncStore().fetch();
       setTimeout(async () => {
         // Renew session tocken
         axios

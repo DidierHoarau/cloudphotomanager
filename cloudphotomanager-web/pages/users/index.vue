@@ -4,7 +4,7 @@
     <button v-on:click="logout()">Logout</button>
     <button v-if="!isChangePasswordStarted" v-on:click="changePasswordStart(true)">Change Password</button>
     <NuxtLink v-if="authenticationStore.isAdmin" to="/users/management"><button>Users</button></NuxtLink>
-    <article v-else>
+    <article v-if="isChangePasswordStarted">
       <h1>Change Password</h1>
       <label>Old Password</label>
       <input id="password" v-model="user.passwordOld" type="password" />

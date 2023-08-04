@@ -48,7 +48,7 @@ export default {
 
     this.files = this.inputFiles.files;
     this.position = this.inputFiles.position;
-    this.loadMedia();
+    this.loadMedia(true);
 
     const mediaContainer = document.querySelector("#media-container");
     const gestureManager = new Hammer.Manager(mediaContainer);
@@ -60,23 +60,6 @@ export default {
         this.previousMedia();
       }
     });
-
-    if (useRoute().query.fileId) {
-      this.position = _.findIndex(this.files, { id: useRoute().query.fileId });
-      this.loadMedia();
-    }
-    watch(
-      () => useRoute().query.fileId,
-      () => {
-        if (useRoute().query.fileId) {
-          const newPosition = _.findIndex(this.files, { id: useRoute().query.fileId });
-          if (this.position !== newPosition) {
-            this.position = newPosition;
-            this.loadMedia();
-          }
-        }
-      }
-    );
   },
   methods: {
     clickedClose() {
@@ -146,11 +129,17 @@ export default {
         mediaDomElement.classList.remove("animate-media-in-left");
       }, 700);
     },
-    loadMedia() {
+    loadMedia(newRoute = false) {
       this.file = this.files[this.position];
-      useRouter().push({
-        query: { accountId: this.file.accountId, folderId: this.file.folderId, fileId: this.file.id },
-      });
+      if (newRoute) {
+        useRouter().push({
+          query: { accountId: this.file.accountId, folderId: this.file.folderId, fileId: this.file.id },
+        });
+      } else {
+        useRouter().replace({
+          query: { accountId: this.file.accountId, folderId: this.file.folderId, fileId: this.file.id },
+        });
+      }
     },
     preloadFile(file) {
       const img = new Image();
