@@ -4,9 +4,8 @@
       <kbd v-if="syncStore.countTotal > 0">Sync: {{ syncStore.countTotal }}</kbd>
     </div>
     <div class="gallery-folders" :class="{ 'gallery-folders-closed': !menuOpened }">
-      <FolderList @onFolderSelected="onFolderSelected" />
+      <FolderList monitorRoute="true" @onFolderSelected="onFolderSelected" />
     </div>
-    <button></button>
     <div class="gallery-files-actions">
       <button class="secondary outline" v-on:click="clickedRefresh()">
         <i class="bi bi-arrow-clockwise"></i> Refresh
@@ -378,7 +377,7 @@ export default {
 @media (max-width: 700px) {
   .gallery-layout {
     display: grid;
-    grid-template-rows: 2.5em 1fr auto 2fr;
+    grid-template-rows: 2em 1fr auto 2fr;
     grid-template-columns: 1fr;
     column-gap: 1em;
   }

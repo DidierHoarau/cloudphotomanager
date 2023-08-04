@@ -69,8 +69,11 @@ export default {
       () => useRoute().query.fileId,
       () => {
         if (useRoute().query.fileId) {
-          this.position = _.findIndex(this.files, { id: useRoute().query.fileId });
-          this.loadMedia();
+          const newPosition = _.findIndex(this.files, { id: useRoute().query.fileId });
+          if (this.position !== newPosition) {
+            this.position = newPosition;
+            this.loadMedia();
+          }
         }
       }
     );

@@ -4,7 +4,7 @@
     <Loading v-if="foldersStore.loading" class="folder-component-layout-list" />
     <div v-else class="folder-component-layout-list">
       <div v-for="(folder, index) in foldersStore.folders" v-bind:key="folder.name">
-        <div v-if="isVisible(folder)" class="folder-layout" :class="{ 'source-active': selectFolderIndex == index }">
+        <div v-if="isVisible(folder)" class="folder-layout" :class="{ 'source-active': selectedFolderId == folder.id }">
           <span v-on:click="toggleFolderCollapsed(folder, index)" class="folder-layout-indent">
             <span v-if="!folderFilter" v-html="folder.indentation"></span>
             <i v-if="folder.isCollapsed" class="bi bi-folder"></i>
@@ -33,10 +33,13 @@ import * as _ from "lodash";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 
 export default {
+  props: {
+    monitorRoute: false,
+  },
   data() {
     return {
       folderFilter: "",
-      selectFolderIndex: -1,
+      selectedFolderId: null,
     };
   },
   async created() {
@@ -44,11 +47,28 @@ export default {
       FoldersStore().fetch();
     });
     FoldersStore().fetch();
+
+    if (this.monitorRoute) {
+    }
+
+    if (useRoute().query.folderId) {
+      this.selectedFolderId = useRoute().query.folderId;
+    }
+    watch(
+      () => useRoute().query.folderId,
+      () => {
+        if (useRoute().query.folderId) {
+          this.selectedFolderId = useRoute().query.folderId;
+        } else {
+          this.selectedFolderId = null;
+        }
+      }
+    );
   },
   methods: {
     selectFolder(folder, index) {
       this.$emit("onFolderSelected", { folder });
-      this.selectFolderIndex = index;
+      this.selectedFolderId = folder.id;
     },
     filterFolders() {},
     isVisible(folder) {
