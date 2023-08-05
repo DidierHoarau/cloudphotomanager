@@ -3,7 +3,6 @@ import { Auth } from "../users/Auth";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { FileData } from "./FileData";
 import { AccountFactory } from "../accounts/AccountFactory";
-import { AccountData } from "../accounts/AccountData";
 import { SyncInventory } from "../sync/SyncInventory";
 import { FolderData } from "../folders/FolderData";
 import { Logger } from "../utils-std-ts/Logger";

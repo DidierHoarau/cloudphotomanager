@@ -199,20 +199,16 @@ export class UserRoutes {
     });
 
     fastify.get("/access/validate", async (req, res) => {
-      console.log(req);
       let tokenCokkie = null;
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tokenCokkie = (fastify as any).unsignCookie((req as any).cookies.token);
-        console.log(tokenCokkie);
       } catch (err) {
         tokenCokkie = null;
       }
       if (!tokenCokkie || !tokenCokkie.valid || !Auth.isTokenValid(tokenCokkie.value)) {
-        console.log("invalid");
         return res.status(403).send({ error: "Access Denied" });
       }
-      console.log("valid");
       res.status(200).send({});
     });
   }
