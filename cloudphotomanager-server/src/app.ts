@@ -18,6 +18,8 @@ import { SyncRoutes } from "./sync/SyncRoutes";
 import { FileOperationsRoutes } from "./files/FileOperationsRoutes";
 import { AnalysisData } from "./analysis/AnalysisData";
 import { AnalysisRoutes } from "./analysis/AnalysisRoutes";
+import type { FastifyCookieOptions } from "@fastify/cookie";
+import cookie from "@fastify/cookie";
 
 const logger = new Logger("app");
 
@@ -61,6 +63,11 @@ Promise.resolve().then(async () => {
   }
   /* eslint-disable-next-line */
   fastify.register(require("@fastify/multipart"));
+
+  fastify.register(cookie, {
+    secret: config.JWT_KEY,
+    parseOptions: {},
+  } as FastifyCookieOptions);
 
   StandardTracerApi.registerHooks(fastify, config);
 

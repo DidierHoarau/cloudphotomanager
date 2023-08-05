@@ -7,7 +7,6 @@ import { SyncQueue } from "../sync/SyncQueue";
 import { Auth } from "../users/Auth";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { FolderData } from "./FolderData";
-import { UserPermissionData } from "../users/UserPermissionData";
 import { UserPermissionCheck } from "../users/UserPermissionCheck";
 
 export class FolderRoutes {

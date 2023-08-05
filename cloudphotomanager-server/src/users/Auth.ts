@@ -77,6 +77,15 @@ export class Auth {
     }
     return userSession;
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  public static isTokenValid(token: string): boolean {
+    try {
+      jwt.verify(token, config.JWT_KEY);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
 
   public static isAdmin(userSession: UserSession): boolean {
     if (userSession.permissions && userSession.permissions.isAdmin) {

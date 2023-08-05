@@ -33,7 +33,13 @@ export class UserRoutes {
       const userSession = await Auth.getUserSession(req);
       if (userSession.isAuthenticated) {
         user = await UserData.get(span, userSession.userId);
-        return res.status(201).send({ success: true, token: await Auth.generateJWT(span, user) });
+        const token = await Auth.generateJWT(span, user);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (res as any).setCookie("token", token, {
+          path: "/",
+          signed: true,
+        });
+        return res.status(201).send({ success: true, token });
       }
 
       // From User/Pass
@@ -47,7 +53,13 @@ export class UserRoutes {
       if (!user) {
         return res.status(403).send({ error: "Authentication Failed" });
       } else if (await UserPassword.checkPassword(span, user, req.body.password)) {
-        return res.status(201).send({ success: true, token: await Auth.generateJWT(span, user) });
+        const token = await Auth.generateJWT(span, user);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (res as any).setCookie("token", token, {
+          path: "/",
+          signed: true,
+        });
+        return res.status(201).send({ success: true, token });
       } else {
         return res.status(403).send({ error: "Authentication Failed" });
       }
@@ -184,6 +196,24 @@ export class UserRoutes {
       permissions.info = req.body.info;
       await UserPermissionData.updateForUser(span, req.params.userId, permissions);
       res.status(201).send({});
+    });
+
+    fastify.get("/access/validate", async (req, res) => {
+      console.log(req);
+      let tokenCokkie = null;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tokenCokkie = (fastify as any).unsignCookie((req as any).cookies.token);
+        console.log(tokenCokkie);
+      } catch (err) {
+        tokenCokkie = null;
+      }
+      if (!tokenCokkie || !tokenCokkie.valid || !Auth.isTokenValid(tokenCokkie.value)) {
+        console.log("invalid");
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      console.log("valid");
+      res.status(200).send({});
     });
   }
 }
