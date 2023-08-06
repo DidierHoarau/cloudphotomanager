@@ -2,7 +2,6 @@ import { Span } from "@opentelemetry/sdk-trace-base";
 import { FileData } from "../files/FileData";
 import { Account } from "../model/Account";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
-import { Config } from "../Config";
 import * as fs from "fs-extra";
 import { Logger } from "../utils-std-ts/Logger";
 import { FileMediaType } from "../model/FileMediaType";
@@ -13,17 +12,10 @@ import { SyncQueue } from "./SyncQueue";
 import { Folder } from "../model/Folder";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 
-let config: Config;
 const logger = new Logger("SyncFileCache");
 
 export class SyncFileCache {
   //
-  public static async init(context: Span, configIn: Config): Promise<void> {
-    const span = StandardTracer.startSpan("SyncFileCache_init", context);
-    config = configIn;
-    span.end();
-  }
-
   public static async checkFolder(context: Span, account: Account, folder: Folder) {
     const span = StandardTracer.startSpan("SyncFileCache_checkFolder", context);
     const files = await FileData.listByFolder(span, account.getAccountDefinition().id, folder.id);
@@ -40,7 +32,7 @@ export class SyncFileCache {
     const isVideo = File.getMediaType(file.filename) === FileMediaType.video;
     const hasThumbnail = fs.existsSync(`${cacheDir}/thumbnail.webp`);
     const hasImagePreview = fs.existsSync(`${cacheDir}/preview.webp`);
-    const hasVideoPreview = fs.existsSync(`${cacheDir}/preview.mp4`);
+    // const hasVideoPreview = fs.existsSync(`${cacheDir}/preview.mp4`);
     const accountCapabilities = account.getCapabilities();
 
     if (
@@ -68,8 +60,14 @@ export class SyncFileCache {
     await account
       .downloadFile(span, file, `${tmpDir}/tmp_preview`, tmpFileName)
       .then(async () => {
-        await sharp(`${tmpDir}/tmp_preview/${tmpFileName}`).resize({ width: 300 }).toFile(`${cacheDir}/thumbnail.webp`);
-        await sharp(`${tmpDir}/tmp_preview/${tmpFileName}`).resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
+        await sharp(`${tmpDir}/tmp_preview/${tmpFileName}`)
+          .withMetadata()
+          .resize({ width: 300 })
+          .toFile(`${cacheDir}/thumbnail.webp`);
+        await sharp(`${tmpDir}/tmp_preview/${tmpFileName}`)
+          .withMetadata()
+          .resize({ width: 2000 })
+          .toFile(`${cacheDir}/preview.webp`);
       })
       .catch((err) => {
         logger.error(err);
@@ -90,6 +88,7 @@ export class SyncFileCache {
       .downloadThumbnail(span, file, `${tmpDir}/tmp_tumbnail`, tmpFileName)
       .then(async () => {
         await sharp(`${tmpDir}/tmp_tumbnail/${tmpFileName}`)
+          .withMetadata()
           .resize({ width: 300 })
           .toFile(`${cacheDir}/thumbnail.webp`);
       })

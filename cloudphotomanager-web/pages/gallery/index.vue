@@ -144,7 +144,7 @@ export default {
         )
         .then((res) => {
           if (this.requestEtag === requestEtag) {
-            this.files = _.sortBy(res.data.files, ["name"]);
+            this.files = _.sortBy(res.data.files, ["dateMedia"]);
           }
         })
         .catch(handleError)

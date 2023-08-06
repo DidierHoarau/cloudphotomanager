@@ -7,9 +7,10 @@ import { AccountDefinition } from "../model/AccountDefinition";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { Timeout } from "../utils-std-ts/Timeout";
-import { SyncFileCache } from "./SyncFileCache";
 import { SyncInventory } from "./SyncInventory";
 import { SyncQueue } from "./SyncQueue";
+import { FileData } from "../files/FileData";
+import * as fs from "fs-extra";
 
 let config: Config;
 
@@ -20,7 +21,6 @@ export class Scheduler {
   public static async init(context: Span, configIn: Config) {
     const span = StandardTracer.startSpan("Scheduler_init", context);
     config = configIn;
-    SyncFileCache.init(span, configIn);
     SyncInventory.init(span, configIn);
     Scheduler.startSchedule();
     span.end();
@@ -32,6 +32,23 @@ export class Scheduler {
       const span = StandardTracer.startSpan("Scheduler_startSchedule");
       const accountDefinitions = await AccountData.list(span);
       accountDefinitions.forEach(async (accountDefinition) => {
+        // Tmp Fix
+        const files = await FileData.listForAccount(span, accountDefinition.id);
+        console.log(files.length);
+        for (const file of files) {
+          if (file.metadata.photo && file.metadata.photo.orientation > 1) {
+            const cacheDir = await FileData.getFileCacheDir(span, file.id);
+            try {
+              if (fs.existsSync(cacheDir)) {
+                await fs.remove(cacheDir);
+                console.log("removed: " + cacheDir);
+              }
+            } catch (err) {
+              console.error(err);
+            }
+          }
+        }
+        // End Tmp Fix
         if (config.AUTO_SYNC) {
           Scheduler.startAccountSync(span, accountDefinition);
         }
