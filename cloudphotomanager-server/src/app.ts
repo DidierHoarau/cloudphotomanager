@@ -80,7 +80,7 @@ Promise.resolve().then(async () => {
   });
 
   fastify.register(new FileRoutes().getRoutes, {
-    prefix: "/api/accounts/:accountId/files",
+    prefix: "/api/files",
   });
 
   fastify.register(new FolderRoutes().getRoutes, {

@@ -73,5 +73,28 @@ export class FileRoutes {
       res.header("Content-Type", "application/octet-stream");
       return res.send(stream);
     });
+
+    fastify.get("/static/404", async (req, res) => {
+      const span = StandardTracer.getSpanFromRequest(req);
+      const uri = req.headers["x-original-uri"];
+      // const test = 'x-original-uri': '/static/c/b/cbc0e0d92c7cd78a712eca61b5a11a3d/thumbnail.webp',
+      // uri = "/static/c/b/cbc0e0d92c7cd78a712eca61b5a11a3d/thumbnail.webp";
+      // console.log(req.headers, uri);
+      const fileIdMatch = /\/static\/.\/.\/(.*)\/.*/.exec(uri as string);
+      if (fileIdMatch) {
+        const file = await FileData.get(span, fileIdMatch[1]);
+        // console.log(fileIdMatch[1]);
+        const cacheDir = await FileData.getFileCacheDir(span, file.id);
+        if (!fs.existsSync(`${cacheDir}/preview.webp`) || !fs.existsSync(`${cacheDir}/thumbnail.webp`)) {
+          SyncFileCache.checkFile(
+            span,
+            await AccountFactory.getAccountImplementation(file.accountId),
+            file,
+            SyncQueueItemPriority.MEDIUM
+          );
+        }
+      }
+      return res.status(404).send({ error: "File Not Found" });
+    });
   }
 }
