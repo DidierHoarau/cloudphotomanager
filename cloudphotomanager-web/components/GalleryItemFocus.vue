@@ -113,7 +113,8 @@ export default {
       }, 700);
     },
     nextMedia() {
-      if (this.files.length === 0 || this.position === this.files.size - 1) {
+      console.log(this.position, this.files.length);
+      if (this.files.length === 0 || this.position === this.files.length - 1) {
         return;
       }
       const mediaDomElement = document.querySelector(".media-content");
