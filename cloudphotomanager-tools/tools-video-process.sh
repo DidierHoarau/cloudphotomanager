@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 FILE_IN=$1
 FILE_OUT=$2
