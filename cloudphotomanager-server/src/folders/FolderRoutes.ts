@@ -8,6 +8,7 @@ import { Auth } from "../users/Auth";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { FolderData } from "./FolderData";
 import { UserPermissionCheck } from "../users/UserPermissionCheck";
+import { SyncQueueItemWeight } from "../model/SyncQueueItemWeight";
 
 export class FolderRoutes {
   //
@@ -84,7 +85,14 @@ export class FolderRoutes {
         return res.status(200).send({ files: [] });
       }
       const account = await AccountFactory.getAccountImplementation(req.params.accountId);
-      SyncQueue.queueItem(account, folder.id, folder, SyncInventory.syncFolder, SyncQueueItemPriority.HIGH);
+      SyncQueue.queueItem(
+        account,
+        folder.id,
+        folder,
+        SyncInventory.syncFolder,
+        SyncQueueItemPriority.HIGH,
+        SyncQueueItemWeight.LIGHT
+      );
 
       return res.status(200).send({});
     });

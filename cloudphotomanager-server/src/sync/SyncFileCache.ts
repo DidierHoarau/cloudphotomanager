@@ -8,14 +8,25 @@ import { FileMediaType } from "../model/FileMediaType";
 import { File } from "../model/File";
 import * as sharp from "sharp";
 import { SyncQueue } from "./SyncQueue";
-
 import { Folder } from "../model/Folder";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
+import { SyncQueueItemWeight } from "../model/SyncQueueItemWeight";
+import { Config } from "../Config";
+import { SystemCommand } from "../SystemCommand";
+import { Timeout } from "../utils-std-ts/Timeout";
 
 const logger = new Logger("SyncFileCache");
+let config: Config;
 
 export class SyncFileCache {
   //
+
+  public static async init(context: Span, configIn: Config) {
+    const span = StandardTracer.startSpan("Scheduler_init", context);
+    config = configIn;
+    span.end();
+  }
+
   public static async checkFolder(context: Span, account: Account, folder: Folder) {
     const span = StandardTracer.startSpan("SyncFileCache_checkFolder", context);
     const files = await FileData.listByFolder(span, account.getAccountDefinition().id, folder.id);
@@ -32,6 +43,7 @@ export class SyncFileCache {
     const isVideo = File.getMediaType(file.filename) === FileMediaType.video;
     const hasThumbnail = fs.existsSync(`${cacheDir}/thumbnail.webp`);
     const hasImagePreview = fs.existsSync(`${cacheDir}/preview.webp`);
+    const hasVideoPreview = fs.existsSync(`${cacheDir}/preview.webm`);
     // const hasVideoPreview = fs.existsSync(`${cacheDir}/preview.mp4`);
     const accountCapabilities = account.getCapabilities();
 
@@ -39,13 +51,62 @@ export class SyncFileCache {
       (isImage && !hasThumbnail && accountCapabilities.downloadPhotoThumbnail) ||
       (isVideo && !hasThumbnail && accountCapabilities.downloadVideoThumbnail)
     ) {
-      await SyncQueue.queueItem(account, file.id, file, SyncFileCache.syncThumbnail, priority);
+      await SyncQueue.queueItem(
+        account,
+        file.id,
+        file,
+        SyncFileCache.syncThumbnail,
+        priority,
+        SyncQueueItemWeight.LIGHT
+      );
     }
 
     if (isImage && !hasImagePreview) {
-      await SyncQueue.queueItem(account, file.id, file, SyncFileCache.syncPhotoFromFull, priority);
+      await SyncQueue.queueItem(
+        account,
+        file.id,
+        file,
+        SyncFileCache.syncPhotoFromFull,
+        priority,
+        SyncQueueItemWeight.LIGHT
+      );
     }
 
+    if (isVideo && !hasVideoPreview) {
+      await SyncQueue.queueItem(
+        account,
+        file.id,
+        file,
+        SyncFileCache.syncVideoFromFull,
+        priority,
+        SyncQueueItemWeight.HEAVY
+      );
+    }
+
+    span.end();
+  }
+
+  public static async syncVideoFromFull(account: Account, file: File) {
+    const span = StandardTracer.startSpan("SyncFileCache_syncVideoFromFull");
+    const cacheDir = await FileData.getFileCacheDir(span, file.id);
+    const tmpDir = await FileData.getFileTmpDir(span, file.id);
+    await fs.ensureDir(cacheDir);
+    await fs.ensureDir(`${tmpDir}/tmp_preview`);
+    const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
+    logger.info(`Caching video ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
+    await account
+      .downloadFile(span, file, `${tmpDir}/tmp_preview`, tmpFileName)
+      .then(async () => {
+        logger.info(
+          await SystemCommand.execute(
+            `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/tmp_preview/${tmpFileName} ${cacheDir}/preview.webm`
+          )
+        );
+      })
+      .catch((err) => {
+        logger.error(err);
+      });
+    await fs.remove(`${cacheDir}/tmp_preview`);
     span.end();
   }
 

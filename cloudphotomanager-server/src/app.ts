@@ -20,6 +20,7 @@ import { AnalysisData } from "./analysis/AnalysisData";
 import { AnalysisRoutes } from "./analysis/AnalysisRoutes";
 import type { FastifyCookieOptions } from "@fastify/cookie";
 import cookie from "@fastify/cookie";
+import { SyncFileCache } from "./sync/SyncFileCache";
 
 const logger = new Logger("app");
 
@@ -38,6 +39,7 @@ Promise.resolve().then(async () => {
 
   const span = StandardTracer.startSpan("init");
 
+  await SyncFileCache.init(span, config);
   await SqlDbutils.init(span, config);
   await Auth.init(span, config);
   await FileData.init(span, config);

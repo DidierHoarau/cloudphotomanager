@@ -11,6 +11,7 @@ import { FolderData } from "../folders/FolderData";
 import { Folder } from "../model/Folder";
 import { SyncFileCache } from "./SyncFileCache";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
+import { SyncQueueItemWeight } from "../model/SyncQueueItemWeight";
 
 let config: Config;
 const logger = new Logger("SyncInventory");
@@ -43,7 +44,8 @@ export class SyncInventory {
           cloudSubFolder.id,
           cloudSubFolder,
           SyncInventory.syncFolder,
-          SyncQueueItemPriority.MEDIUM
+          SyncQueueItemPriority.MEDIUM,
+          SyncQueueItemWeight.LIGHT
         );
       }
     }

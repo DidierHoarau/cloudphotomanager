@@ -8,6 +8,7 @@ import { FolderData } from "../folders/FolderData";
 import { Logger } from "../utils-std-ts/Logger";
 import { SyncQueue } from "../sync/SyncQueue";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
+import { SyncQueueItemWeight } from "../model/SyncQueueItemWeight";
 
 const logger = new Logger("FileOperationsRoutes");
 export class FileOperationsRoutes {
@@ -43,7 +44,14 @@ export class FileOperationsRoutes {
       await FileData.delete(span, file.id);
       FolderData.get(span, file.folderId)
         .then((folder) => {
-          SyncQueue.queueItem(account, folder.id, folder, SyncInventory.syncFolder, SyncQueueItemPriority.HIGH);
+          SyncQueue.queueItem(
+            account,
+            folder.id,
+            folder,
+            SyncInventory.syncFolder,
+            SyncQueueItemPriority.HIGH,
+            SyncQueueItemWeight.LIGHT
+          );
         })
         .catch((err) => {
           logger.error(err);
@@ -52,7 +60,14 @@ export class FileOperationsRoutes {
       account
         .getFolderByPath(span, req.body.folderpath)
         .then((folder) => {
-          SyncQueue.queueItem(account, folder.id, folder, SyncInventory.syncFolder, SyncQueueItemPriority.HIGH);
+          SyncQueue.queueItem(
+            account,
+            folder.id,
+            folder,
+            SyncInventory.syncFolder,
+            SyncQueueItemPriority.HIGH,
+            SyncQueueItemWeight.LIGHT
+          );
         })
         .catch((err) => {
           logger.error(err);
@@ -85,7 +100,14 @@ export class FileOperationsRoutes {
 
       FolderData.get(span, file.folderId)
         .then(async (folder) => {
-          SyncQueue.queueItem(account, file.folderId, folder, SyncInventory.syncFolder, SyncQueueItemPriority.HIGH);
+          SyncQueue.queueItem(
+            account,
+            file.folderId,
+            folder,
+            SyncInventory.syncFolder,
+            SyncQueueItemPriority.HIGH,
+            SyncQueueItemWeight.LIGHT
+          );
         })
         .catch((err) => {
           logger.error(err);

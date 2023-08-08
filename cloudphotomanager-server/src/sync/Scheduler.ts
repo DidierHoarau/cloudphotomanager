@@ -9,8 +9,7 @@ import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { Timeout } from "../utils-std-ts/Timeout";
 import { SyncInventory } from "./SyncInventory";
 import { SyncQueue } from "./SyncQueue";
-import { FileData } from "../files/FileData";
-import * as fs from "fs-extra";
+import { SyncQueueItemWeight } from "../model/SyncQueueItemWeight";
 
 let config: Config;
 
@@ -75,7 +74,8 @@ export class Scheduler {
         rootFolderCloud.id,
         rootFolderCloud,
         SyncInventory.syncFolder,
-        SyncQueueItemPriority.MEDIUM
+        SyncQueueItemPriority.MEDIUM,
+        SyncQueueItemWeight.LIGHT
       );
     }
 
@@ -85,17 +85,38 @@ export class Scheduler {
       account.getAccountDefinition().id,
       new Date(new Date().getTime() - OUTDATED_AGE)
     )) {
-      await SyncQueue.queueItem(account, folder.id, folder, SyncInventory.syncFolder, SyncQueueItemPriority.MEDIUM);
+      await SyncQueue.queueItem(
+        account,
+        folder.id,
+        folder,
+        SyncInventory.syncFolder,
+        SyncQueueItemPriority.MEDIUM,
+        SyncQueueItemWeight.LIGHT
+      );
     }
 
     // Top oldest sync folder
     for (const folder of await FolderData.getOldestSync(span, account.getAccountDefinition().id, 10)) {
-      await SyncQueue.queueItem(account, folder.id, folder, SyncInventory.syncFolder, SyncQueueItemPriority.MEDIUM);
+      await SyncQueue.queueItem(
+        account,
+        folder.id,
+        folder,
+        SyncInventory.syncFolder,
+        SyncQueueItemPriority.MEDIUM,
+        SyncQueueItemWeight.LIGHT
+      );
     }
 
     // Top oldest sync files
     for (const folder of await FolderData.getNewstUpdate(span, account.getAccountDefinition().id, 10)) {
-      await SyncQueue.queueItem(account, folder.id, folder, SyncInventory.syncFolder, SyncQueueItemPriority.MEDIUM);
+      await SyncQueue.queueItem(
+        account,
+        folder.id,
+        folder,
+        SyncInventory.syncFolder,
+        SyncQueueItemPriority.MEDIUM,
+        SyncQueueItemWeight.LIGHT
+      );
     }
 
     span.end();

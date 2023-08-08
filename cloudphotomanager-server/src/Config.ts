@@ -14,7 +14,8 @@ export class Config implements ConfigInterface {
   public JWT_VALIDITY_DURATION: number = 31 * 24 * 3600;
   public CORS_POLICY_ORIGIN: string;
   public DATA_DIR = process.env.DATA_DIR || "/data";
-  public TMP_DIR = process.env.CACHE_DIR || "/tmp";
+  public TOOLS_DIR = process.env.TOOLS_DIR || "/opt/app/cloudphotomanager/tools";
+  public TMP_DIR = process.env.TMP_DIR || "/tmp";
   public JWT_KEY: string = uuidv4();
   public LOG_LEVEL = "info";
   public SOURCE_FETCH_FREQUENCY = 30 * 60 * 1000;

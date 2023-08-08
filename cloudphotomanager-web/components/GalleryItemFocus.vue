@@ -7,11 +7,17 @@
     </div>
     <DialogMove v-if="activeOperation == 'move'" :target="{ files: [file] }" @onDone="onOperationDone" />
     <div id="media-container">
-      <img class="media-content" v-if="file" :src="getMediaSource(file)" />
+      <img class="media-content" v-if="file && getType(file) == 'image'" :src="getImageSource(file)" />
+      <video class="media-content" v-if="file && getType(file) == 'video'" controls>
+        <source :src="getVideoSource(file)" type="video/webm" />
+      </video>
     </div>
     <div id="media-preload">
-      <img v-if="position > 0" :src="getMediaSource(files[position - 1])" />
-      <img v-if="position + 1 < files.length - 1" :src="getMediaSource(files[position + 1])" />
+      <img v-if="position > 0 && getType(files[position - 1]) == 'image'" :src="getImageSource(files[position - 1])" />
+      <img
+        v-if="position + 1 < files.length - 1 && getType(files[position + 1]) == 'image'"
+        :src="getImageSource(files[position + 1])"
+      />
     </div>
   </div>
 </template>
@@ -68,6 +74,18 @@ export default {
     clickedMove() {
       this.activeOperation = "move";
     },
+    getType(file) {
+      const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp"];
+      const videoExtensions = ["mp4", "mov", "wmv", "avi", "mkv"];
+      const extension = file.filename.split(".").pop().toLowerCase();
+      if (imageExtensions.includes(extension)) {
+        return "image";
+      } else if (videoExtensions.includes(extension)) {
+        return "video";
+      } else {
+        return "unknown";
+      }
+    },
     async clickedDelete() {
       if (confirm(`Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`) == true) {
         await axios
@@ -113,7 +131,6 @@ export default {
       }, 700);
     },
     nextMedia() {
-      console.log(this.position, this.files.length);
       if (this.files.length === 0 || this.position === this.files.length - 1) {
         return;
       }
@@ -144,10 +161,13 @@ export default {
     },
     preloadFile(file) {
       const img = new Image();
-      img.src = this.getMediaSource(file);
+      img.src = this.getImageSource(file);
     },
-    getMediaSource(file) {
+    getImageSource(file) {
       return this.staticUrl + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.webp";
+    },
+    getVideoSource(file) {
+      return this.staticUrl + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.webm";
     },
   },
 };
@@ -176,6 +196,14 @@ export default {
   width: auto;
   height: auto;
   display: flex;
+}
+#media-container video {
+  grid-column: 2;
+  grid-row: 2;
+  max-width: 100vw;
+  max-height: 100vh;
+  width: auto;
+  height: auto;
 }
 .file-preview .action {
   font-size: 1.5em;
