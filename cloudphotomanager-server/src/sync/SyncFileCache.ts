@@ -13,7 +13,7 @@ import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { SyncQueueItemWeight } from "../model/SyncQueueItemWeight";
 import { Config } from "../Config";
 import { SystemCommand } from "../SystemCommand";
-import { Timeout } from "../utils-std-ts/Timeout";
+import * as probe from "node-ffprobe";
 
 const logger = new Logger("SyncFileCache");
 let config: Config;
@@ -91,22 +91,40 @@ export class SyncFileCache {
     const cacheDir = await FileData.getFileCacheDir(span, file.id);
     const tmpDir = await FileData.getFileTmpDir(span, file.id);
     await fs.ensureDir(cacheDir);
+    await fs.remove(`${tmpDir}/tmp_preview`);
     await fs.ensureDir(`${tmpDir}/tmp_preview`);
     const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
     logger.info(`Caching video ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
     await account
       .downloadFile(span, file, `${tmpDir}/tmp_preview`, tmpFileName)
       .then(async () => {
+        let targetWidth = 900;
+        await probe(`${tmpDir}/tmp_preview/${tmpFileName}`)
+          .then((probeData) => {
+            if (!probeData || !probeData.streams || probeData.streams.length == 0 || !probeData.streams[0].width) {
+              return;
+            }
+            if (probeData.streams[0].width > 900) {
+              targetWidth = 900;
+            } else {
+              targetWidth = probeData.streams[0].width;
+            }
+          })
+          .catch((err) => {
+            logger.error(err);
+            targetWidth = 900;
+          });
         logger.info(
           await SystemCommand.execute(
-            `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/tmp_preview/${tmpFileName} ${cacheDir}/preview.webm`
+            `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/tmp_preview/${tmpFileName} ${tmpDir}/tmp_preview/${tmpFileName}.webm ${targetWidth}`
           )
         );
+        await fs.move(`${tmpDir}/tmp_preview/${tmpFileName}.webm`, `${cacheDir}/preview.webm`);
       })
       .catch((err) => {
         logger.error(err);
       });
-    await fs.remove(`${cacheDir}/tmp_preview`);
+    await fs.remove(`${tmpDir}/tmp_preview`);
     span.end();
   }
 
@@ -133,7 +151,7 @@ export class SyncFileCache {
       .catch((err) => {
         logger.error(err);
       });
-    await fs.remove(`${cacheDir}/tmp_preview`);
+    await fs.remove(`${tmpDir}/tmp_preview`);
     span.end();
   }
 
@@ -156,7 +174,7 @@ export class SyncFileCache {
       .catch((err) => {
         logger.error(err);
       });
-    await fs.remove(`${cacheDir}/tmp_tumbnail`);
+    await fs.remove(`${tmpDir}/tmp_tumbnail`);
     span.end();
   }
 }

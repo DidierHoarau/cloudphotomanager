@@ -16,7 +16,7 @@ module.exports = {
       autorestart: false,
       env_development: {
         DEV_MODE: "true",
-        TMP_DIR: "../docs/dev/tmp",
+        TMP_DIR: "../docs/dev/data/tmp",
         TOOLS_DIR: "../cloudphotomanager-tools",
         DATA_DIR: "../docs/dev/data",
         OPENTELEMETRY_COLLECTOR_HTTP: "http://localhost:4318/v1/traces",

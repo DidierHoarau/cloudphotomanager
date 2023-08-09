@@ -38,6 +38,7 @@
     "md5": "^2.3.0",
     "md5-file": "^5.0.0",
     "node-cron": "^3.0.2",
+    "node-ffprobe": "^3.0.0",
     "opml": "^0.5.1",
     "pino-pretty": "^10.2.0",
     "rss-parser": "^3.13.0",

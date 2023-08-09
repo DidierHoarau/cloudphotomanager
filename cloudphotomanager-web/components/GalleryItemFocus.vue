@@ -8,7 +8,7 @@
     <DialogMove v-if="activeOperation == 'move'" :target="{ files: [file] }" @onDone="onOperationDone" />
     <div id="media-container">
       <img class="media-content" v-if="file && getType(file) == 'image'" :src="getImageSource(file)" />
-      <video class="media-content" v-if="file && getType(file) == 'video'" controls>
+      <video class="media-content" v-if="file && videoDelayedLoadingDone && getType(file) == 'video'" controls>
         <source :src="getVideoSource(file)" type="video/webm" />
       </video>
     </div>
@@ -46,6 +46,7 @@ export default {
       file: null,
       files: [],
       position: 0,
+      videoDelayedLoadingDone: false,
     };
   },
   async created() {
@@ -148,6 +149,7 @@ export default {
       }, 700);
     },
     loadMedia(newRoute = false) {
+      this.videoDelayedLoadingDone = false;
       this.file = this.files[this.position];
       if (newRoute) {
         useRouter().push({
@@ -158,6 +160,9 @@ export default {
           query: { accountId: this.file.accountId, folderId: this.file.folderId, fileId: this.file.id },
         });
       }
+      setTimeout(() => {
+        this.videoDelayedLoadingDone = true;
+      }, 100);
     },
     preloadFile(file) {
       const img = new Image();
