@@ -1,6 +1,6 @@
 <template>
   <div class="folder-component-layout">
-    <input v-model="folderFilter" type="text" class="folder-component-layout-filter" v-on:input="filterFolders" />
+    <input v-model="folderFilter" type="text" class="folder-component-layout-filter" />
     <Loading v-if="foldersStore.loading" class="folder-component-layout-list" />
     <div v-else class="folder-component-layout-list">
       <div v-for="(folder, index) in foldersStore.folders" v-bind:key="folder.name">
@@ -70,10 +70,9 @@ export default {
       this.$emit("onFolderSelected", { folder });
       this.selectedFolderId = folder.id;
     },
-    filterFolders() {},
     isVisible(folder) {
       if (this.folderFilter) {
-        return folder.folderpath.toLowerCase().indexOf(this.folderFilter.toLowerCase()) >= 0;
+        return folder.folderpath.toLowerCase().indexOf(this.folderFilter.toLowerCase().trim()) >= 0;
       }
       if (folder.folderpath === "/") {
         return true;

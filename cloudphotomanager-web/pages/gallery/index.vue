@@ -27,6 +27,7 @@
       <Loading v-if="loading" />
       <div v-else class="card gallery-file" v-for="file in files" v-bind:key="file.id">
         <div class="gallery-file-image" v-on:click="focusGalleryItem(file)">
+          <i v-if="getType(file) == 'video'" class="bi bi-play-circle gallery-file-video-type-overlay"></i>
           <img
             :src="staticUrl + '/' + file.id[0] + '/' + file.id[1] + '/' + file.id + '/thumbnail.webp'"
             onerror="this.onerror=null; this.src='/images/file-sync-in-progress.webp'"
@@ -64,6 +65,7 @@ import * as _ from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
+import { FileUtils } from "~~/services/FileUtils";
 
 export default {
   data() {
@@ -250,6 +252,10 @@ export default {
         this.loading = false;
       }
     },
+    getType(file) {
+      return FileUtils.getType(file);
+      // return "HELLO";
+    },
   },
 };
 </script>
@@ -279,6 +285,7 @@ export default {
   grid-column-start: 1;
   grid-column-end: span 3;
   word-break: break-all;
+  position: relative;
 }
 .gallery-file-image img {
   width: 100%;
@@ -419,8 +426,11 @@ export default {
   width: 100vw;
   height: 100vh;
 }
-.sync-status {
+.gallery-file-video-type-overlay {
+  font-size: 3em;
   position: absolute;
-  right: 2em;
+  right: 0.1em;
+  bottom: 0em;
+  opacity: 0.5;
 }
 </style>

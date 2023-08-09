@@ -31,6 +31,7 @@ import axios from "axios";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
+import { FileUtils } from "~~/services/FileUtils";
 import * as Hammer from "hammerjs";
 import * as _ from "lodash";
 
@@ -76,16 +77,7 @@ export default {
       this.activeOperation = "move";
     },
     getType(file) {
-      const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp"];
-      const videoExtensions = ["mp4", "mov", "wmv", "avi", "mkv"];
-      const extension = file.filename.split(".").pop().toLowerCase();
-      if (imageExtensions.includes(extension)) {
-        return "image";
-      } else if (videoExtensions.includes(extension)) {
-        return "video";
-      } else {
-        return "unknown";
-      }
+      return FileUtils.getType(file);
     },
     async clickedDelete() {
       if (confirm(`Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`) == true) {
