@@ -20,6 +20,7 @@ ffmpeg \
   -crf 20 \
   -c:a libvorbis \
   -b:a 128k \
+  -threads 1 \
   ${FILE_OUT}
 echo "Processing ${FILE_IN}: Completed"
 echo "- Input: $(ls -sh ${FILE_IN})"
