@@ -7,8 +7,8 @@ if [ "${FILE_WIDTH}" == "" ]; then
   FILE_WIDTH=900
 fi
 
-echo "Processing ${FILE_IN}: Started"
-nice -15 ffmpeg \
+echo "Processing $(ls -sh ${FILE_IN}): Started"
+nice -20 ffmpeg \
   -nostats \
   -hide_banner \
   -loglevel error \
@@ -16,9 +16,7 @@ nice -15 ffmpeg \
   -vf scale=${FILE_WIDTH}:-1 \
   -b:v 1M \
   -r 30 \
-  -c:v libvpx \
-  -crf 20 \
-  -c:a libvorbis \
+  -c:v libx264 \
   -b:a 128k \
   -threads 1 \
   ${FILE_OUT}

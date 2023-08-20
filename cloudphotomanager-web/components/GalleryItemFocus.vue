@@ -9,7 +9,7 @@
     <div id="media-container">
       <img class="media-content" v-if="file && getType(file) == 'image'" :src="getImageSource(file)" />
       <video class="media-content" v-if="file && videoDelayedLoadingDone && getType(file) == 'video'" controls>
-        <source :src="getVideoSource(file)" type="video/webm" />
+        <source :src="getVideoSource(file)" type="video/mp4" />
       </video>
     </div>
     <div id="media-preload">
@@ -164,7 +164,7 @@ export default {
       return this.staticUrl + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.webp";
     },
     getVideoSource(file) {
-      return this.staticUrl + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.webm";
+      return this.staticUrl + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.mp4";
     },
   },
 };

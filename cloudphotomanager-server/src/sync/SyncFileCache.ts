@@ -43,7 +43,7 @@ export class SyncFileCache {
     const isVideo = File.getMediaType(file.filename) === FileMediaType.video;
     const hasThumbnail = fs.existsSync(`${cacheDir}/thumbnail.webp`);
     const hasImagePreview = fs.existsSync(`${cacheDir}/preview.webp`);
-    const hasVideoPreview = fs.existsSync(`${cacheDir}/preview.webm`);
+    const hasVideoPreview = fs.existsSync(`${cacheDir}/preview.mp4`);
     // const hasVideoPreview = fs.existsSync(`${cacheDir}/preview.mp4`);
     const accountCapabilities = account.getCapabilities();
 
@@ -116,10 +116,10 @@ export class SyncFileCache {
           });
         logger.info(
           await SystemCommand.execute(
-            `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/tmp_preview/${tmpFileName} ${tmpDir}/tmp_preview/${tmpFileName}.webm ${targetWidth}`
+            `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/tmp_preview/${tmpFileName} ${tmpDir}/tmp_preview/${tmpFileName}.mp4 ${targetWidth}`
           )
         );
-        await fs.move(`${tmpDir}/tmp_preview/${tmpFileName}.webm`, `${cacheDir}/preview.webm`);
+        await fs.move(`${tmpDir}/tmp_preview/${tmpFileName}.mp4`, `${cacheDir}/preview.mp4`);
       })
       .catch((err) => {
         logger.error(err);
