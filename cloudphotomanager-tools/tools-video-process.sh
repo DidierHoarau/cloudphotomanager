@@ -8,7 +8,7 @@ if [ "${FILE_WIDTH}" == "" ]; then
 fi
 
 echo "Processing ${FILE_IN}: Started"
-ffmpeg \
+nice -15 ffmpeg \
   -nostats \
   -hide_banner \
   -loglevel error \
