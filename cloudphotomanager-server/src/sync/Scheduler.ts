@@ -31,23 +31,6 @@ export class Scheduler {
       const span = StandardTracer.startSpan("Scheduler_startSchedule");
       const accountDefinitions = await AccountData.list(span);
       accountDefinitions.forEach(async (accountDefinition) => {
-        // Tmp Fix
-        // const files = await FileData.listForAccount(span, accountDefinition.id);
-        // console.log(files.length);
-        // for (const file of files) {
-        //   if (file.metadata.photo && file.metadata.photo.orientation > 1) {
-        //     const cacheDir = await FileData.getFileCacheDir(span, file.id);
-        //     try {
-        //       if (fs.existsSync(cacheDir)) {
-        //         await fs.remove(cacheDir);
-        //         console.log("removed: " + cacheDir);
-        //       }
-        //     } catch (err) {
-        //       console.error(err);
-        //     }
-        //   }
-        // }
-        // End Tmp Fix
         if (config.AUTO_SYNC) {
           Scheduler.startAccountSync(span, accountDefinition);
         }
