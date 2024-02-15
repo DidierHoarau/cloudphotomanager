@@ -61,7 +61,7 @@ const authenticationStore = AuthenticationStore();
 
 <script>
 import axios from "axios";
-import * as _ from "lodash";
+import { find, findIndex, sortBy } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
@@ -103,7 +103,7 @@ export default {
     });
     if (useRoute().query.accountId && useRoute().query.folderId && useRoute().query.fileId) {
       await this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
-      this.focusGalleryItem(_.find(this.files, { id: useRoute().query.fileId }));
+      this.focusGalleryItem(find(this.files, { id: useRoute().query.fileId }));
     } else if (useRoute().query.accountId && useRoute().query.folderId) {
       this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
     }
@@ -121,7 +121,7 @@ export default {
         setTimeout(async () => {
           if (useRoute().query.fileId) {
             await this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
-            this.focusGalleryItem(_.find(this.files, { id: useRoute().query.fileId }));
+            this.focusGalleryItem(find(this.files, { id: useRoute().query.fileId }));
           } else {
             this.displayFullScreen = false;
           }
@@ -146,7 +146,7 @@ export default {
         )
         .then((res) => {
           if (this.requestEtag === requestEtag) {
-            this.files = _.sortBy(res.data.files, ["dateMedia"]);
+            this.files = sortBy(res.data.files, ["dateMedia"]);
           }
         })
         .catch(handleError)
@@ -168,7 +168,7 @@ export default {
       EventBus.emit(EventTypes.FILE_UPDATED, {});
     },
     onFileSelected(file) {
-      const selectedIndex = _.findIndex(this.selectedFiles, { id: file.id });
+      const selectedIndex = findIndex(this.selectedFiles, { id: file.id });
       if (selectedIndex < 0) {
         this.selectedFiles.push(file);
       } else {
@@ -181,7 +181,7 @@ export default {
     },
     focusGalleryItem(file) {
       this.displayFullScreen = true;
-      this.positionFocus = _.findIndex(this.files, { id: file.id });
+      this.positionFocus = findIndex(this.files, { id: file.id });
     },
     unFocusGalleryItem(result) {
       useRouter().push({ query: { accountId: this.currentAccountId, folderId: this.currentFolderId } });

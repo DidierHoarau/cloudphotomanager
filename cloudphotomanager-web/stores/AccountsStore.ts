@@ -2,7 +2,7 @@ import { AuthService } from "~~/services/AuthService";
 import Config from "~~/services/Config";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import axios from "axios";
-import * as _ from "lodash";
+import { sortBy } from "lodash";
 
 export const AccountsStore = defineStore("AccountsStore", {
   state: () => ({
@@ -17,7 +17,7 @@ export const AccountsStore = defineStore("AccountsStore", {
       await axios
         .get(`${(await Config.get()).SERVER_URL}/accounts/`, await AuthService.getAuthHeader())
         .then((res) => {
-          this.accounts = _.sortBy(res.data.accounts, ["name"]);
+          this.accounts = sortBy(res.data.accounts, ["name"]);
           if (this.accounts.length > 0) {
             this.accountSelected = (this.accounts[0] as any).id;
           }

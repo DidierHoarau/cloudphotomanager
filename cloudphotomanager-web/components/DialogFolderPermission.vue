@@ -26,7 +26,7 @@ import axios from "axios";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
-import * as _ from "lodash";
+import { find } from "lodash";
 
 export default {
   props: {
@@ -61,7 +61,7 @@ export default {
           if (!permissions.info.folders) {
             permissions.info.folders = [];
           }
-          const folderPermission = _.find(permissions.folders, { folderId: this.selectedFolder.id });
+          const folderPermission = find(permissions.folders, { folderId: this.selectedFolder.id });
           if (!folderPermission) {
             let scope = "ro";
             if (this.isRecursive) {

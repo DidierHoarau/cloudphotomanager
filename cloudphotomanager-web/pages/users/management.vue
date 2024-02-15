@@ -51,7 +51,7 @@ import axios from "axios";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
-import * as _ from "lodash";
+import { find, findIndex } from "lodash";
 
 export default {
   data() {
@@ -84,8 +84,8 @@ export default {
               .then(async (res) => {
                 user.permissions = res.data.info;
                 for (const folder of user.permissions.folders || []) {
-                  const folderKnown = _.find(FoldersStore().folders, { id: folder.folderId });
-                  const accountKnown = _.find(AccountsStore().accounts, { id: folderKnown.accountId });
+                  const folderKnown = find(FoldersStore().folders, { id: folder.folderId });
+                  const accountKnown = find(AccountsStore().accounts, { id: folderKnown.accountId });
                   folder.scope_tag = "RO";
                   if (folder.scope === "ro_recursive") {
                     folder.scope_tag = "RO Recursive";
@@ -114,7 +114,7 @@ export default {
         .get(`${(await Config.get()).SERVER_URL}/users/${user.id}/permissions`, await AuthService.getAuthHeader())
         .then(async (res) => {
           const permissions = res.data;
-          const folderToRemove = _.findIndex(permissions.info.folders, { folderId: folder.folderId });
+          const folderToRemove = findIndex(permissions.info.folders, { folderId: folder.folderId });
           if (folderToRemove >= 0) {
             permissions.info.folders.splice(folderToRemove, 1);
             await axios.put(

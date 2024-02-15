@@ -2,7 +2,7 @@ import { AuthService } from "~~/services/AuthService";
 import Config from "~~/services/Config";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import axios from "axios";
-import * as _ from "lodash";
+import { find, sortBy } from "lodash";
 import { PreferencesFolders } from "~~/services/PreferencesFolders";
 
 export const FoldersStore = defineStore("FoldersStore", {
@@ -25,7 +25,7 @@ export const FoldersStore = defineStore("FoldersStore", {
         await axios
           .get(`${(await Config.get()).SERVER_URL}/accounts/${account.id}/folders`, await AuthService.getAuthHeader())
           .then((res) => {
-            for (const folder of _.sortBy(res.data.folders, ["folderpath"])) {
+            for (const folder of sortBy(res.data.folders, ["folderpath"])) {
               if (folder.folderpath !== "/") {
                 folders.push({
                   name: folder.folderpath.split("/").pop(),
@@ -86,7 +86,7 @@ export const FoldersStore = defineStore("FoldersStore", {
         )
       ).data.counts;
       counts.forEach((element: any) => {
-        const folder = _.find(this.folders, { id: element.folderId });
+        const folder = find(this.folders, { id: element.folderId });
         if (folder) {
           folder.counts = element.counts;
         }

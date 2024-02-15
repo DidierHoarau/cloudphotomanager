@@ -10,6 +10,9 @@ import { Timeout } from "../utils-std-ts/Timeout";
 import { SyncInventory } from "./SyncInventory";
 import { SyncQueue } from "./SyncQueue";
 import { SyncQueueItemWeight } from "../model/SyncQueueItemWeight";
+import { Logger } from "../utils-std-ts/Logger";
+
+const logger = new Logger("Scheduler");
 
 let config: Config;
 
@@ -32,7 +35,9 @@ export class Scheduler {
       const accountDefinitions = await AccountData.list(span);
       accountDefinitions.forEach(async (accountDefinition) => {
         if (config.AUTO_SYNC) {
-          Scheduler.startAccountSync(span, accountDefinition);
+          Scheduler.startAccountSync(span, accountDefinition).catch((err) => {
+            logger.error(err);
+          });
         }
       });
       await Timeout.wait(config.SOURCE_FETCH_FREQUENCY);

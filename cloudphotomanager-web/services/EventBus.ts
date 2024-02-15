@@ -11,6 +11,7 @@ export enum EventTypes {
 }
 
 export function handleError(error: any): void {
+  console.log(error);
   let text = error.response;
   if (error.response && error.response.data && error.response.data.error) {
     text = error.response.data.error;

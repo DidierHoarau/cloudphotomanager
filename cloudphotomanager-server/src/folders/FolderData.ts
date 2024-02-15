@@ -207,9 +207,6 @@ export class FolderData {
       return;
     }
     cacheAccountsFoldersInProgess++;
-    if (cacheAccountsFoldersInProgess > 1) {
-      return;
-    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const newCache: any = {};
     const span = StandardTracer.startSpan("FolderData_refreshCacheFolders");
@@ -231,9 +228,6 @@ export class FolderData {
       return;
     }
     cacheAccountsFoldersCountsInProgess++;
-    if (cacheAccountsFoldersCountsInProgess > 1) {
-      return;
-    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const newCache: any = {};
     const span = StandardTracer.startSpan("FolderData_refreshCacheFoldersCounts");

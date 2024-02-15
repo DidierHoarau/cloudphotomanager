@@ -46,7 +46,7 @@ const accountsStore = AccountsStore();
 
 <script>
 import axios from "axios";
-import * as _ from "lodash";
+import { debounce, find, findIndex } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
@@ -111,8 +111,8 @@ export default {
             EventBus.emit(EventTypes.ALERT_MESSAGE, {
               text: "File deleted",
             });
-            const hashIndex = _.findIndex(this.analysis, { hash: file.hash });
-            this.analysis[hashIndex].files.splice(_.findIndex(this.analysis[hashIndex].files), 1);
+            const hashIndex = findIndex(this.analysis, { hash: file.hash });
+            this.analysis[hashIndex].files.splice(findIndex(this.analysis[hashIndex].files), 1);
             if (this.analysis[hashIndex].files.length === 0) {
               this.analysis.splice(hashIndex, 1);
             }
@@ -123,9 +123,9 @@ export default {
       }
     },
     displayFolderPath(folders, folderId) {
-      return _.find(folders, { id: folderId }).folderpath;
+      return find(folders, { id: folderId }).folderpath;
     },
-    analysisFilterChanged: _.debounce(async function (e) {
+    analysisFilterChanged: debounce(async function (e) {
       if (!this.analysisFilter) {
         this.analysisFiltered = this.analysis;
         return;
