@@ -1,5 +1,5 @@
 # BUILD
-FROM node:18-alpine as builder
+FROM node:20-alpine as builder
 
 WORKDIR /opt/src
 
@@ -18,7 +18,7 @@ RUN cd cloudphotomanager-web && \
     npm run generate
 
 # RUN
-FROM node:18-alpine
+FROM node:20-alpine
 
 COPY docker-config/entrypoint.sh /entrypoint.sh
 
