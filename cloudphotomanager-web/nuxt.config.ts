@@ -15,7 +15,7 @@ export default defineNuxtConfig({
         { rel: "icon", href: "/icon.png" },
         { rel: "stylesheet", href: "/styles.css" },
         { rel: "stylesheet", href: "https://unpkg.com/@picocss/pico@latest/css/pico.min.css" },
-        { rel: "stylesheet", href: "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css" },
+        { rel: "stylesheet", href: "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" },
       ],
     },
   },

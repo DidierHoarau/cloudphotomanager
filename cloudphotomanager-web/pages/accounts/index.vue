@@ -4,6 +4,30 @@
     <div class="actions page-actions">
       <NuxtLink to="/accounts/new"><i class="bi bi-plus-square"></i></NuxtLink>
     </div>
+    <table>
+      <thead>
+        <tr>
+          <td>Type</td>
+          <td>Name</td>
+          <td><i class="bi bi-trash-fill"></i> Delete</td>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="(account, index) in accountsStore.accounts" v-bind:key="index">
+          <td>
+            <i v-if="account.info.type == 'oneDrive'" class="bi bi-windows"></i>
+            <i v-else-if="account.info.type == 's3'" class="bi bi-amazon"></i>
+          </td>
+          <td>
+            {{ account.name }}
+          </td>
+          <td>
+            <i class="bi bi-trash-fill" v-on:click="clickedDelete(account)"></i>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
     <div v-for="(account, index) in accountsStore.accounts" v-bind:key="index">{{ account }}</div>
   </div>
 </template>

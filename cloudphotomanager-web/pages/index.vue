@@ -19,4 +19,8 @@ export default {
 };
 </script>
 
-<style scoped></style>
+<style>
+.page button {
+  margin-right: 1em;
+}
+</style>

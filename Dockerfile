@@ -23,8 +23,7 @@ FROM node:20-alpine
 COPY docker-config/entrypoint.sh /entrypoint.sh
 
 RUN apk add --no-cache nginx ffmpeg && \
-    apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main vips-dev && \
-    apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main libheif-dev && \
+RUN apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main vips-dev libheif-dev && \
     npm install -g pm2
     
 COPY docker-config/default.conf /etc/nginx/http.d/default.conf
