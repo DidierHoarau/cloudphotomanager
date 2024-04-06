@@ -27,8 +27,6 @@
         </tr>
       </tbody>
     </table>
-
-    <div v-for="(account, index) in accountsStore.accounts" v-bind:key="index">{{ account }}</div>
   </div>
 </template>
 
