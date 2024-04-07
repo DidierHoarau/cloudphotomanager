@@ -3,7 +3,8 @@ FROM node:20-alpine as builder
 
 WORKDIR /opt/src
 
-RUN apk add --no-cache bash git python3 perl alpine-sdk
+RUN apk add --no-cache bash git python3 perl alpine-sdk && \
+    apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main vips-dev libheif-dev && \
 
 COPY cloudphotomanager-server cloudphotomanager-server
 
