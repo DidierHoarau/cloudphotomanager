@@ -9,7 +9,7 @@ RUN apk add --no-cache bash git python3 perl alpine-sdk && \
 COPY cloudphotomanager-server cloudphotomanager-server
 
 RUN cd cloudphotomanager-server && \
-    npm install && \
+    npm ci && \
     npm run build
 
 COPY cloudphotomanager-web cloudphotomanager-web

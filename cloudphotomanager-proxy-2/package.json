@@ -6,10 +6,9 @@
   "scripts": {
     "//": "-------------------------------------------------------------------",
     "build": "cargo build",
-    "lint": "eslint src",
-    "test": "jest --coverage || true",
+    "lint": "echo nothing yet",
+    "test": "echo nothing yet",
     "////": "-----------------------------------------------------------------",
-    "dev": "ts-node-dev ./src/app.ts",
-    "dev:test": "NODE_ENV=dev jest --watch --config='jest.config.js'"
+    "dev": "cargo watch -x run"
   }
 }
