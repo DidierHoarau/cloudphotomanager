@@ -14,7 +14,7 @@ export const FoldersStore = defineStore("FoldersStore", {
   getters: {},
 
   actions: {
-    async fetch(accountId: string) {
+    async fetch() {
       if (this.folders.length === 0) {
         this.loading = true;
       }
@@ -45,7 +45,7 @@ export const FoldersStore = defineStore("FoldersStore", {
           })
           .catch(handleError);
         this.checkVisibility(folders, account.id);
-        this.fetchCounts(account.id);
+        this.fetchCounts(folders, account.id);
       }
       (this.folders as any[]) = folders;
       this.loading = false;
@@ -78,19 +78,19 @@ export const FoldersStore = defineStore("FoldersStore", {
         }
       }
     },
-    async fetchCounts(accountId: string) {
+    async fetchCounts(folders: any[], accountId: string) {
       const counts = (
         await axios.get(
           `${(await Config.get()).SERVER_URL}/accounts/${accountId}/folders/counts`,
           await AuthService.getAuthHeader()
         )
       ).data.counts;
-      counts.forEach((element: any) => {
-        const folder = find(this.folders, { id: element.folderId });
+      for (let element of counts) {
+        const folder = find(folders, { accountId, id: element.folderId });
         if (folder) {
           folder.counts = element.counts;
         }
-      });
+      }
     },
 
     toggleFolderCollapsed(index: number) {
