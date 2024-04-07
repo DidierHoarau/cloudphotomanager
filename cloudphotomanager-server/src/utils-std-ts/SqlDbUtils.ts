@@ -15,7 +15,24 @@ export class SqlDbutils {
   public static async init(context: Span, config: Config): Promise<void> {
     const span = StandardTracer.startSpan("SqlDbutils_init", context);
     await fs.ensureDir(config.DATA_DIR);
-    database = new Database(`${config.DATA_DIR}/database.db`);
+    if (config.DATABASE_ASYNC_WRITE) {
+      await fs.rm("database-async.db").catch((err) => {
+        // Npthing
+      });
+      await fs.copyFile(`${config.DATA_DIR}/database.db`, "database-async.db");
+      database = new Database("database-async.db");
+      setInterval(() => {
+        database.backup(`${config.DATA_DIR}/database.db`, (err) => {
+          if (err) {
+            logger.error(`Error backing up database: ${err}`);
+          } else {
+            logger.info("Database backed up successfully!");
+          }
+        });
+      }, 5 * 60 * 1000); // 5 minutes
+    } else {
+      database = new Database(`${config.DATA_DIR}/database.db`);
+    }
     await SqlDbutils.execSQLFile(span, `${SQL_DIR}/init-0000.sql`);
     const initFiles = (await await fs.readdir(`${SQL_DIR}`)).sort();
     let dbVersionApplied = 0;

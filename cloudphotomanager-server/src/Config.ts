@@ -24,6 +24,7 @@ export class Config implements ConfigInterface {
   public PROCESSORS_SYSTEM = "processors-system";
   public PROCESSORS_USER = "processors-user";
   public AUTO_SYNC = process.env.AUTO_SYNC !== "N";
+  public DATABASE_ASYNC_WRITE = false;
 
   public async reload(): Promise<void> {
     const content = await fse.readJson(this.CONFIG_FILE);
@@ -48,5 +49,6 @@ export class Config implements ConfigInterface {
     setIfSet("SOURCE_FETCH_FREQUENCY");
     setIfSet("OPENTELEMETRY_COLLECTOR_HTTP");
     setIfSet("OPENTELEMETRY_COLLECTOR_AWS");
+    setIfSet("DATABASE_ASYNC_WRITE");
   }
 }
