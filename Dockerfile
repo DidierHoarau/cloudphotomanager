@@ -1,5 +1,5 @@
 # BUILD
-FROM node:18-alpine as builder
+FROM node:20-alpine as builder
 
 WORKDIR /opt/src
 
@@ -9,7 +9,7 @@ RUN apk add --no-cache bash git python3 perl alpine-sdk && \
 COPY cloudphotomanager-server cloudphotomanager-server
 
 RUN cd cloudphotomanager-server && \
-    npm ci && \
+    npm install && \
     npm run build
 
 COPY cloudphotomanager-web cloudphotomanager-web
@@ -19,7 +19,7 @@ RUN cd cloudphotomanager-web && \
     npm run generate
 
 # RUN
-FROM node:18-alpine
+FROM node:20-alpine
 
 COPY docker-config/entrypoint.sh /entrypoint.sh
 
