@@ -22,8 +22,8 @@ export class AccountData {
     const span = StandardTracer.startSpan("AccountData_list", context);
     const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM accounts");
     const accounts: AccountDefinition[] = [];
-    if (rawData.length > 0) {
-      accounts.push(fromRaw(rawData[0]));
+    for (let account of rawData) {
+      accounts.push(fromRaw(account));
     }
     span.end();
     return accounts;
@@ -44,6 +44,13 @@ export class AccountData {
     );
     span.end();
     FolderData.refreshCacheFolders();
+  }
+
+  public static async delete(context: Span, accountId: string): Promise<void> {
+    const span = StandardTracer.startSpan("AccountData_delete", context);
+    await SqlDbutils.execSQL(span, "DELETE FROM files WHERE accountId = ?", [accountId]);
+    await SqlDbutils.execSQL(span, "DELETE FROM accounts WHERE id = ?", [accountId]);
+    span.end();
   }
 }
 

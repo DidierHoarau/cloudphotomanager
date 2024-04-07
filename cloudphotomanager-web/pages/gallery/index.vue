@@ -29,7 +29,9 @@
         <div class="gallery-file-image" v-on:click="focusGalleryItem(file)">
           <i v-if="getType(file) == 'video'" class="bi bi-play-circle gallery-file-video-type-overlay"></i>
           <img
-            :src="staticUrl + '/' + file.id[0] + '/' + file.id[1] + '/' + file.id + '/thumbnail.webp'"
+            :src="
+              staticUrl + '/' + file.accountId + '/' + file.id[0] + '/' + file.id[1] + '/' + file.id + '/thumbnail.webp'
+            "
             onerror="this.onerror=null; this.src='/images/file-sync-in-progress.webp'"
           />
         </div>

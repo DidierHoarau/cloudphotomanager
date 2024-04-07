@@ -16,13 +16,13 @@ export class FileData {
     span.end();
   }
 
-  public static async getFileCacheDir(context: Span, fileId: string): Promise<string> {
-    const cacheDir = `${config.DATA_DIR}/cache/${fileId[0]}/${fileId[1]}/${fileId}`;
+  public static async getFileCacheDir(context: Span, accountId: String, fileId: string): Promise<string> {
+    const cacheDir = `${config.DATA_DIR}/cache/${accountId}/${fileId[0]}/${fileId[1]}/${fileId}`;
     return cacheDir;
   }
 
-  public static async getFileTmpDir(context: Span, fileId: string): Promise<string> {
-    const cacheDir = `${config.TMP_DIR}/cache/${fileId[0]}/${fileId[1]}/${fileId}`;
+  public static async getFileTmpDir(context: Span, accountId: String, fileId: string): Promise<string> {
+    const cacheDir = `${config.TMP_DIR}/cache/${accountId}/${fileId[0]}/${fileId[1]}/${fileId}`;
     return cacheDir;
   }
 

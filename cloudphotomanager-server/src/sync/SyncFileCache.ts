@@ -38,7 +38,7 @@ export class SyncFileCache {
 
   public static async checkFile(context: Span, account: Account, file: File, priority = SyncQueueItemPriority.LOW) {
     const span = StandardTracer.startSpan("SyncFileCache_checkFile", context);
-    const cacheDir = await FileData.getFileCacheDir(span, file.id);
+    const cacheDir = await FileData.getFileCacheDir(span, account.getAccountDefinition().id, file.id);
     const isImage = File.getMediaType(file.filename) === FileMediaType.image;
     const isVideo = File.getMediaType(file.filename) === FileMediaType.video;
     const hasThumbnail = fs.existsSync(`${cacheDir}/thumbnail.webp`);
@@ -88,8 +88,8 @@ export class SyncFileCache {
 
   public static async syncVideoFromFull(account: Account, file: File) {
     const span = StandardTracer.startSpan("SyncFileCache_syncVideoFromFull");
-    const cacheDir = await FileData.getFileCacheDir(span, file.id);
-    const tmpDir = await FileData.getFileTmpDir(span, file.id);
+    const cacheDir = await FileData.getFileCacheDir(span, account.getAccountDefinition().id, file.id);
+    const tmpDir = await FileData.getFileTmpDir(span, account.getAccountDefinition().id, file.id);
     await fs.ensureDir(cacheDir);
     await fs.remove(`${tmpDir}/tmp_preview`);
     await fs.ensureDir(`${tmpDir}/tmp_preview`);
@@ -130,8 +130,8 @@ export class SyncFileCache {
 
   public static async syncPhotoFromFull(account: Account, file: File) {
     const span = StandardTracer.startSpan("SyncFileCache_syncPhotoFromFull");
-    const cacheDir = await FileData.getFileCacheDir(span, file.id);
-    const tmpDir = await FileData.getFileTmpDir(span, file.id);
+    const cacheDir = await FileData.getFileCacheDir(span, account.getAccountDefinition().id, file.id);
+    const tmpDir = await FileData.getFileTmpDir(span, account.getAccountDefinition().id, file.id);
     await fs.ensureDir(cacheDir);
     await fs.ensureDir(`${tmpDir}/tmp_preview`);
     const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
@@ -157,8 +157,8 @@ export class SyncFileCache {
 
   public static async syncThumbnail(account: Account, file: File) {
     const span = StandardTracer.startSpan("SyncFileCache_syncThumbnail");
-    const cacheDir = await FileData.getFileCacheDir(span, file.id);
-    const tmpDir = await FileData.getFileTmpDir(span, file.id);
+    const cacheDir = await FileData.getFileCacheDir(span, account.getAccountDefinition().id, file.id);
+    const tmpDir = await FileData.getFileTmpDir(span, account.getAccountDefinition().id, file.id);
     await fs.ensureDir(cacheDir);
     await fs.ensureDir(`${tmpDir}/tmp_tumbnail`);
     const tmpFileName = `tmp.${file.filename.split(".").pop()}`;

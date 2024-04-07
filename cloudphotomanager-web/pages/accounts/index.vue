@@ -16,7 +16,7 @@
         <tr v-for="(account, index) in accountsStore.accounts" v-bind:key="index">
           <td>
             <i v-if="account.info.type == 'oneDrive'" class="bi bi-windows"></i>
-            <i v-else-if="account.info.type == 's3'" class="bi bi-amazon"></i>
+            <i v-else-if="account.info.type == 'awsS3'" class="bi bi-amazon"></i>
           </td>
           <td>
             {{ account.name }}
@@ -37,6 +37,8 @@ const accountsStore = AccountsStore();
 <script>
 import axios from "axios";
 import Config from "~~/services/Config.ts";
+import { AuthService } from "~~/services/AuthService";
+import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 
 export default {
   data() {
@@ -44,6 +46,18 @@ export default {
   },
   async created() {
     AccountsStore().fetch();
+  },
+  methods: {
+    async clickedDelete(account) {
+      if (confirm(`Delete the account? (Can't be undone!)\nAccount: ${account.name} \n`) == true) {
+        await axios
+          .delete(`${(await Config.get()).SERVER_URL}/accounts/${account.id}`, await AuthService.getAuthHeader())
+          .then(async (res) => {
+            AccountsStore().fetch();
+          })
+          .catch(handleError);
+      }
+    },
   },
 };
 </script>

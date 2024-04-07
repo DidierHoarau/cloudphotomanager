@@ -29,7 +29,7 @@ export class FileRoutes {
       //   return res.status(403).send({ error: "Access Denied" });
       // }
 
-      const cacheDir = await FileData.getFileCacheDir(span, req.params.fileId);
+      const cacheDir = await FileData.getFileCacheDir(span, req.params.accountId, req.params.fileId);
       const filepath = `${cacheDir}/thumbnail.webp`;
       if (!fs.existsSync(filepath)) {
         SyncFileCache.checkFile(
@@ -61,7 +61,7 @@ export class FileRoutes {
       //   return res.status(403).send({ error: "Access Denied" });
       // }
 
-      const cacheDir = await FileData.getFileCacheDir(span, req.params.fileId);
+      const cacheDir = await FileData.getFileCacheDir(span, req.params.accountId, req.params.fileId);
       const filepath = `${cacheDir}/preview.webp`;
       if (!fs.existsSync(filepath)) {
         return res.status(404).send({ error: "File Not Found" });
@@ -80,7 +80,7 @@ export class FileRoutes {
       const fileIdMatch = /\/static\/.\/.\/(.*)\/.*/.exec(uri as string);
       if (fileIdMatch) {
         const file = await FileData.get(span, fileIdMatch[1]);
-        const cacheDir = await FileData.getFileCacheDir(span, file.id);
+        const cacheDir = await FileData.getFileCacheDir(span, file.accountId, file.id);
         if (!fs.existsSync(`${cacheDir}/preview.webp`) || !fs.existsSync(`${cacheDir}/thumbnail.webp`)) {
           SyncFileCache.checkFile(
             span,

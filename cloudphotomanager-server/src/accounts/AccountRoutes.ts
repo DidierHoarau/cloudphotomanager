@@ -5,6 +5,10 @@ import { Auth } from "../users/Auth";
 import { StandardTracer } from "../utils-std-ts/StandardTracer";
 import { AccountData } from "./AccountData";
 import { AccountFactory } from "./AccountFactory";
+import { Logger } from "../utils-std-ts/Logger";
+import { FolderData } from "../folders/FolderData";
+
+const logger = new Logger("AccountRoutes");
 
 export class AccountRoutes {
   //
@@ -74,8 +78,29 @@ export class AccountRoutes {
         return res.status(400).send({ error: "Account Validation Failed" });
       }
       await AccountData.add(span, account.getAccountDefinition());
-      Scheduler.startAccountSync(span, account.getAccountDefinition());
+      Scheduler.startAccountSync(span, account.getAccountDefinition()).catch((err) => {
+        logger.error(err);
+      });
       return res.status(201).send(account);
+    });
+
+    interface DeleteAccount extends RequestGenericInterface {
+      Params: {
+        accountId: string;
+      };
+    }
+    fastify.delete<DeleteAccount>("/:accountId", async (req, res) => {
+      const span = StandardTracer.getSpanFromRequest(req);
+      const userSession = await Auth.getUserSession(req);
+      if (!userSession.isAuthenticated) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      let account = await AccountData.get(span, req.params.accountId);
+      if (!account) {
+        return res.status(404).send({ error: "Account Not Found" });
+      }
+      await AccountData.delete(span, account.id);
+      return res.status(202).send({});
     });
 
     fastify.get("/onedrive/info", async (req, res) => {

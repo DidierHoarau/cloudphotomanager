@@ -161,10 +161,14 @@ export default {
       img.src = this.getImageSource(file);
     },
     getImageSource(file) {
-      return this.staticUrl + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.webp";
+      return (
+        this.staticUrl + "/" + file.accountId + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.webp"
+      );
     },
     getVideoSource(file) {
-      return this.staticUrl + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.mp4";
+      return (
+        this.staticUrl + "/" + file.accountId + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.mp4"
+      );
     },
   },
 };
