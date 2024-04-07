@@ -182,6 +182,10 @@ export default {
       this.fetchFiles(event.folder.accountId, event.folder.id);
     },
     focusGalleryItem(file) {
+      if (!file) {
+        this.displayFullScreen = false;
+        return;
+      }
       this.displayFullScreen = true;
       this.positionFocus = findIndex(this.files, { id: file.id });
     },
