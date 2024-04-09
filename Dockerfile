@@ -3,8 +3,18 @@ FROM node:20-alpine as builder
 
 WORKDIR /opt/src
 
-RUN apk add --no-cache bash git python3 perl alpine-sdk && \
-    apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main vips-dev libheif-dev
+RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories && \
+    apk add --no-cache --update \
+    build-base \
+    vips-dev=8.15.2-r0 \
+    fftw-dev \
+    gcc \
+    g++ \
+    make \
+    python3 \
+    wget \
+    vips-dev=8.15.2-r0 \
+    vips-heif=8.15.2-r0
 
 COPY cloudphotomanager-server cloudphotomanager-server
 
@@ -23,8 +33,20 @@ FROM node:20-alpine
 
 COPY docker-config/entrypoint.sh /entrypoint.sh
 
-RUN apk add --no-cache nginx ffmpeg && \
-    apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main vips-dev libheif-dev && \
+RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories && \
+    apk add --no-cache --update \
+    build-base \
+    vips-dev=8.15.2-r0 \
+    fftw-dev \
+    gcc \
+    g++ \
+    make \
+    python3 \
+    wget \
+    vips-dev=8.15.2-r0 \
+    vips-heif=8.15.2-r0 \
+    nginx \
+    ffmpeg && \
     npm install -g pm2
     
 COPY docker-config/default.conf /etc/nginx/http.d/default.conf
