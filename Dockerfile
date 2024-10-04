@@ -1,5 +1,5 @@
 # BUILD
-FROM node:20-alpine as builder
+FROM node:22-alpine as builder
 
 WORKDIR /opt/src
 
@@ -29,22 +29,22 @@ RUN cd cloudphotomanager-web && \
     npm run generate
 
 # RUN
-FROM node:20-alpine
+FROM node:22-alpine
 
 COPY docker-config/entrypoint.sh /entrypoint.sh
 
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories && \
     apk add --no-cache --update \
         build-base \
-        vips-dev=8.15.2-r0 \
+        vips-dev \
         fftw-dev \
         gcc \
         g++ \
         make \
         python3 \
         wget \
-        vips-dev=8.15.2-r0 \
-        vips-heif=8.15.2-r0 \
+        vips-dev \
+        vips-heif \
         nginx \
         ffmpeg && \
     npm install -g pm2
