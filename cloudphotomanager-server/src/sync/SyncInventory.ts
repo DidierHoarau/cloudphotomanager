@@ -1,7 +1,7 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { FileData } from "../files/FileData";
 import { Account } from "../model/Account";
-import { StandardTracer } from "../utils-std-ts/StandardTracer";
+import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { Config } from "../Config";
 import { Logger } from "../utils-std-ts/Logger";
 import * as _ from "lodash";
@@ -19,13 +19,13 @@ const logger = new Logger("SyncInventory");
 export class SyncInventory {
   //
   public static async init(context: Span, configIn: Config): Promise<void> {
-    const span = StandardTracer.startSpan("SyncInventory_init", context);
+    const span = StandardTracerStartSpan("SyncInventory_init", context);
     config = configIn;
     span.end();
   }
 
   public static async syncFolder(account: Account, knownFolder: Folder): Promise<void> {
-    const span = StandardTracer.startSpan("SyncInventory_syncFolder");
+    const span = StandardTracerStartSpan("SyncInventory_syncFolder");
     logger.info(`Sync folder: ${account.getAccountDefinition().id}: ${knownFolder.folderpath}`);
 
     const cloudFolder = await account.getFolder(span, knownFolder);

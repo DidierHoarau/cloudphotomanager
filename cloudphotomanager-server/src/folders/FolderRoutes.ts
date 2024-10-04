@@ -5,7 +5,7 @@ import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { SyncInventory } from "../sync/SyncInventory";
 import { SyncQueue } from "../sync/SyncQueue";
 import { Auth } from "../users/Auth";
-import { StandardTracer } from "../utils-std-ts/StandardTracer";
+import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { FolderData } from "./FolderData";
 import { UserPermissionCheck } from "../users/UserPermissionCheck";
 import { SyncQueueItemWeight } from "../model/SyncQueueItemWeight";
@@ -20,7 +20,7 @@ export class FolderRoutes {
       };
     }
     fastify.get<GetFoldersAccountIdRequest>("/", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -39,7 +39,7 @@ export class FolderRoutes {
       };
     }
     fastify.get<GetFoldersCountAccountIdRequest>("/counts", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -55,7 +55,7 @@ export class FolderRoutes {
       };
     }
     fastify.get<GetAccountIdFolderIdFilesRequest>("/:folderId/files", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -75,7 +75,7 @@ export class FolderRoutes {
       };
     }
     fastify.put<PutAccountIdFolderIdSyncRequest>("/:folderId/sync", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });

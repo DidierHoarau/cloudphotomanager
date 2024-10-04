@@ -5,7 +5,7 @@ import { Config } from "../Config";
 import { FolderData } from "../folders/FolderData";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { StandardTracer } from "../utils-std-ts/StandardTracer";
+import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { Timeout } from "../utils-std-ts/Timeout";
 import { SyncInventory } from "./SyncInventory";
 import { SyncQueue } from "./SyncQueue";
@@ -21,7 +21,7 @@ const OUTDATED_AGE = 7 * 24 * 3600 * 1000;
 export class Scheduler {
   //
   public static async init(context: Span, configIn: Config) {
-    const span = StandardTracer.startSpan("Scheduler_init", context);
+    const span = StandardTracerStartSpan("Scheduler_init", context);
     config = configIn;
     // SyncInventory.init(span, configIn);
     // Scheduler.startSchedule();
@@ -31,7 +31,7 @@ export class Scheduler {
   public static async startSchedule() {
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      const span = StandardTracer.startSpan("Scheduler_startSchedule");
+      const span = StandardTracerStartSpan("Scheduler_startSchedule");
       const accountDefinitions = await AccountData.list(span);
       accountDefinitions.forEach(async (accountDefinition) => {
         if (config.AUTO_SYNC) {
@@ -45,7 +45,7 @@ export class Scheduler {
   }
 
   public static async startAccountSync(context: Span, accountDefinition: AccountDefinition) {
-    const span = StandardTracer.startSpan("Scheduler_startAccountSync", context);
+    const span = StandardTracerStartSpan("Scheduler_startAccountSync", context);
     const account = await AccountFactory.getAccountImplementation(accountDefinition.id);
 
     // Debug

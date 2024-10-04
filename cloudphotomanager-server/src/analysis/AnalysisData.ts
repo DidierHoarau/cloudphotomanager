@@ -1,6 +1,6 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
 import * as _ from "lodash";
-import { StandardTracer } from "../utils-std-ts/StandardTracer";
+import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 import { File } from "../model/File";
 import { Config } from "../Config";
@@ -12,14 +12,14 @@ let config: Config;
 export class AnalysisData {
   //
   public static async init(context: Span, configIn: Config) {
-    const span = StandardTracer.startSpan("AnalysisData_init", context);
+    const span = StandardTracerStartSpan("AnalysisData_init", context);
     config = configIn;
     span.end();
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public static async listAccountDuplicates(context: Span, accountId: string): Promise<AnalysisDuplicate[]> {
-    const span = StandardTracer.startSpan("AnalysisData_listAccountDuplicates", context);
+    const span = StandardTracerStartSpan("AnalysisData_listAccountDuplicates", context);
     const rawData = await SqlDbutils.querySQL(
       span,
       "SELECT * " +

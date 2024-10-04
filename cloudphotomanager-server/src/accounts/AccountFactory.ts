@@ -1,6 +1,6 @@
 import { Account } from "../model/Account";
 import { AccountDefinition } from "../model/AccountDefinition";
-import { StandardTracer } from "../utils-std-ts/StandardTracer";
+import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { AccountData } from "./AccountData";
 import { AwsS3Account } from "./awsS3/AwsS3Account";
 import { OneDriveAccount } from "./oneDrive/OneDriveAccount";
@@ -26,7 +26,7 @@ export class AccountFactory {
       return cached.account;
     }
 
-    const span = StandardTracer.startSpan("AccountFactory_getAccountImplementation");
+    const span = StandardTracerStartSpan("AccountFactory_getAccountImplementation");
     const accountDefinition = await AccountData.get(span, id);
     let account;
     if (accountDefinition.info.type === AwsS3Account.TYPE) {

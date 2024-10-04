@@ -3,7 +3,6 @@ import * as path from "path";
 import { watchFile } from "fs-extra";
 import { Config } from "./Config";
 import { Logger } from "./utils-std-ts/Logger";
-import { StandardTracer } from "./utils-std-ts/StandardTracer";
 import { UserRoutes } from "./users/UserRoutes";
 import { Auth } from "./users/Auth";
 import { StandardTracerApi } from "./StandardTracerApi";
@@ -21,6 +20,7 @@ import { AnalysisRoutes } from "./analysis/AnalysisRoutes";
 import type { FastifyCookieOptions } from "@fastify/cookie";
 import cookie from "@fastify/cookie";
 import { SyncFileCache } from "./sync/SyncFileCache";
+import { StandardTracerInitTelemetry, StandardTracerStartSpan } from "./utils-std-ts/StandardTracer";
 
 const logger = new Logger("app");
 
@@ -35,9 +35,9 @@ Promise.resolve().then(async () => {
     config.reload();
   });
 
-  StandardTracer.initTelemetry(config);
+  StandardTracerInitTelemetry(config);
 
-  const span = StandardTracer.startSpan("init");
+  const span = StandardTracerStartSpan("init");
 
   await SyncFileCache.init(span, config);
   await SqlDbutils.init(span, config);

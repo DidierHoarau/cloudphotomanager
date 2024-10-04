@@ -1,7 +1,7 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { FileData } from "../files/FileData";
 import { Account } from "../model/Account";
-import { StandardTracer } from "../utils-std-ts/StandardTracer";
+import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import * as fs from "fs-extra";
 import { Logger } from "../utils-std-ts/Logger";
 import { FileMediaType } from "../model/FileMediaType";
@@ -22,13 +22,13 @@ export class SyncFileCache {
   //
 
   public static async init(context: Span, configIn: Config) {
-    const span = StandardTracer.startSpan("Scheduler_init", context);
+    const span = StandardTracerStartSpan("Scheduler_init", context);
     config = configIn;
     span.end();
   }
 
   public static async checkFolder(context: Span, account: Account, folder: Folder) {
-    const span = StandardTracer.startSpan("SyncFileCache_checkFolder", context);
+    const span = StandardTracerStartSpan("SyncFileCache_checkFolder", context);
     const files = await FileData.listByFolder(span, account.getAccountDefinition().id, folder.id);
     for (const file of files) {
       this.checkFile(span, account, file);
@@ -37,7 +37,7 @@ export class SyncFileCache {
   }
 
   public static async checkFile(context: Span, account: Account, file: File, priority = SyncQueueItemPriority.LOW) {
-    const span = StandardTracer.startSpan("SyncFileCache_checkFile", context);
+    const span = StandardTracerStartSpan("SyncFileCache_checkFile", context);
     const cacheDir = await FileData.getFileCacheDir(span, account.getAccountDefinition().id, file.id);
     const isImage = File.getMediaType(file.filename) === FileMediaType.image;
     const isVideo = File.getMediaType(file.filename) === FileMediaType.video;
@@ -87,7 +87,7 @@ export class SyncFileCache {
   }
 
   public static async syncVideoFromFull(account: Account, file: File) {
-    const span = StandardTracer.startSpan("SyncFileCache_syncVideoFromFull");
+    const span = StandardTracerStartSpan("SyncFileCache_syncVideoFromFull");
     const cacheDir = await FileData.getFileCacheDir(span, account.getAccountDefinition().id, file.id);
     const tmpDir = await FileData.getFileTmpDir(span, account.getAccountDefinition().id, file.id);
     await fs.ensureDir(cacheDir);
@@ -129,7 +129,7 @@ export class SyncFileCache {
   }
 
   public static async syncPhotoFromFull(account: Account, file: File) {
-    const span = StandardTracer.startSpan("SyncFileCache_syncPhotoFromFull");
+    const span = StandardTracerStartSpan("SyncFileCache_syncPhotoFromFull");
     const cacheDir = await FileData.getFileCacheDir(span, account.getAccountDefinition().id, file.id);
     const tmpDir = await FileData.getFileTmpDir(span, account.getAccountDefinition().id, file.id);
     await fs.ensureDir(cacheDir);
@@ -156,7 +156,7 @@ export class SyncFileCache {
   }
 
   public static async syncThumbnail(account: Account, file: File) {
-    const span = StandardTracer.startSpan("SyncFileCache_syncThumbnail");
+    const span = StandardTracerStartSpan("SyncFileCache_syncThumbnail");
     const cacheDir = await FileData.getFileCacheDir(span, account.getAccountDefinition().id, file.id);
     const tmpDir = await FileData.getFileTmpDir(span, account.getAccountDefinition().id, file.id);
     await fs.ensureDir(cacheDir);

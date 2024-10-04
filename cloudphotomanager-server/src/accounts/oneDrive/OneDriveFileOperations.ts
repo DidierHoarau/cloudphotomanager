@@ -1,7 +1,7 @@
 // https://learn.microsoft.com/en-us/onedrive/developer/?view=odsp-graph-online
 
 import { Span } from "@opentelemetry/sdk-trace-base";
-import { StandardTracer } from "../../utils-std-ts/StandardTracer";
+import { StandardTracerStartSpan } from "../../utils-std-ts/StandardTracer";
 import { File } from "../../model/File";
 import axios from "axios";
 import * as fs from "fs-extra";
@@ -21,7 +21,7 @@ export class OneDriveFileOperations {
     filename: string
   ): Promise<void> {
     return new Promise(async (resolve, reject) => {
-      const span = StandardTracer.startSpan("OneDriveFileOperations_downloadFile", context);
+      const span = StandardTracerStartSpan("OneDriveFileOperations_downloadFile", context);
       axios({
         url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/content`,
         method: "GET",
@@ -57,7 +57,7 @@ export class OneDriveFileOperations {
     filename: string
   ): Promise<void> {
     return new Promise(async (resolve, reject) => {
-      const span = StandardTracer.startSpan("OneDriveFileOperations_downloadFile", context);
+      const span = StandardTracerStartSpan("OneDriveFileOperations_downloadFile", context);
       axios({
         url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/thumbnails`,
         method: "GET",

@@ -2,7 +2,7 @@ import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { UserPassword } from "./UserPassword";
 import { Auth } from "./Auth";
 import { User } from "../model/User";
-import { StandardTracer } from "../utils-std-ts/StandardTracer";
+import { StandardTracerGetSpanFromRequest, StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { UserData } from "./UserData";
 import { UserPermission } from "../model/UserPermission";
 import { UserPermissionData } from "./UserPermissionData";
@@ -12,7 +12,7 @@ export class UserRoutes {
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     //
     fastify.get("/status/initialization", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       if ((await UserData.list(span)).length === 0) {
         res.status(201).send({ initialized: false });
       } else {
@@ -27,7 +27,7 @@ export class UserRoutes {
       };
     }
     fastify.post<PostSession>("/session", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       let user: User;
       // From token
       const userSession = await Auth.getUserSession(req);
@@ -66,7 +66,7 @@ export class UserRoutes {
     });
 
     fastify.get("/", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -81,7 +81,7 @@ export class UserRoutes {
       };
     }
     fastify.post<PostUser>("/", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       let isInitialized = true;
       if ((await UserData.list(span)).length === 0) {
         isInitialized = false;
@@ -120,7 +120,7 @@ export class UserRoutes {
       };
     }
     fastify.delete<DeletetUser>("/:userId", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -140,7 +140,7 @@ export class UserRoutes {
       };
     }
     fastify.put<PutNewPassword>("/password", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -163,7 +163,7 @@ export class UserRoutes {
       };
     }
     fastify.get<GetUserIdPermissions>("/:userId/permissions", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -184,7 +184,7 @@ export class UserRoutes {
       };
     }
     fastify.put<PutUserIdPermissions>("/:userId/permissions", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });

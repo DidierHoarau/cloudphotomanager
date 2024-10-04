@@ -3,7 +3,7 @@
 import { Account } from "../../model/Account";
 import { AccountDefinition } from "../../model/AccountDefinition";
 import { Span } from "@opentelemetry/sdk-trace-base";
-import { StandardTracer } from "../../utils-std-ts/StandardTracer";
+import { StandardTracerStartSpan } from "../../utils-std-ts/StandardTracer";
 import { File } from "../../model/File";
 import axios from "axios";
 import { Logger } from "../../utils-std-ts/Logger";
@@ -40,7 +40,7 @@ export class OneDriveAccount implements Account {
   }
 
   public async updateFileMetadata(context: Span, file: File): Promise<void> {
-    const span = StandardTracer.startSpan("OneDriveAccount_updateFileMetadata", context);
+    const span = StandardTracerStartSpan("OneDriveAccount_updateFileMetadata", context);
     const info = (
       await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`, {
         headers: {
@@ -59,7 +59,7 @@ export class OneDriveAccount implements Account {
   }
 
   public async validate(context: Span): Promise<boolean> {
-    const span = StandardTracer.startSpan("OneDriveAccount_validate", context);
+    const span = StandardTracerStartSpan("OneDriveAccount_validate", context);
     let valid = false;
     const params = new URLSearchParams();
     params.append("client_id", process.env.ONEDRIVE_CLIENT_ID);
@@ -86,7 +86,7 @@ export class OneDriveAccount implements Account {
 
   public async getToken(context: Span): Promise<string> {
     if (new Date() > this.tokenExpiration) {
-      const span = StandardTracer.startSpan("OneDriveAccount_getToken", context);
+      const span = StandardTracerStartSpan("OneDriveAccount_getToken", context);
       const params = new URLSearchParams();
       params.append("client_id", process.env.ONEDRIVE_CLIENT_ID);
       params.append("redirect_uri", process.env.ONEDRIVE_CALLBACK_SIGNIN);

@@ -1,4 +1,4 @@
-import { StandardTracer } from "../utils-std-ts/StandardTracer";
+import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { UserPermissionData } from "./UserPermissionData";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { Folder } from "../model/Folder";
@@ -8,7 +8,7 @@ import { FolderData } from "../folders/FolderData";
 export class UserPermissionCheck {
   //
   public static async filterFoldersForUser(context: Span, folders: Folder[], userId: string): Promise<Folder[]> {
-    const span = StandardTracer.startSpan("UserPermissionData_filterFoldersForUser", context);
+    const span = StandardTracerStartSpan("UserPermissionData_filterFoldersForUser", context);
     const filteredFolders = [];
     const userPermissions = await UserPermissionData.getForUser(span, userId);
     if (userPermissions.info.isAdmin) {

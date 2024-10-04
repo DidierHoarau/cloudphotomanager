@@ -1,6 +1,6 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { Auth } from "../users/Auth";
-import { StandardTracer } from "../utils-std-ts/StandardTracer";
+import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { FileData } from "./FileData";
 import { AccountFactory } from "../accounts/AccountFactory";
 import { SyncInventory } from "../sync/SyncInventory";
@@ -25,7 +25,7 @@ export class FileOperationsRoutes {
       };
     }
     fastify.put<PostFilesAccountIdRequest>("/folder", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -83,7 +83,7 @@ export class FileOperationsRoutes {
       };
     }
     fastify.delete<DeleteFilesAccountIdFileId>("/delete", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });

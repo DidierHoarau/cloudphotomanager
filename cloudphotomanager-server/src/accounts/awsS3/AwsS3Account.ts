@@ -2,7 +2,7 @@ import { Account } from "../../model/Account";
 import { AccountDefinition } from "../../model/AccountDefinition";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import * as AWS from "aws-sdk";
-import { StandardTracer } from "../../utils-std-ts/StandardTracer";
+import { StandardTracerStartSpan } from "../../utils-std-ts/StandardTracer";
 import { S3 } from "aws-sdk";
 import { File } from "../../model/File";
 import * as fs from "fs-extra";
@@ -63,7 +63,7 @@ export class AwsS3Account implements Account {
   }
 
   public async downloadFile(context: Span, file: File, folder: string, filename: string): Promise<void> {
-    const span = StandardTracer.startSpan("AwsS3Account_downloadFile", context);
+    const span = StandardTracerStartSpan("AwsS3Account_downloadFile", context);
     const params = {
       Bucket: this.accountDefinition.infoPrivate.bucket,
       Key: `${file.folderId}/${file.filename}`,
@@ -81,7 +81,7 @@ export class AwsS3Account implements Account {
   }
 
   public async validate(context: Span): Promise<boolean> {
-    const span = StandardTracer.startSpan("AwsS3Account_validate", context);
+    const span = StandardTracerStartSpan("AwsS3Account_validate", context);
     let valid = false;
     try {
       const params = {

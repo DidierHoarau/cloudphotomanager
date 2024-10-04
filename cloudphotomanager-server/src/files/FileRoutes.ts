@@ -1,16 +1,11 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { Auth } from "../users/Auth";
-import { StandardTracer } from "../utils-std-ts/StandardTracer";
+import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { FileData } from "./FileData";
 import * as fs from "fs-extra";
-import { FolderData } from "../folders/FolderData";
-import { File } from "../model/File";
-import { FileMediaType } from "../model/FileMediaType";
-import { SyncQueue } from "../sync/SyncQueue";
 import { AccountFactory } from "../accounts/AccountFactory";
 import { SyncFileCache } from "../sync/SyncFileCache";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { SyncInventory } from "../sync/SyncInventory";
 
 export class FileRoutes {
   //
@@ -23,7 +18,7 @@ export class FileRoutes {
       };
     }
     fastify.get<GetFilesAccountIdFileIdThumbnailRequest>("/:fileId/thumbnail", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       // if (!userSession.isAuthenticated) {
       //   return res.status(403).send({ error: "Access Denied" });
@@ -55,7 +50,7 @@ export class FileRoutes {
       };
     }
     fastify.get<GetFilesAccountIdFileIdPreviewRequest>("/:fileId/preview", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       // if (!userSession.isAuthenticated) {
       //   return res.status(403).send({ error: "Access Denied" });
@@ -75,7 +70,7 @@ export class FileRoutes {
     });
 
     fastify.get("/static/404", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const uri = req.headers["x-original-uri"];
       const fileIdMatch = /\/static\/.\/.\/(.*)\/.*/.exec(uri as string);
       if (fileIdMatch) {

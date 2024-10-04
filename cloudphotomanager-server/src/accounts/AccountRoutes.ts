@@ -2,7 +2,7 @@ import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { Scheduler } from "../sync/Scheduler";
 import { Auth } from "../users/Auth";
-import { StandardTracer } from "../utils-std-ts/StandardTracer";
+import { StandardTracerGetSpanFromRequest, StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { AccountData } from "./AccountData";
 import { AccountFactory } from "./AccountFactory";
 import { Logger } from "../utils-std-ts/Logger";
@@ -15,7 +15,7 @@ export class AccountRoutes {
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     //
     fastify.get("/", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -35,7 +35,7 @@ export class AccountRoutes {
       };
     }
     fastify.post<PostAccountValidation>("/validation", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -60,7 +60,7 @@ export class AccountRoutes {
       };
     }
     fastify.post<PostAccount>("/", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -90,7 +90,7 @@ export class AccountRoutes {
       };
     }
     fastify.delete<DeleteAccount>("/:accountId", async (req, res) => {
-      const span = StandardTracer.getSpanFromRequest(req);
+      const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await Auth.getUserSession(req);
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
