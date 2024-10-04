@@ -6,15 +6,15 @@ WORKDIR /opt/src
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories && \
     apk add --no-cache --update \
         build-base \
-        vips-dev=8.15.2-r0 \
+        vips-dev \
         fftw-dev \
         gcc \
         g++ \
         make \
         python3 \
         wget \
-        vips-dev=8.15.2-r0 \
-        vips-heif=8.15.2-r0
+        vips-dev \
+        vips-heif
 
 COPY cloudphotomanager-server cloudphotomanager-server
 
