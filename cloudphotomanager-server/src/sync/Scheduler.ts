@@ -23,8 +23,8 @@ export class Scheduler {
   public static async init(context: Span, configIn: Config) {
     const span = StandardTracer.startSpan("Scheduler_init", context);
     config = configIn;
-    SyncInventory.init(span, configIn);
-    Scheduler.startSchedule();
+    // SyncInventory.init(span, configIn);
+    // Scheduler.startSchedule();
     span.end();
   }
 
