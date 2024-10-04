@@ -2,11 +2,10 @@ import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { Scheduler } from "../sync/Scheduler";
 import { Auth } from "../users/Auth";
-import { StandardTracerGetSpanFromRequest, StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
+import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { AccountData } from "./AccountData";
 import { AccountFactory } from "./AccountFactory";
 import { Logger } from "../utils-std-ts/Logger";
-import { FolderData } from "../folders/FolderData";
 
 const logger = new Logger("AccountRoutes");
 
@@ -25,6 +24,22 @@ export class AccountRoutes {
         delete account.infoPrivate;
       });
       return res.status(200).send({ accounts });
+    });
+
+    interface GetAccount extends RequestGenericInterface {
+      Params: {
+        accountId: string;
+      };
+    }
+    fastify.get<GetAccount>("/:accountId", async (req, res) => {
+      const span = StandardTracerGetSpanFromRequest(req);
+      const userSession = await Auth.getUserSession(req);
+      if (!userSession.isAuthenticated) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const account = await AccountData.get(span, req.params.accountId);
+      delete account.infoPrivate;
+      return res.status(200).send(account);
     });
 
     interface PostAccountValidation extends RequestGenericInterface {
@@ -79,6 +94,40 @@ export class AccountRoutes {
       }
       await AccountData.add(span, account.getAccountDefinition());
       Scheduler.startAccountSync(span, account.getAccountDefinition()).catch((err) => {
+        logger.error(err);
+      });
+      return res.status(201).send(account);
+    });
+
+    interface PutAccount extends RequestGenericInterface {
+      Params: {
+        accountId: string;
+      };
+      Body: {
+        name: string;
+        rootpath: string;
+        info: string;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        infoPrivate: any;
+      };
+    }
+    fastify.put<PutAccount>("/:accountId", async (req, res) => {
+      const span = StandardTracerGetSpanFromRequest(req);
+      const userSession = await Auth.getUserSession(req);
+      if (!Auth.isAdmin(userSession)) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      if (!req.body.name) {
+        return res.status(400).send({ error: "Missing Paramter: Name" });
+      }
+
+      const account = await AccountData.get(span, req.params.accountId);
+      account.name = req.body.name;
+      account.rootpath = req.body.rootpath;
+      account.info = req.body.info;
+      account.infoPrivate = req.body.infoPrivate;
+      await AccountData.update(span, account);
+      Scheduler.startAccountSync(span, account).catch((err) => {
         logger.error(err);
       });
       return res.status(201).send(account);

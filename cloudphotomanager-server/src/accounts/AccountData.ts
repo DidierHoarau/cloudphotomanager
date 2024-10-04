@@ -46,6 +46,19 @@ export class AccountData {
     FolderData.refreshCacheFolders();
   }
 
+  public static async update(context: Span, accountDefinition: AccountDefinition): Promise<void> {
+    const span = StandardTracerStartSpan("AccountData_add", context);
+    await SqlDbutils.execSQL(span, "UPDATE accounts SET name=?, rootpath=?, info=?, infoPrivate=? WHERE id=?", [
+      accountDefinition.name,
+      accountDefinition.rootpath,
+      JSON.stringify(accountDefinition.info),
+      JSON.stringify(accountDefinition.infoPrivate),
+      accountDefinition.id,
+    ]);
+    span.end();
+    FolderData.refreshCacheFolders();
+  }
+
   public static async delete(context: Span, accountId: string): Promise<void> {
     const span = StandardTracerStartSpan("AccountData_delete", context);
     await SqlDbutils.execSQL(span, "DELETE FROM files WHERE accountId = ?", [accountId]);
