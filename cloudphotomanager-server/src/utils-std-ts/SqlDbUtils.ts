@@ -16,10 +16,12 @@ export class SqlDbutils {
     const span = StandardTracerStartSpan("SqlDbutils_init", context);
     await fs.ensureDir(config.DATA_DIR);
     if (config.DATABASE_ASYNC_WRITE) {
-      await fs.rm("database-async.db").catch((err) => {
-        // Npthing
-      });
-      await fs.copyFile(`${config.DATA_DIR}/database.db`, "database-async.db");
+      if (fs.existsSync(`${config.DATA_DIR}/database.db`)) {
+        await fs.rm("database-async.db").catch(() => {
+          // Nothing
+        });
+        await fs.copyFile(`${config.DATA_DIR}/database.db`, "database-async.db");
+      }
       database = new Database("database-async.db");
       setInterval(() => {
         database.backup(`${config.DATA_DIR}/database.db`, (err) => {

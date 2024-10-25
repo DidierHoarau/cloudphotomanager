@@ -48,9 +48,6 @@ export class Scheduler {
     const span = StandardTracerStartSpan("Scheduler_startAccountSync", context);
     const account = await AccountFactory.getAccountImplementation(accountDefinition.id);
 
-    // Debug
-    // FolderData.deleteAccount(span, accountDefinition.id);
-
     // Ensure root folder
     const rootFolderCloud = await account.getFolderByPath(span, "/");
     const rootFolderKnown = await FolderData.get(span, rootFolderCloud.id);
