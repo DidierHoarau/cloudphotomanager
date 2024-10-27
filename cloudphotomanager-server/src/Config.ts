@@ -7,12 +7,13 @@ const logger = new Logger("config");
 
 export class Config implements ConfigInterface {
   //
-  public readonly CONFIG_FILE: string = "config.json";
+  public CONFIG_DIR = process.env.CONFIG_DIR || "/etc/cloudphotomanager";
+  public readonly CONFIG_FILE: string = `${this.CONFIG_DIR}/config.json`;
   public readonly SERVICE_ID = "cloudphotomanager-server";
   public VERSION = 1;
   public readonly API_PORT: number = 8080;
   public JWT_VALIDITY_DURATION: number = 31 * 24 * 3600;
-  public CORS_POLICY_ORIGIN: string;
+  public CORS_POLICY_ORIGIN = "*";
   public DATA_DIR = process.env.DATA_DIR || "/data";
   public TOOLS_DIR = process.env.TOOLS_DIR || "/opt/app/cloudphotomanager/tools";
   public TMP_DIR = process.env.TMP_DIR || "/tmp";
@@ -27,10 +28,17 @@ export class Config implements ConfigInterface {
   public DATABASE_ASYNC_WRITE = false;
 
   public async reload(): Promise<void> {
-    const content = await fse.readJson(this.CONFIG_FILE);
+    logger.info(`Configuration Value: VERSION: ${this.VERSION}`);
+    logger.info(`Configuration Value: CONFIG_FILE: ${this.CONFIG_FILE}`);
+    let configContent = {};
+    if (!fse.existsSync(this.CONFIG_FILE)) {
+      logger.warn(`Configuration file doesn't exist. Using Default values`);
+    } else {
+      configContent = await fse.readJson(this.CONFIG_FILE);
+    }
     const setIfSet = (field: string, displayLog = true) => {
-      if (content[field]) {
-        this[field] = content[field];
+      if (configContent[field]) {
+        this[field] = configContent[field];
       }
       if (displayLog) {
         logger.info(`Configuration Value: ${field}: ${this[field]}`);
@@ -38,8 +46,6 @@ export class Config implements ConfigInterface {
         logger.info(`Configuration Value: ${field}: ********************`);
       }
     };
-    logger.info(`Configuration Value: CONFIG_FILE: ${this.CONFIG_FILE}`);
-    logger.info(`Configuration Value: VERSION: ${this.VERSION}`);
     setIfSet("JWT_VALIDITY_DURATION");
     setIfSet("CORS_POLICY_ORIGIN");
     setIfSet("DATA_DIR");
