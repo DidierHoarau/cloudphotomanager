@@ -56,7 +56,7 @@ COPY cloudphotomanager-tools /opt/app/cloudphotomanager/tools
 COPY --from=builder /opt/src/cloudphotomanager-server/node_modules /opt/app/cloudphotomanager/node_modules
 COPY --from=builder /opt/src/cloudphotomanager-server/dist /opt/app/cloudphotomanager/dist
 COPY --from=builder /opt/src/cloudphotomanager-web/.output/public /opt/app/cloudphotomanager/web
-COPY cloudphotomanager-server/config.json /etc/cloudphotomanager/config.json
+COPY config.json /etc/cloudphotomanager/config.json
 COPY cloudphotomanager-server/sql /opt/app/cloudphotomanager/sql
 
 WORKDIR /opt/app/cloudphotomanager

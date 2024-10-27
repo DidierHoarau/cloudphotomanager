@@ -7,8 +7,7 @@ const logger = new Logger("config");
 
 export class Config implements ConfigInterface {
   //
-  public CONFIG_DIR = process.env.CONFIG_DIR || "/etc/cloudphotomanager";
-  public readonly CONFIG_FILE: string = `${this.CONFIG_DIR}/config.json`;
+  public CONFIG_FILE = process.env.CONFIG_FILE || "/etc/cloudphotomanager/config.json";
   public readonly SERVICE_ID = "cloudphotomanager-server";
   public VERSION = 1;
   public readonly API_PORT: number = 8080;
