@@ -1,5 +1,5 @@
 {
   "CORS_POLICY_ORIGIN": "*",
   "JWT_KEY": "dev",
-  "DATABASE_ASYNC_WRITE": true
+  "DATABASE_ASYNC_WRITE": false
 }

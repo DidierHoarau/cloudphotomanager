@@ -13,7 +13,7 @@ module.exports = {
       cwd: "cloudphotomanager-server",
       script: "npm",
       args: "run dev",
-      autorestart: false,
+      autorestart: true,
       env_development: {
         DEV_MODE: "true",
         TMP_DIR: "../docs/dev/data/tmp",

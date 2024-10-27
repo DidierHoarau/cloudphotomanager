@@ -36,15 +36,17 @@ export class SqlDbutils {
       database = new Database(`${config.DATA_DIR}/database.db`);
     }
     await SqlDbutils.execSQLFile(span, `${SQL_DIR}/init-0000.sql`);
-    const initFiles = (await await fs.readdir(`${SQL_DIR}`)).sort();
-    let dbVersionApplied = 0;
     const dbVersionQuery = await SqlDbutils.querySQL(
       span,
       "SELECT MAX(value) as maxVerion FROM metadata WHERE type='db_version'"
     );
+    const initFiles = (await await fs.readdir(`${SQL_DIR}`)).sort();
+    let dbVersionApplied = 0;
+
     if (dbVersionQuery[0].maxVerion) {
       dbVersionApplied = Number(dbVersionQuery[0].maxVerion);
     }
+
     logger.info(`Current DB Version: ${dbVersionApplied}`);
     for (const initFile of initFiles) {
       const regex = /init-(\d+).sql/g;
