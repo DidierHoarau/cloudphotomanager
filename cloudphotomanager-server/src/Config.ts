@@ -48,7 +48,6 @@ export class Config implements ConfigInterface {
     setIfSet("JWT_VALIDITY_DURATION");
     setIfSet("CORS_POLICY_ORIGIN");
     setIfSet("DATA_DIR");
-    setIfSet("CACHE_DIR");
     setIfSet("JWT_KEY", false);
     setIfSet("LOG_LEVEL");
     setIfSet("SOURCE_FETCH_FREQUENCY");
