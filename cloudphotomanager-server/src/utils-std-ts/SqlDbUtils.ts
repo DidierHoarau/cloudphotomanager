@@ -17,12 +17,12 @@ export class SqlDbutils {
     await fs.ensureDir(config.DATA_DIR);
     if (config.DATABASE_ASYNC_WRITE) {
       if (fs.existsSync(`${config.DATA_DIR}/database.db`)) {
-        await fs.rm("database-async.db").catch(() => {
+        await fs.rm("/tmp/database-async.db").catch(() => {
           // Nothing
         });
-        await fs.copyFile(`${config.DATA_DIR}/database.db`, "database-async.db");
+        await fs.copyFile(`${config.DATA_DIR}/database.db`, "/tmp/database-async.db");
       }
-      database = new Database("database-async.db");
+      database = new Database("/tmp/database-async.db");
       setInterval(() => {
         database.backup(`${config.DATA_DIR}/database.db`, (err) => {
           if (err) {
