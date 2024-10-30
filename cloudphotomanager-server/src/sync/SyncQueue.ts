@@ -43,14 +43,21 @@ export class SyncQueue {
     priority: SyncQueueItemPriority,
     weight: SyncQueueItemWeight
   ): void {
-    const existingQueueditem = _.find(queue, { id });
-    if (existingQueueditem) {
-      if (existingQueueditem.priority > priority) {
-        existingQueueditem.priority = priority;
-      }
+    if (_.find(queue, { id })) {
       return;
     }
+    const newQueueItem = {
+      id,
+      account,
+      data,
+      priority,
+      status: SyncQueueItemStatus.WAITING,
+      weight,
+      callbackExecution,
+    };
+    queue.push(newQueueItem);
     const itemProcess = async () => {
+      newQueueItem.status = SyncQueueItemStatus.ACTIVE;
       await callbackExecution(account, data)
         .catch((err) => {
           logger.error(err);
