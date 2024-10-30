@@ -20,7 +20,6 @@ let config: Config;
 
 export class SyncFileCache {
   //
-
   public static async init(context: Span, configIn: Config) {
     const span = StandardTracerStartSpan("Scheduler_init", context);
     config = configIn;

@@ -4,14 +4,16 @@ import { SyncQueueItem } from "../model/SyncQueueItem";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { SyncQueueItemStatus } from "../model/SyncQueueItemStatus";
 import { Logger } from "../utils-std-ts/Logger";
-import { Timeout } from "../utils-std-ts/Timeout";
 import { SyncQueueItemWeight } from "../model/SyncQueueItemWeight";
+import { PromisePool } from "../utils-std-ts/PromisePool";
 
-let inProgressSyncCount = 0;
 const MAX_PARALLEL_SYNC = 3;
 
 const logger = new Logger("SyncQueue");
 const queue: SyncQueueItem[] = [];
+
+const promisePoolLight = new PromisePool(MAX_PARALLEL_SYNC, 5 * 3600 * 1000);
+const promisePoolHeavy = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
 
 export class SyncQueue {
   //
@@ -48,44 +50,21 @@ export class SyncQueue {
       }
       return;
     }
-    queue.push({ account, id, data, callbackExecution, priority, status: SyncQueueItemStatus.WAITING, weight });
-    SyncQueue.processQueue();
-  }
+    const itemProcess = async () => {
+      await callbackExecution(account, data)
+        .catch((err) => {
+          logger.error(err);
+        })
+        .finally(() => {
+          const index = _.findIndex(queue, { id });
+          queue.splice(index, 1);
+        });
+    };
 
-  private static async processQueue() {
-    const hasHeavyTaskRunning =
-      _.filter(queue, { status: SyncQueueItemStatus.ACTIVE, weight: SyncQueueItemWeight.HEAVY }).length > 0;
-    if (
-      inProgressSyncCount >= MAX_PARALLEL_SYNC ||
-      _.filter(queue, { status: SyncQueueItemStatus.WAITING }).length === 0 ||
-      (hasHeavyTaskRunning &&
-        _.filter(queue, { status: SyncQueueItemStatus.WAITING, weight: SyncQueueItemWeight.LIGHT }).length === 0)
-    ) {
-      return;
-    }
-    inProgressSyncCount++;
-    let syncItem;
-    if (hasHeavyTaskRunning) {
-      syncItem = _.sortBy(_.filter(queue, { status: SyncQueueItemStatus.WAITING, weight: SyncQueueItemWeight.LIGHT }), [
-        "priority",
-      ])[0];
+    if (weight === SyncQueueItemWeight.HEAVY) {
+      promisePoolHeavy.add(itemProcess);
     } else {
-      syncItem = _.sortBy(_.filter(queue, { status: SyncQueueItemStatus.WAITING }), ["priority"])[0];
+      promisePoolLight.add(itemProcess);
     }
-    syncItem.status = SyncQueueItemStatus.ACTIVE;
-    syncItem
-      .callbackExecution(syncItem.account, syncItem.data)
-      .catch((err) => {
-        logger.error(err);
-      })
-      .finally(() => {
-        const index = _.findIndex(queue, { id: syncItem.id });
-        queue.splice(index, 1);
-        inProgressSyncCount--;
-        Timeout.wait(100);
-        SyncQueue.processQueue();
-      });
-    Timeout.wait(100);
-    SyncQueue.processQueue();
   }
 }

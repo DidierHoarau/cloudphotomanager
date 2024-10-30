@@ -6,6 +6,7 @@ import { StandardTracerStartSpan } from "../../utils-std-ts/StandardTracer";
 import { S3 } from "aws-sdk";
 import { File } from "../../model/File";
 import * as fs from "fs-extra";
+import * as path from "path";
 import { Folder } from "../../model/Folder";
 import { AccountCapabilities } from "../../model/AccountCapabilities";
 
@@ -36,7 +37,51 @@ export class AwsS3Account implements Account {
   getFolder(context: Span, folder: Folder): Promise<Folder> {
     throw new Error("Method not implemented.");
   }
-  getFolderByPath(context: Span, folderpath: string): Promise<Folder> {
+  async getFolderByPath(context: Span, folderpath: string): Promise<Folder> {
+    let isTruncated = true; // To keep track of pagination
+    let continuationToken; // For pagination
+    const s3 = await await this.getS3Client();
+    while (isTruncated) {
+      const params = {
+        Bucket: this.accountDefinition.infoPrivate.bucket,
+        Prefix: "", //path.join(this.accountDefinition.rootpath + folderpath), // Ensure to include the trailing slash
+        ContinuationToken: continuationToken, // Token for pagination
+        Delimiter: "/",
+      };
+
+      try {
+        const response = await s3.listObjectsV2(params).promise();
+        response.Contents.forEach((item) => {
+          console.log(item.Key); // Log each object's key (name)
+        });
+        response.CommonPrefixes.forEach((prefix) => {
+          console.log(prefix.Prefix); // Log each subfolder prefix
+        });
+
+        isTruncated = response.IsTruncated; // Check if there are more items
+        continuationToken = response.NextContinuationToken; // Get the next token for the next call
+      } catch (error) {
+        console.error("Error fetching objects:", error);
+        throw error; // Handle error appropriately
+      }
+    }
+
+    // console.log(this.accountDefinition);
+    // const data =
+    //   .listObjectsV2({
+    //     Bucket: ,
+    //     Prefix: path.join(this.accountDefinition.rootpath + folderpath), // Ensure to include the trailing slash
+    //     Delimiter: "/",
+    //   })
+    //   .promise();
+    // console.log({
+    //   Bucket: this.accountDefinition.infoPrivate.bucket,
+    //   Prefix: path.join(this.accountDefinition.rootpath + folderpath), // Ensure to include the trailing slash
+    //   Delimiter: "/",
+    // });
+    // console.log(path.join(this.accountDefinition.rootpath + folderpath));
+    // const files = data.Contents.map((item) => item.Key);
+    // console.log(files);
     throw new Error("Method not implemented.");
   }
   moveFile(context: Span, file: File, folderpathDestination: string): Promise<void> {
@@ -65,7 +110,7 @@ export class AwsS3Account implements Account {
   public async downloadFile(context: Span, file: File, folder: string, filename: string): Promise<void> {
     const span = StandardTracerStartSpan("AwsS3Account_downloadFile", context);
     const params = {
-      Bucket: this.accountDefinition.infoPrivate.bucket,
+      Bucket: this.accountDefinition.infoPrivate.bucket + "bla",
       Key: `${file.folderId}/${file.filename}`,
     };
     const fileStream = (await this.getS3Client()).getObject(params).createReadStream();
