@@ -1,7 +1,7 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { Auth } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
-import { AnalysisData } from "./AnalysisData";
+import { AnalysisDataListAccountDuplicates } from "./AnalysisData";
 
 export class AnalysisRoutes {
   //
@@ -18,7 +18,7 @@ export class AnalysisRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const duplicates = await AnalysisData.listAccountDuplicates(span, req.params.accountId);
+      const duplicates = await AnalysisDataListAccountDuplicates(span, req.params.accountId);
       return res.send({ duplicates });
     });
   }

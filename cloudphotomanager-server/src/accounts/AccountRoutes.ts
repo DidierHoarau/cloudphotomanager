@@ -1,11 +1,11 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountDefinition } from "../model/AccountDefinition";
-import { Scheduler } from "../sync/Scheduler";
 import { Auth } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { AccountData } from "./AccountData";
 import { AccountFactory } from "./AccountFactory";
 import { Logger } from "../utils-std-ts/Logger";
+import { SchedulerStartAccountSync } from "../sync/Scheduler";
 
 const logger = new Logger("AccountRoutes");
 
@@ -93,7 +93,7 @@ export class AccountRoutes {
         return res.status(400).send({ error: "Account Validation Failed" });
       }
       await AccountData.add(span, account.getAccountDefinition());
-      Scheduler.startAccountSync(span, account.getAccountDefinition()).catch((err) => {
+      SchedulerStartAccountSync(span, account.getAccountDefinition()).catch((err) => {
         logger.error(err);
       });
       return res.status(201).send(account);
@@ -127,7 +127,7 @@ export class AccountRoutes {
       account.info = req.body.info;
       account.infoPrivate = req.body.infoPrivate;
       await AccountData.update(span, account);
-      Scheduler.startAccountSync(span, account).catch((err) => {
+      SchedulerStartAccountSync(span, account).catch((err) => {
         logger.error(err);
       });
       return res.status(201).send(account);
@@ -144,7 +144,7 @@ export class AccountRoutes {
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      let account = await AccountData.get(span, req.params.accountId);
+      const account = await AccountData.get(span, req.params.accountId);
       if (!account) {
         return res.status(404).send({ error: "Account Not Found" });
       }

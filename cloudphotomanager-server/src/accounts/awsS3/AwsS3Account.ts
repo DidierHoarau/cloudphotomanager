@@ -9,6 +9,7 @@ import * as fs from "fs-extra";
 import * as path from "path";
 import { Folder } from "../../model/Folder";
 import { AccountCapabilities } from "../../model/AccountCapabilities";
+import { AwsS3AccountInventoryGetFolderByPath } from "./AwsS3AccountInventory";
 
 export class AwsS3Account implements Account {
   //
@@ -38,35 +39,7 @@ export class AwsS3Account implements Account {
     throw new Error("Method not implemented.");
   }
   async getFolderByPath(context: Span, folderpath: string): Promise<Folder> {
-    let isTruncated = true;
-    let continuationToken;
-    const s3 = await await this.getS3Client();
-    while (isTruncated) {
-      const params = {
-        Bucket: this.accountDefinition.infoPrivate.bucket,
-        Prefix: path.join(this.accountDefinition.rootpath + folderpath).replace(/^\/+/, ""),
-        ContinuationToken: continuationToken,
-        Delimiter: "/",
-      };
-
-      try {
-        const response = await s3.listObjectsV2(params).promise();
-        response.Contents.forEach((item) => {
-          console.log(item.Key);
-        });
-        response.CommonPrefixes.forEach((prefix) => {
-          console.log(prefix.Prefix);
-        });
-
-        isTruncated = response.IsTruncated;
-        continuationToken = response.NextContinuationToken;
-      } catch (error) {
-        console.error("Error fetching objects:", error);
-        throw error;
-      }
-    }
-
-    throw new Error("Method not implemented.");
+    return AwsS3AccountInventoryGetFolderByPath(context, this, await this.getS3Client(), folderpath);
   }
   moveFile(context: Span, file: File, folderpathDestination: string): Promise<void> {
     throw new Error("Method not implemented.");

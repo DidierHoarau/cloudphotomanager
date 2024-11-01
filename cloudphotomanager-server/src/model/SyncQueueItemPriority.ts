@@ -1,5 +1,5 @@
 export enum SyncQueueItemPriority {
-  HIGH = 1,
-  MEDIUM = 2,
-  LOW = 3,
+  INTERACTIVE = 0,
+  NORMAL = 2,
+  BATCH = 4,
 }

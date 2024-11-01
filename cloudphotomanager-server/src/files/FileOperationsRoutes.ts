@@ -3,12 +3,11 @@ import { Auth } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { FileData } from "./FileData";
 import { AccountFactory } from "../accounts/AccountFactory";
-import { SyncInventory } from "../sync/SyncInventory";
+import { SyncInventorySyncFolder } from "../sync/SyncInventory";
 import { FolderData } from "../folders/FolderData";
 import { Logger } from "../utils-std-ts/Logger";
-import { SyncQueue } from "../sync/SyncQueue";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { SyncQueueItemWeight } from "../model/SyncQueueItemWeight";
+import { SyncQueueQueueItem } from "../sync/SyncQueue";
 
 const logger = new Logger("FileOperationsRoutes");
 export class FileOperationsRoutes {
@@ -44,14 +43,7 @@ export class FileOperationsRoutes {
       await FileData.delete(span, file.id);
       FolderData.get(span, file.folderId)
         .then((folder) => {
-          SyncQueue.queueItem(
-            account,
-            folder.id,
-            folder,
-            SyncInventory.syncFolder,
-            SyncQueueItemPriority.HIGH,
-            SyncQueueItemWeight.LIGHT
-          );
+          SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.INTERACTIVE);
         })
         .catch((err) => {
           logger.error(err);
@@ -60,14 +52,7 @@ export class FileOperationsRoutes {
       account
         .getFolderByPath(span, req.body.folderpath)
         .then((folder) => {
-          SyncQueue.queueItem(
-            account,
-            folder.id,
-            folder,
-            SyncInventory.syncFolder,
-            SyncQueueItemPriority.HIGH,
-            SyncQueueItemWeight.LIGHT
-          );
+          SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.INTERACTIVE);
         })
         .catch((err) => {
           logger.error(err);
@@ -100,13 +85,12 @@ export class FileOperationsRoutes {
 
       FolderData.get(span, file.folderId)
         .then(async (folder) => {
-          SyncQueue.queueItem(
+          SyncQueueQueueItem(
             account,
             file.folderId,
             folder,
-            SyncInventory.syncFolder,
-            SyncQueueItemPriority.HIGH,
-            SyncQueueItemWeight.LIGHT
+            SyncInventorySyncFolder,
+            SyncQueueItemPriority.INTERACTIVE
           );
         })
         .catch((err) => {

@@ -4,8 +4,7 @@ import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer
 import { FileData } from "./FileData";
 import * as fs from "fs-extra";
 import { AccountFactory } from "../accounts/AccountFactory";
-import { SyncFileCache } from "../sync/SyncFileCache";
-import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
+import { SyncFileCacheCheckFile } from "../sync/SyncFileCache";
 
 export class FileRoutes {
   //
@@ -27,11 +26,10 @@ export class FileRoutes {
       const cacheDir = await FileData.getFileCacheDir(span, req.params.accountId, req.params.fileId);
       const filepath = `${cacheDir}/thumbnail.webp`;
       if (!fs.existsSync(filepath)) {
-        SyncFileCache.checkFile(
+        SyncFileCacheCheckFile(
           span,
           await AccountFactory.getAccountImplementation(req.params.accountId),
-          await FileData.get(span, req.params.fileId),
-          SyncQueueItemPriority.MEDIUM
+          await FileData.get(span, req.params.fileId)
         );
         return res.status(404).send({ error: "File Not Found" });
       }
@@ -77,12 +75,7 @@ export class FileRoutes {
         const file = await FileData.get(span, fileIdMatch[1]);
         const cacheDir = await FileData.getFileCacheDir(span, file.accountId, file.id);
         if (!fs.existsSync(`${cacheDir}/preview.webp`) || !fs.existsSync(`${cacheDir}/thumbnail.webp`)) {
-          SyncFileCache.checkFile(
-            span,
-            await AccountFactory.getAccountImplementation(file.accountId),
-            file,
-            SyncQueueItemPriority.MEDIUM
-          );
+          SyncFileCacheCheckFile(span, await AccountFactory.getAccountImplementation(file.accountId), file);
         }
       }
       return res.status(404).send({ error: "File Not Found" });

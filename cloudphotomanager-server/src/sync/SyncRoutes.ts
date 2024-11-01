@@ -1,6 +1,6 @@
-import { FastifyInstance, RequestGenericInterface } from "fastify";
+import { FastifyInstance } from "fastify";
 import { Auth } from "../users/Auth";
-import { SyncQueue } from "./SyncQueue";
+import { SyncQueueGetCounts } from "./SyncQueue";
 
 export class SyncRoutes {
   //
@@ -12,7 +12,7 @@ export class SyncRoutes {
         return res.status(403).send({ error: "Access Denied" });
       }
 
-      return res.status(200).send({ sync: SyncQueue.getCounts() });
+      return res.status(200).send({ sync: SyncQueueGetCounts() });
     });
   }
 }

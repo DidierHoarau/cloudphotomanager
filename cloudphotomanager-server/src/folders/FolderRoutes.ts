@@ -2,13 +2,12 @@ import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountFactory } from "../accounts/AccountFactory";
 import { FileData } from "../files/FileData";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { SyncInventory } from "../sync/SyncInventory";
-import { SyncQueue } from "../sync/SyncQueue";
 import { Auth } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { FolderData } from "./FolderData";
 import { UserPermissionCheck } from "../users/UserPermissionCheck";
-import { SyncQueueItemWeight } from "../model/SyncQueueItemWeight";
+import { SyncQueueQueueItem } from "../sync/SyncQueue";
+import { SyncInventorySyncFolder } from "../sync/SyncInventory";
 
 export class FolderRoutes {
   //
@@ -85,14 +84,7 @@ export class FolderRoutes {
         return res.status(200).send({ files: [] });
       }
       const account = await AccountFactory.getAccountImplementation(req.params.accountId);
-      SyncQueue.queueItem(
-        account,
-        folder.id,
-        folder,
-        SyncInventory.syncFolder,
-        SyncQueueItemPriority.HIGH,
-        SyncQueueItemWeight.LIGHT
-      );
+      SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.INTERACTIVE);
 
       return res.status(200).send({});
     });

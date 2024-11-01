@@ -1,7 +1,6 @@
 import { Account } from "./Account";
 import { SyncQueueItemPriority } from "./SyncQueueItemPriority";
 import { SyncQueueItemStatus } from "./SyncQueueItemStatus";
-import { SyncQueueItemWeight } from "./SyncQueueItemWeight";
 
 export interface SyncQueueItem {
   account: Account;
@@ -12,5 +11,4 @@ export interface SyncQueueItem {
   callbackExecution: any;
   priority: SyncQueueItemPriority;
   status: SyncQueueItemStatus;
-  weight: SyncQueueItemWeight;
 }
