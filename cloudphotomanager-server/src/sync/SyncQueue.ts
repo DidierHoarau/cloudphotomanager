@@ -12,8 +12,8 @@ const MAX_PARALLEL_SYNC = 3;
 const logger = new Logger("SyncQueue");
 const queue: SyncQueueItem[] = [];
 
-const promisePoolLight = new PromisePool(MAX_PARALLEL_SYNC, 5 * 3600 * 1000);
-const promisePoolHeavy = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
+const promisePoolLight = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
+const promisePoolHeavy = new PromisePool(1, 5 * 3600 * 1000);
 
 export class SyncQueue {
   //
