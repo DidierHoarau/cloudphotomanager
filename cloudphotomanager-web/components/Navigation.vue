@@ -30,6 +30,7 @@
         ></NuxtLink>
       </li>
     </ul>
+    <dialog v-if="syncStore.countBlocking > 0" open>Operations in Process: {{ syncStore.countBlocking }}</dialog>
   </nav>
 </template>
 

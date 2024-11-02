@@ -43,7 +43,13 @@ export class FileOperationsRoutes {
       await FileData.delete(span, file.id);
       FolderData.get(span, file.folderId)
         .then((folder) => {
-          SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.INTERACTIVE);
+          SyncQueueQueueItem(
+            account,
+            folder.id,
+            folder,
+            SyncInventorySyncFolder,
+            SyncQueueItemPriority.INTERACTIVE_BLOCKING
+          );
         })
         .catch((err) => {
           logger.error(err);
@@ -52,7 +58,13 @@ export class FileOperationsRoutes {
       account
         .getFolderByPath(span, req.body.folderpath)
         .then((folder) => {
-          SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.INTERACTIVE);
+          SyncQueueQueueItem(
+            account,
+            folder.id,
+            folder,
+            SyncInventorySyncFolder,
+            SyncQueueItemPriority.INTERACTIVE_BLOCKING
+          );
         })
         .catch((err) => {
           logger.error(err);
@@ -90,7 +102,7 @@ export class FileOperationsRoutes {
             file.folderId,
             folder,
             SyncInventorySyncFolder,
-            SyncQueueItemPriority.INTERACTIVE
+            SyncQueueItemPriority.INTERACTIVE_BLOCKING
           );
         })
         .catch((err) => {

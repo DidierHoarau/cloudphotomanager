@@ -11,7 +11,7 @@ const MAX_PARALLEL_SYNC = 3;
 const logger = new Logger("SyncQueue");
 const queue: SyncQueueItem[] = [];
 
-const promisePoolInteractive = new PromisePool(MAX_PARALLEL_SYNC, 5 * 3600 * 1000);
+const promisePoolInteractive = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
 const promisePoolNormal = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
 const promisePoolBatch = new PromisePool(1, 5 * 3600 * 1000);
 
@@ -20,6 +20,7 @@ export function SyncQueueGetCounts(): any[] {
   return [
     { type: SyncQueueItemStatus.ACTIVE, count: _.filter(queue, { status: SyncQueueItemStatus.ACTIVE }).length },
     { type: SyncQueueItemStatus.WAITING, count: _.filter(queue, { status: SyncQueueItemStatus.WAITING }).length },
+    { type: "blocking", count: _.filter(queue, { priority: SyncQueueItemPriority.INTERACTIVE_BLOCKING }).length },
   ];
 }
 
@@ -64,7 +65,7 @@ export function SyncQueueQueueItem(
       });
   };
 
-  if (priority === SyncQueueItemPriority.INTERACTIVE) {
+  if (priority === SyncQueueItemPriority.INTERACTIVE || priority === SyncQueueItemPriority.INTERACTIVE_BLOCKING) {
     promisePoolInteractive.add(itemProcess);
   } else if (priority === SyncQueueItemPriority.BATCH) {
     promisePoolBatch.add(itemProcess);

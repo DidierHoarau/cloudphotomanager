@@ -7,8 +7,9 @@ import axios from "axios";
 export const SyncStore = defineStore("SyncStore", {
   state: () => ({
     countTotal: 0,
+    countBlocking: 0,
     counts: [],
-    checkFrequency: 15 * 1000,
+    checkFrequency: 1000,
     checking: false,
   }),
 
@@ -24,6 +25,9 @@ export const SyncStore = defineStore("SyncStore", {
           let count = 0;
           for (const item of res.data.sync) {
             count += item.count;
+            if (item.type === "blocking") {
+              this.countBlocking = item.count;
+            }
           }
           this.countTotal = count;
         })
@@ -31,6 +35,11 @@ export const SyncStore = defineStore("SyncStore", {
           console.error(err);
         });
       this.checking = false;
+      if (this.countBlocking > 0) {
+        this.checkFrequency = 1000;
+      } else {
+        this.checkFrequency = 10 * 1000;
+      }
       Timeout.wait(this.checkFrequency).then(() => {
         this.fetch();
       });
