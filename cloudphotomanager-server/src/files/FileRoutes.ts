@@ -1,9 +1,9 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { Auth } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
-import { FileData } from "./FileData";
+import { FileDataGet, FileDataGetFileCacheDir } from "./FileData";
 import * as fs from "fs-extra";
-import { AccountFactory } from "../accounts/AccountFactory";
+import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { SyncFileCacheCheckFile } from "../sync/SyncFileCache";
 
 export class FileRoutes {
@@ -23,13 +23,13 @@ export class FileRoutes {
       //   return res.status(403).send({ error: "Access Denied" });
       // }
 
-      const cacheDir = await FileData.getFileCacheDir(span, req.params.accountId, req.params.fileId);
+      const cacheDir = await FileDataGetFileCacheDir(span, req.params.accountId, req.params.fileId);
       const filepath = `${cacheDir}/thumbnail.webp`;
       if (!fs.existsSync(filepath)) {
         SyncFileCacheCheckFile(
           span,
-          await AccountFactory.getAccountImplementation(req.params.accountId),
-          await FileData.get(span, req.params.fileId)
+          await AccountFactoryGetAccountImplementation(req.params.accountId),
+          await FileDataGet(span, req.params.fileId)
         );
         return res.status(404).send({ error: "File Not Found" });
       }
@@ -54,7 +54,7 @@ export class FileRoutes {
       //   return res.status(403).send({ error: "Access Denied" });
       // }
 
-      const cacheDir = await FileData.getFileCacheDir(span, req.params.accountId, req.params.fileId);
+      const cacheDir = await FileDataGetFileCacheDir(span, req.params.accountId, req.params.fileId);
       const filepath = `${cacheDir}/preview.webp`;
       if (!fs.existsSync(filepath)) {
         return res.status(404).send({ error: "File Not Found" });
@@ -72,10 +72,10 @@ export class FileRoutes {
       const uri = req.headers["x-original-uri"];
       const fileIdMatch = /\/static\/.\/.\/(.*)\/.*/.exec(uri as string);
       if (fileIdMatch) {
-        const file = await FileData.get(span, fileIdMatch[1]);
-        const cacheDir = await FileData.getFileCacheDir(span, file.accountId, file.id);
+        const file = await FileDataGet(span, fileIdMatch[1]);
+        const cacheDir = await FileDataGetFileCacheDir(span, file.accountId, file.id);
         if (!fs.existsSync(`${cacheDir}/preview.webp`) || !fs.existsSync(`${cacheDir}/thumbnail.webp`)) {
-          SyncFileCacheCheckFile(span, await AccountFactory.getAccountImplementation(file.accountId), file);
+          SyncFileCacheCheckFile(span, await AccountFactoryGetAccountImplementation(file.accountId), file);
         }
       }
       return res.status(404).send({ error: "File Not Found" });

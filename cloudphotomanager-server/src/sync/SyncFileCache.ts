@@ -1,5 +1,5 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import { FileData } from "../files/FileData";
+import { FileDataGetFileCacheDir, FileDataGetFileTmpDir, FileDataListByFolder } from "../files/FileData";
 import { Account } from "../model/Account";
 import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import * as fs from "fs-extra";
@@ -25,7 +25,7 @@ export async function SyncFileCacheInit(context: Span, configIn: Config) {
 
 export async function SyncFileCacheCheckFolder(context: Span, account: Account, folder: Folder) {
   const span = StandardTracerStartSpan("SyncFileCache_checkFolder", context);
-  const files = await FileData.listByFolder(span, account.getAccountDefinition().id, folder.id);
+  const files = await FileDataListByFolder(span, account.getAccountDefinition().id, folder.id);
   for (const file of files) {
     SyncFileCacheCheckFile(span, account, file);
   }
@@ -34,7 +34,7 @@ export async function SyncFileCacheCheckFolder(context: Span, account: Account, 
 
 export async function SyncFileCacheCheckFile(context: Span, account: Account, file: File) {
   const span = StandardTracerStartSpan("SyncFileCache_checkFile", context);
-  const cacheDir = await FileData.getFileCacheDir(span, account.getAccountDefinition().id, file.id);
+  const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
   const isImage = File.getMediaType(file.filename) === FileMediaType.image;
   const isVideo = File.getMediaType(file.filename) === FileMediaType.video;
   const hasThumbnail = fs.existsSync(`${cacheDir}/thumbnail.webp`);
@@ -64,8 +64,8 @@ export async function SyncFileCacheCheckFile(context: Span, account: Account, fi
 
 async function syncVideoFromFull(account: Account, file: File) {
   const span = StandardTracerStartSpan("SyncFileCache_syncVideoFromFull");
-  const cacheDir = await FileData.getFileCacheDir(span, account.getAccountDefinition().id, file.id);
-  const tmpDir = await FileData.getFileTmpDir(span, account.getAccountDefinition().id, file.id);
+  const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
+  const tmpDir = await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id);
   await fs.ensureDir(cacheDir);
   await fs.remove(`${tmpDir}/tmp_preview`);
   await fs.ensureDir(`${tmpDir}/tmp_preview`);
@@ -106,8 +106,8 @@ async function syncVideoFromFull(account: Account, file: File) {
 
 async function syncPhotoFromFull(account: Account, file: File) {
   const span = StandardTracerStartSpan("SyncFileCache_syncPhotoFromFull");
-  const cacheDir = await FileData.getFileCacheDir(span, account.getAccountDefinition().id, file.id);
-  const tmpDir = await FileData.getFileTmpDir(span, account.getAccountDefinition().id, file.id);
+  const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
+  const tmpDir = await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id);
   await fs.ensureDir(cacheDir);
   await fs.ensureDir(`${tmpDir}/tmp_preview`);
   const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
@@ -133,8 +133,8 @@ async function syncPhotoFromFull(account: Account, file: File) {
 
 async function syncThumbnail(account: Account, file: File) {
   const span = StandardTracerStartSpan("SyncFileCache_syncThumbnail");
-  const cacheDir = await FileData.getFileCacheDir(span, account.getAccountDefinition().id, file.id);
-  const tmpDir = await FileData.getFileTmpDir(span, account.getAccountDefinition().id, file.id);
+  const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
+  const tmpDir = await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id);
   await fs.ensureDir(cacheDir);
   await fs.ensureDir(`${tmpDir}/tmp_tumbnail`);
   const tmpFileName = `tmp.${file.filename.split(".").pop()}`;

@@ -3,7 +3,7 @@ import { UserPermissionData } from "./UserPermissionData";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { Folder } from "../model/Folder";
 import * as _ from "lodash";
-import { FolderData } from "../folders/FolderData";
+import { FolderDataGet } from "../folders/FolderData";
 
 export class UserPermissionCheck {
   //
@@ -17,7 +17,7 @@ export class UserPermissionCheck {
     const folderPermittedList: Folder[] = [];
 
     for (const folderPermittedIteration of userPermissions.info.folders) {
-      const folderPermittedDefinition = await FolderData.get(span, folderPermittedIteration.folderId);
+      const folderPermittedDefinition = await FolderDataGet(span, folderPermittedIteration.folderId);
       if (folderPermittedDefinition) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (folderPermittedDefinition as any).scope = folderPermittedIteration.scope;

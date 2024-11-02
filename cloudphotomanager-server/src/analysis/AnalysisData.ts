@@ -3,17 +3,8 @@ import * as _ from "lodash";
 import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 import { File } from "../model/File";
-import { Config } from "../Config";
 import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
-import { FolderData } from "../folders/FolderData";
-
-let config: Config;
-
-export async function AnalysisDataInit(context: Span, configIn: Config) {
-  const span = StandardTracerStartSpan("AnalysisData_init", context);
-  config = configIn;
-  span.end();
-}
+import { FolderDataListForAccount } from "../folders/FolderData";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function AnalysisDataListAccountDuplicates(
@@ -32,7 +23,7 @@ export async function AnalysisDataListAccountDuplicates(
   );
   const analysis: AnalysisDuplicate[] = [];
   let currentAnalysisDuplicate: AnalysisDuplicate = null;
-  const knownFolders = await FolderData.listForAccount(span, accountId);
+  const knownFolders = await FolderDataListForAccount(span, accountId);
   for (const fileRaw of rawData) {
     const file = fromRaw(fileRaw);
     if (!currentAnalysisDuplicate || currentAnalysisDuplicate.hash !== file.hash) {

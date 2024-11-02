@@ -1,13 +1,13 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { AccountFactory } from "../accounts/AccountFactory";
-import { FileData } from "../files/FileData";
+import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { Auth } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
-import { FolderData } from "./FolderData";
+import { FolderDataGet, FolderDataListCountsForAccount, FolderDataListForAccount } from "./FolderData";
 import { UserPermissionCheck } from "../users/UserPermissionCheck";
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
 import { SyncInventorySyncFolder } from "../sync/SyncInventory";
+import { FileDataListByFolder } from "../files/FileData";
 
 export class FolderRoutes {
   //
@@ -26,7 +26,7 @@ export class FolderRoutes {
       }
       const folders = await UserPermissionCheck.filterFoldersForUser(
         span,
-        await FolderData.listForAccount(span, req.params.accountId, true),
+        await FolderDataListForAccount(span, req.params.accountId, true),
         userSession.userId
       );
       return res.status(200).send({ folders });
@@ -43,7 +43,7 @@ export class FolderRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const counts = await FolderData.listCountsForAccount(span, req.params.accountId, true);
+      const counts = await FolderDataListCountsForAccount(span, req.params.accountId, true);
       return res.status(200).send({ counts });
     });
 
@@ -59,11 +59,11 @@ export class FolderRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const folder = await FolderData.get(span, req.params.folderId);
+      const folder = await FolderDataGet(span, req.params.folderId);
       if (!folder) {
         return res.status(200).send({ files: [] });
       }
-      const files = await FileData.listByFolder(span, req.params.accountId, req.params.folderId);
+      const files = await FileDataListByFolder(span, req.params.accountId, req.params.folderId);
       return res.status(200).send({ files });
     });
 
@@ -79,11 +79,11 @@ export class FolderRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const folder = await FolderData.get(span, req.params.folderId);
+      const folder = await FolderDataGet(span, req.params.folderId);
       if (!folder) {
         return res.status(200).send({ files: [] });
       }
-      const account = await AccountFactory.getAccountImplementation(req.params.accountId);
+      const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
       SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.INTERACTIVE);
 
       return res.status(200).send({});

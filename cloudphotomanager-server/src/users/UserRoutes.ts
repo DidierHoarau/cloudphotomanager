@@ -2,10 +2,10 @@ import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { UserPassword } from "./UserPassword";
 import { Auth } from "./Auth";
 import { User } from "../model/User";
-import { StandardTracerGetSpanFromRequest, StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
-import { UserData } from "./UserData";
+import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { UserPermission } from "../model/UserPermission";
 import { UserPermissionData } from "./UserPermissionData";
+import { UserDataAdd, UserDataDelete, UserDataGet, UserDataGetByName, UserDataList, UserDataUpdate } from "./UserData";
 
 export class UserRoutes {
   //
@@ -13,7 +13,7 @@ export class UserRoutes {
     //
     fastify.get("/status/initialization", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      if ((await UserData.list(span)).length === 0) {
+      if ((await UserDataList(span)).length === 0) {
         res.status(201).send({ initialized: false });
       } else {
         res.status(201).send({ initialized: true });
@@ -32,7 +32,7 @@ export class UserRoutes {
       // From token
       const userSession = await Auth.getUserSession(req);
       if (userSession.isAuthenticated) {
-        user = await UserData.get(span, userSession.userId);
+        user = await UserDataGet(span, userSession.userId);
         const token = await Auth.generateJWT(span, user);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (res as any).setCookie("token", token, {
@@ -49,7 +49,7 @@ export class UserRoutes {
       if (!req.body.password) {
         return res.status(400).send({ error: "Missing: Password" });
       }
-      user = await UserData.getByName(span, req.body.name);
+      user = await UserDataGetByName(span, req.body.name);
       if (!user) {
         return res.status(403).send({ error: "Authentication Failed" });
       } else if (await UserPassword.checkPassword(span, user, req.body.password)) {
@@ -71,7 +71,7 @@ export class UserRoutes {
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      res.status(201).send({ users: await UserData.list(span) });
+      res.status(201).send({ users: await UserDataList(span) });
     });
 
     interface PostUser extends RequestGenericInterface {
@@ -83,7 +83,7 @@ export class UserRoutes {
     fastify.post<PostUser>("/", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
       let isInitialized = true;
-      if ((await UserData.list(span)).length === 0) {
+      if ((await UserDataList(span)).length === 0) {
         isInitialized = false;
       }
       const userSession = await Auth.getUserSession(req);
@@ -97,7 +97,7 @@ export class UserRoutes {
       if (!req.body.password) {
         return res.status(400).send({ error: "Missing: Password" });
       }
-      if (await UserData.getByName(span, req.body.name)) {
+      if (await UserDataGetByName(span, req.body.name)) {
         return res.status(400).send({ error: "Username Already Exists" });
       }
       let isAdmin = false;
@@ -109,7 +109,7 @@ export class UserRoutes {
       const userPermission = new UserPermission();
       userPermission.userId = newUser.id;
       userPermission.info.isAdmin = isAdmin;
-      await UserData.add(span, newUser);
+      await UserDataAdd(span, newUser);
       await UserPermissionData.updateForUser(span, newUser.id, userPermission);
       res.status(201).send({});
     });
@@ -125,10 +125,10 @@ export class UserRoutes {
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      if (!(await UserData.get(span, req.params.userId))) {
+      if (!(await UserDataGetByName(span, req.params.userId))) {
         return res.status(404).send({ error: "Not Found" });
       }
-      await UserData.delete(span, req.params.userId);
+      await UserDataDelete(span, req.params.userId);
       await UserPermissionData.deleteForUser(span, req.params.userId);
       res.status(202).send({});
     });
@@ -145,7 +145,7 @@ export class UserRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const user = await UserData.get(span, userSession.userId);
+      const user = await UserDataGetByName(span, userSession.userId);
       if (!req.body.password || !req.body.password) {
         return res.status(400).send({ error: "Missing: Password" });
       }
@@ -153,7 +153,7 @@ export class UserRoutes {
         return res.status(403).send({ error: "Old Password Wrong" });
       }
       await UserPassword.setPassword(span, user, req.body.password);
-      await UserData.update(span, user);
+      await UserDataUpdate(span, user);
       res.status(201).send({});
     });
 
@@ -168,7 +168,7 @@ export class UserRoutes {
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      if (!(await UserData.get(span, req.params.userId))) {
+      if (!(await UserDataGetByName(span, req.params.userId))) {
         return res.status(404).send({ error: "Not Found" });
       }
       res.status(200).send(await UserPermissionData.getForUser(span, req.params.userId));
@@ -189,7 +189,7 @@ export class UserRoutes {
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      if (!(await UserData.get(span, req.params.userId))) {
+      if (!(await UserDataGetByName(span, req.params.userId))) {
         return res.status(404).send({ error: "Not Found" });
       }
       const permissions = await UserPermissionData.getForUser(span, req.params.userId);

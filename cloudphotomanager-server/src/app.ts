@@ -9,8 +9,7 @@ import { StandardTracerApi } from "./StandardTracerApi";
 import { SqlDbutils } from "./utils-std-ts/SqlDbUtils";
 import { AccountRoutes } from "./accounts/AccountRoutes";
 import { FileRoutes } from "./files/FileRoutes";
-import { FileData } from "./files/FileData";
-import { FolderData } from "./folders/FolderData";
+import { FileDataInit } from "./files/FileData";
 import { FolderRoutes } from "./folders/FolderRoutes";
 import { SyncRoutes } from "./sync/SyncRoutes";
 import { FileOperationsRoutes } from "./files/FileOperationsRoutes";
@@ -20,7 +19,7 @@ import cookie from "@fastify/cookie";
 import { StandardTracerInitTelemetry, StandardTracerStartSpan } from "./utils-std-ts/StandardTracer";
 import { SchedulerInit } from "./sync/Scheduler";
 import { SyncFileCacheInit } from "./sync/SyncFileCache";
-import { AnalysisDataInit } from "./analysis/AnalysisData";
+import { FolderDataInit } from "./folders/FolderData";
 
 const logger = new Logger("app");
 
@@ -42,9 +41,8 @@ Promise.resolve().then(async () => {
   await SyncFileCacheInit(span, config);
   await SqlDbutils.init(span, config);
   await Auth.init(span, config);
-  await FileData.init(span, config);
-  await FolderData.init(span, config);
-  await AnalysisDataInit(span, config);
+  await FileDataInit(span, config);
+  await FolderDataInit(span);
   await SchedulerInit(span, config);
 
   span.end();

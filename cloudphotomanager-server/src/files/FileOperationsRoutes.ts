@@ -1,13 +1,13 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { Auth } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
-import { FileData } from "./FileData";
-import { AccountFactory } from "../accounts/AccountFactory";
+import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { SyncInventorySyncFolder } from "../sync/SyncInventory";
-import { FolderData } from "../folders/FolderData";
+import { FolderDataGet } from "../folders/FolderData";
 import { Logger } from "../utils-std-ts/Logger";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
+import { FileDataDelete, FileDataGet } from "./FileData";
 
 const logger = new Logger("FileOperationsRoutes");
 export class FileOperationsRoutes {
@@ -32,16 +32,16 @@ export class FileOperationsRoutes {
       if (!req.body.folderpath) {
         return res.status(400).send({ error: "Missing parameter: folderpath" });
       }
-      const file = await FileData.get(span, req.params.fileId);
+      const file = await FileDataGet(span, req.params.fileId);
       if (!file) {
         return res.status(404).send({ error: "File not found" });
       }
-      const account = await AccountFactory.getAccountImplementation(req.params.accountId);
+      const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
       await account.moveFile(span, file, req.body.folderpath);
 
       // Sync
-      await FileData.delete(span, file.id);
-      FolderData.get(span, file.folderId)
+      await FileDataDelete(span, file.id);
+      FolderDataGet(span, file.folderId)
         .then((folder) => {
           SyncQueueQueueItem(
             account,
@@ -86,16 +86,16 @@ export class FileOperationsRoutes {
         return res.status(403).send({ error: "Access Denied" });
       }
 
-      const file = await FileData.get(span, req.params.fileId);
+      const file = await FileDataGet(span, req.params.fileId);
       if (!file) {
         return res.status(404).send({ error: "File Not Found" });
       }
 
-      const account = await AccountFactory.getAccountImplementation(req.params.accountId);
+      const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
       await account.deleteFile(span, file);
-      await FileData.delete(span, file.id);
+      await FileDataDelete(span, file.id);
 
-      FolderData.get(span, file.folderId)
+      FolderDataGet(span, file.folderId)
         .then(async (folder) => {
           SyncQueueQueueItem(
             account,

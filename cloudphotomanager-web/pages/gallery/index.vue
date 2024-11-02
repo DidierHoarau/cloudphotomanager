@@ -325,6 +325,7 @@ export default {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(7em, 1fr));
   grid-gap: 0.3em;
+  padding-bottom: 0.3em;
 }
 .gallery-files-actions button,
 .gallery-files-actions kbd {

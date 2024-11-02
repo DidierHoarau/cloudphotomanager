@@ -25,8 +25,8 @@ export async function AwsS3AccountInventoryGetFolderByPath(
 
     const response = await s3.listObjectsV2(params).promise();
     response.Contents.forEach((item) => {
-      console.log(item.Key);
-      console.log(item);
+      // console.log(item.Key);
+      // console.log(item);
     });
     response.CommonPrefixes.forEach((prefix) => {
       console.log(prefix.Prefix);

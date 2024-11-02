@@ -2,8 +2,8 @@ import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { Auth } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
-import { AccountData } from "./AccountData";
-import { AccountFactory } from "./AccountFactory";
+import { AccountDataAdd, AccountDataDelete, AccountDataGet, AccountDataList, AccountDataUpdate } from "./AccountData";
+import { AccountFactoryGetAccountFromDefinition } from "./AccountFactory";
 import { Logger } from "../utils-std-ts/Logger";
 import { SchedulerStartAccountSync } from "../sync/Scheduler";
 
@@ -19,7 +19,7 @@ export class AccountRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const accounts = await AccountData.list(span);
+      const accounts = await AccountDataList(span);
       accounts.forEach((account: AccountDefinition) => {
         delete account.infoPrivate;
       });
@@ -37,7 +37,7 @@ export class AccountRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const account = await AccountData.get(span, req.params.accountId);
+      const account = await AccountDataGet(span, req.params.accountId);
       delete account.infoPrivate;
       return res.status(200).send(account);
     });
@@ -58,7 +58,7 @@ export class AccountRoutes {
       const accountDefinition = new AccountDefinition();
       accountDefinition.info = req.body.info;
       accountDefinition.infoPrivate = req.body.infoPrivate;
-      const account = await AccountFactory.getAccountFromDefinition(accountDefinition);
+      const account = await AccountFactoryGetAccountFromDefinition(accountDefinition);
       if (await account.validate(span)) {
         return res.status(200).send({});
       }
@@ -88,11 +88,11 @@ export class AccountRoutes {
       accountDefinition.rootpath = req.body.rootpath;
       accountDefinition.info = req.body.info;
       accountDefinition.infoPrivate = req.body.infoPrivate;
-      const account = await AccountFactory.getAccountFromDefinition(accountDefinition);
+      const account = await AccountFactoryGetAccountFromDefinition(accountDefinition);
       if (!(await account.validate(span))) {
         return res.status(400).send({ error: "Account Validation Failed" });
       }
-      await AccountData.add(span, account.getAccountDefinition());
+      await AccountDataAdd(span, account.getAccountDefinition());
       SchedulerStartAccountSync(span, account.getAccountDefinition()).catch((err) => {
         logger.error(err);
       });
@@ -121,12 +121,12 @@ export class AccountRoutes {
         return res.status(400).send({ error: "Missing Paramter: Name" });
       }
 
-      const account = await AccountData.get(span, req.params.accountId);
+      const account = await AccountDataGet(span, req.params.accountId);
       account.name = req.body.name;
       account.rootpath = req.body.rootpath;
       account.info = req.body.info;
       account.infoPrivate = req.body.infoPrivate;
-      await AccountData.update(span, account);
+      await AccountDataUpdate(span, account);
       SchedulerStartAccountSync(span, account).catch((err) => {
         logger.error(err);
       });
@@ -144,11 +144,11 @@ export class AccountRoutes {
       if (!Auth.isAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const account = await AccountData.get(span, req.params.accountId);
+      const account = await AccountDataGet(span, req.params.accountId);
       if (!account) {
         return res.status(404).send({ error: "Account Not Found" });
       }
-      await AccountData.delete(span, account.id);
+      await AccountDataDelete(span, account.id);
       return res.status(202).send({});
     });
 
