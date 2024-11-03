@@ -242,12 +242,13 @@ export default {
       if (confirm(message) == true) {
         this.loading = true;
         for (const file of this.selectedFiles) {
-          await axios
+          axios
             .delete(
               `${(await Config.get()).SERVER_URL}/accounts/${file.accountId}/files/${file.id}/operations/delete`,
               await AuthService.getAuthHeader()
             )
             .then((res) => {
+              SyncStore().fetch();
               EventBus.emit(EventTypes.ALERT_MESSAGE, {
                 text: "File deleted",
               });

@@ -30,7 +30,9 @@
         ></NuxtLink>
       </li>
     </ul>
-    <dialog v-if="syncStore.countBlocking > 0" open>Operations in Process: {{ syncStore.countBlocking }}</dialog>
+    <dialog v-if="syncStore.countBlocking > 0" open>
+      <i class="bi bi-hourglass-split"></i>&nbsp;&nbsp; Operations in Progress: {{ syncStore.countBlocking }}
+    </dialog>
   </nav>
 </template>
 

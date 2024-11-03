@@ -54,7 +54,7 @@ export default {
     async doAction() {
       this.loading = true;
       for (const file of this.target.files) {
-        await axios
+        axios
           .put(
             `${(await Config.get()).SERVER_URL}/accounts/${file.accountId}/files/${file.id}/operations/folder`,
             {
@@ -65,6 +65,7 @@ export default {
           .then((res) => {
             this.$emit("onDone", { status: "invalidated" });
             EventBus.emit(EventTypes.FOLDERS_UPDATED, {});
+            SyncStore().fetch();
           })
           .catch(handleError);
       }
