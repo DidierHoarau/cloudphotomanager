@@ -6,10 +6,13 @@ import { StandardTracerStartSpan } from "../../utils-std-ts/StandardTracer";
 import { S3 } from "aws-sdk";
 import { File } from "../../model/File";
 import * as fs from "fs-extra";
-import * as path from "path";
 import { Folder } from "../../model/Folder";
 import { AccountCapabilities } from "../../model/AccountCapabilities";
-import { AwsS3AccountInventoryGetFolderByPath } from "./AwsS3AccountInventory";
+import {
+  AwsS3AccountInventoryGetFolder,
+  AwsS3AccountInventoryGetFolderByPath,
+  AwsS3AccountInventoryListFoldersInFolder,
+} from "./AwsS3AccountInventory";
 
 export class AwsS3Account implements Account {
   //
@@ -32,11 +35,11 @@ export class AwsS3Account implements Account {
   deleteFile(context: Span, file: File): Promise<void> {
     throw new Error("Method not implemented.");
   }
-  listFoldersInFolder(context: Span, folder: Folder): Promise<Folder[]> {
-    throw new Error("Method not implemented.");
+  async listFoldersInFolder(context: Span, folder: Folder): Promise<Folder[]> {
+    return AwsS3AccountInventoryListFoldersInFolder(context, this, await this.getS3Client(), folder);
   }
-  getFolder(context: Span, folder: Folder): Promise<Folder> {
-    throw new Error("Method not implemented.");
+  async getFolder(context: Span, folder: Folder): Promise<Folder> {
+    return AwsS3AccountInventoryGetFolder(context, this, await this.getS3Client(), folder);
   }
   async getFolderByPath(context: Span, folderpath: string): Promise<Folder> {
     return AwsS3AccountInventoryGetFolderByPath(context, this, await this.getS3Client(), folderpath);

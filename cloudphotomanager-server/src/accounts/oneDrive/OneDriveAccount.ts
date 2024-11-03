@@ -8,9 +8,19 @@ import { File } from "../../model/File";
 import axios from "axios";
 import { Logger } from "../../utils-std-ts/Logger";
 import { Folder } from "../../model/Folder";
-import { OneDriveFileOperations } from "./OneDriveFileOperations";
-import { OneDriveInventory } from "./OneDriveInventory";
 import { AccountCapabilities } from "../../model/AccountCapabilities";
+import {
+  OneDriveInventoryGetFolder,
+  OneDriveInventoryGetFolderByPath,
+  OneDriveInventoryListFilesInFolder,
+  OneDriveInventoryListFoldersInFolder,
+} from "./OneDriveInventory";
+import {
+  OneDriveFileOperationsdeleteFile,
+  OneDriveFileOperationsDownloadFile,
+  OneDriveFileOperationsDownloadThumbnail,
+  OneDriveFileOperationsMoveFile,
+} from "./OneDriveFileOperations";
 
 const logger = new Logger("OneDriveAccount");
 
@@ -103,15 +113,15 @@ export class OneDriveAccount implements Account {
   }
 
   public async listFilesInFolder(context: Span, folder: Folder): Promise<File[]> {
-    return await OneDriveInventory.listFilesInFolder(context, this, folder);
+    return await OneDriveInventoryListFilesInFolder(context, this, folder);
   }
 
   public async listFoldersInFolder(context: Span, folder: Folder): Promise<Folder[]> {
-    return await OneDriveInventory.listFoldersInFolder(context, this, folder);
+    return await OneDriveInventoryListFoldersInFolder(context, this, folder);
   }
 
   public async downloadFile(context: Span, file: File, folderpath: string, filename: string): Promise<void> {
-    await OneDriveFileOperations.downloadFile(context, this, file, folderpath, filename);
+    await OneDriveFileOperationsDownloadFile(context, this, file, folderpath, filename);
   }
 
   public async downloadPreview(context: Span, file: File, folder: string, filename: string): Promise<void> {
@@ -119,23 +129,23 @@ export class OneDriveAccount implements Account {
   }
 
   public async downloadThumbnail(context: Span, file: File, folderpath: string, filename: string): Promise<void> {
-    await OneDriveFileOperations.downloadThumbnail(context, this, file, folderpath, filename);
+    await OneDriveFileOperationsDownloadThumbnail(context, this, file, folderpath, filename);
   }
 
   public async moveFile(context: Span, file: File, folderpathDestination: string): Promise<void> {
-    await OneDriveFileOperations.moveFile(context, this, file, folderpathDestination);
+    await OneDriveFileOperationsMoveFile(context, this, file, folderpathDestination);
   }
 
   public async deleteFile(context: Span, file: File): Promise<void> {
-    await OneDriveFileOperations.deleteFile(context, this, file);
+    await OneDriveFileOperationsdeleteFile(context, this, file);
   }
 
   public async getFolder(context: Span, folder: Folder): Promise<Folder> {
-    return await OneDriveInventory.getFolder(context, this, folder);
+    return await OneDriveInventoryGetFolder(context, this, folder);
   }
 
   public async getFolderByPath(context: Span, folderpath: string): Promise<Folder> {
-    return await OneDriveInventory.getFolderByPath(context, this, folderpath);
+    return await OneDriveInventoryGetFolderByPath(context, this, folderpath);
   }
 
   public folderToEncodedAbsolute(relativePath: string): string {

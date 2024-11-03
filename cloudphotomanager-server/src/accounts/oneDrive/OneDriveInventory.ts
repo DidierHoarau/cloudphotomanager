@@ -7,130 +7,133 @@ import { Folder } from "../../model/Folder";
 import { OneDriveAccount } from "./OneDriveAccount";
 import { FileMediaType } from "../../model/FileMediaType";
 
-export class OneDriveInventory {
-  //
-  public static async listFilesInFolder(
-    context: Span,
-    oneDriveAccount: OneDriveAccount,
-    folder: Folder
-  ): Promise<File[]> {
-    const absoluteFolderPath = `${oneDriveAccount.getAccountDefinition().rootpath}/${folder.folderpath}`.replace(
-      "//",
-      "/"
-    );
-    const folderId = (
-      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/root:${encodeURI(absoluteFolderPath)}`, {
-        headers: {
-          Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-        },
-      })
-    ).data.id;
-    const files: File[] = [];
-    let queryUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${folderId}/children`;
-    do {
-      const children = (
-        await axios.get(queryUrl, {
-          headers: {
-            Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-          },
-        })
-      ).data;
-      for (const child of children.value) {
-        if (!child.folder || File.getMediaType(child.name) !== FileMediaType.unknown) {
-          files.push(fileFromRaw(child, folderId, oneDriveAccount));
-        }
-      }
-      queryUrl = children["@odata.nextLink"];
-    } while (queryUrl);
-    return files;
-  }
-
-  public static async listFoldersInFolder(
-    context: Span,
-    oneDriveAccount: OneDriveAccount,
-    folder: Folder
-  ): Promise<Folder[]> {
-    let queryUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${folder.idCloud}/children`;
-    const folders: Folder[] = [];
-    do {
-      const children = (
-        await axios.get(queryUrl, {
-          headers: {
-            Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-          },
-        })
-      ).data;
-      for (const child of children.value) {
-        if (child.folder) {
-          folders.push(folderFromRaw(child, oneDriveAccount));
-        }
-      }
-      queryUrl = children["@odata.nextLink"];
-    } while (queryUrl);
-    return folders;
-  }
-
-  public static async listFolders(
-    context: Span,
-    oneDriveAccount: OneDriveAccount,
-    folderId: string,
-    folders: Folder[]
-  ): Promise<void> {
+export async function OneDriveInventoryListFilesInFolder(
+  context: Span,
+  oneDriveAccount: OneDriveAccount,
+  folder: Folder
+): Promise<File[]> {
+  const absoluteFolderPath = `${oneDriveAccount.getAccountDefinition().rootpath}/${folder.folderpath}`.replace(
+    "//",
+    "/"
+  );
+  const folderId = (
+    await axios.get(`https://graph.microsoft.com/v1.0/me/drive/root:${encodeURI(absoluteFolderPath)}`, {
+      headers: {
+        Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+      },
+    })
+  ).data.id;
+  const files: File[] = [];
+  let queryUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${folderId}/children`;
+  do {
     const children = (
-      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${folderId}/children`, {
+      await axios.get(queryUrl, {
         headers: {
           Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
         },
       })
-    ).data.value;
-    for (const child of children) {
+    ).data;
+    for (const child of children.value) {
+      if (!child.folder || File.getMediaType(child.name) !== FileMediaType.unknown) {
+        files.push(fileFromRaw(child, folderId, oneDriveAccount));
+      }
+    }
+    queryUrl = children["@odata.nextLink"];
+  } while (queryUrl);
+  return files;
+}
+
+export async function OneDriveInventoryListFoldersInFolder(
+  context: Span,
+  oneDriveAccount: OneDriveAccount,
+  folder: Folder
+): Promise<Folder[]> {
+  let queryUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${folder.idCloud}/children`;
+  const folders: Folder[] = [];
+  do {
+    const children = (
+      await axios.get(queryUrl, {
+        headers: {
+          Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+        },
+      })
+    ).data;
+    for (const child of children.value) {
       if (child.folder) {
         folders.push(folderFromRaw(child, oneDriveAccount));
-        await OneDriveInventory.listFolders(context, oneDriveAccount, child.id, folders);
       }
     }
-  }
+    queryUrl = children["@odata.nextLink"];
+  } while (queryUrl);
+  return folders;
+}
 
-  public static async getFolderByPath(
-    context: Span,
-    oneDriveAccount: OneDriveAccount,
-    folderpath: string
-  ): Promise<Folder> {
-    const absoluteFolderPath = `${oneDriveAccount.getAccountDefinition().rootpath}/${folderpath.replace(
-      /\/+$/,
-      ""
-    )}`.replace(/\/+/g, "/");
-    const folderRaw = (
-      await axios
-        .get(`https://graph.microsoft.com/v1.0/me/drive/root:${encodeURI(absoluteFolderPath)}`, {
-          headers: {
-            Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-          },
-        })
-        .catch((err) => {
-          if (err.response.status !== 404) {
-            throw err;
-          }
-          return { data: {} };
-        })
-    ).data;
-    if (!folderRaw.id) {
-      return null;
+export async function OneDriveInventoryListFolders(
+  context: Span,
+  oneDriveAccount: OneDriveAccount,
+  folderId: string,
+  folders: Folder[]
+): Promise<void> {
+  const children = (
+    await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${folderId}/children`, {
+      headers: {
+        Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+      },
+    })
+  ).data.value;
+  for (const child of children) {
+    if (child.folder) {
+      folders.push(folderFromRaw(child, oneDriveAccount));
+      await OneDriveInventoryListFolders(context, oneDriveAccount, child.id, folders);
     }
-    return folderFromRaw(folderRaw, oneDriveAccount);
   }
+}
 
-  public static async getFolder(context: Span, oneDriveAccount: OneDriveAccount, folderIn: Folder): Promise<Folder> {
-    const folderRaw = (
-      await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${folderIn.idCloud}`, {
+export async function OneDriveInventoryGetFolderByPath(
+  context: Span,
+  oneDriveAccount: OneDriveAccount,
+  folderpath: string
+): Promise<Folder> {
+  const absoluteFolderPath = `${oneDriveAccount.getAccountDefinition().rootpath}/${folderpath.replace(
+    /\/+$/,
+    ""
+  )}`.replace(/\/+/g, "/");
+  const folderRaw = (
+    await axios
+      .get(`https://graph.microsoft.com/v1.0/me/drive/root:${encodeURI(absoluteFolderPath)}`, {
         headers: {
           Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
         },
       })
-    ).data;
-    return folderFromRaw(folderRaw, oneDriveAccount);
+      .catch((err) => {
+        if (err.response.status !== 404) {
+          throw err;
+        }
+        return { data: {} };
+      })
+  ).data;
+  if (!folderRaw.id) {
+    return null;
   }
+  return folderFromRaw(folderRaw, oneDriveAccount);
 }
+
+export async function OneDriveInventoryGetFolder(
+  context: Span,
+  oneDriveAccount: OneDriveAccount,
+  folderIn: Folder
+): Promise<Folder> {
+  const folderRaw = (
+    await axios.get(`https://graph.microsoft.com/v1.0/me/drive/items/${folderIn.idCloud}`, {
+      headers: {
+        Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+      },
+    })
+  ).data;
+  return folderFromRaw(folderRaw, oneDriveAccount);
+}
+
+// Private Functions
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function folderFromRaw(data: any, oneDriveAccount: OneDriveAccount): Folder {

@@ -51,12 +51,8 @@ export async function SchedulerStartAccountSync(context: Span, accountDefinition
     );
   }
 
-  // Outdated Folder
-  for (const folder of await FolderDataGetOlderThan(
-    span,
-    account.getAccountDefinition().id,
-    new Date(new Date().getTime() - OUTDATED_AGE)
-  )) {
+  // Top Newest sync folder
+  for (const folder of await FolderDataGetNewestSync(span, account.getAccountDefinition().id, 10)) {
     await SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.NORMAL);
   }
 
@@ -65,8 +61,12 @@ export async function SchedulerStartAccountSync(context: Span, accountDefinition
     await SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.NORMAL);
   }
 
-  // Top Newest sync folder
-  for (const folder of await FolderDataGetNewestSync(span, account.getAccountDefinition().id, 10)) {
+  // Outdated Folder
+  for (const folder of await FolderDataGetOlderThan(
+    span,
+    account.getAccountDefinition().id,
+    new Date(new Date().getTime() - OUTDATED_AGE)
+  )) {
     await SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.NORMAL);
   }
 
