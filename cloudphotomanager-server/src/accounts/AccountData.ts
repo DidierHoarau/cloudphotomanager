@@ -6,7 +6,7 @@ import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 import { FolderDataRefreshCacheFolders } from "../folders/FolderData";
 
 export async function AccountDataGet(context: Span, accountId: string): Promise<AccountDefinition> {
-  const span = StandardTracerStartSpan("AccountData_get", context);
+  const span = StandardTracerStartSpan("AccountDataGet", context);
   const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM accounts WHERE id = ? ", [accountId]);
   if (rawData.length === 0) {
     throw new Error("Account Not Found");
@@ -17,10 +17,10 @@ export async function AccountDataGet(context: Span, accountId: string): Promise<
 }
 
 export async function AccountDataList(context: Span): Promise<AccountDefinition[]> {
-  const span = StandardTracerStartSpan("AccountData_list", context);
+  const span = StandardTracerStartSpan("AccountDataList", context);
   const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM accounts");
   const accounts: AccountDefinition[] = [];
-  for (let account of rawData) {
+  for (const account of rawData) {
     accounts.push(fromRaw(account));
   }
   span.end();
@@ -28,7 +28,7 @@ export async function AccountDataList(context: Span): Promise<AccountDefinition[
 }
 
 export async function AccountDataAdd(context: Span, accountDefinition: AccountDefinition): Promise<void> {
-  const span = StandardTracerStartSpan("AccountData_add", context);
+  const span = StandardTracerStartSpan("AccountDataAdd", context);
   await SqlDbutils.execSQL(
     span,
     "INSERT INTO accounts (id, name, rootpath, info, infoPrivate) VALUES (?, ?, ?, ?, ?)",
@@ -45,7 +45,7 @@ export async function AccountDataAdd(context: Span, accountDefinition: AccountDe
 }
 
 export async function AccountDataUpdate(context: Span, accountDefinition: AccountDefinition): Promise<void> {
-  const span = StandardTracerStartSpan("AccountData_add", context);
+  const span = StandardTracerStartSpan("AccountDataUpdate", context);
   await SqlDbutils.execSQL(span, "UPDATE accounts SET name=?, rootpath=?, info=?, infoPrivate=? WHERE id=?", [
     accountDefinition.name,
     accountDefinition.rootpath,
@@ -58,9 +58,16 @@ export async function AccountDataUpdate(context: Span, accountDefinition: Accoun
 }
 
 export async function AccountDataDelete(context: Span, accountId: string): Promise<void> {
-  const span = StandardTracerStartSpan("AccountData_delete", context);
+  const span = StandardTracerStartSpan("AccountDataDelete", context);
   await SqlDbutils.execSQL(span, "DELETE FROM files WHERE accountId = ?", [accountId]);
   await SqlDbutils.execSQL(span, "DELETE FROM accounts WHERE id = ?", [accountId]);
+  span.end();
+}
+
+export async function AccountDataDeleteAllFilesAndFolders(context: Span, accountId: string): Promise<void> {
+  const span = StandardTracerStartSpan("AccountDataDeleteAllFiles", context);
+  await SqlDbutils.execSQL(span, "DELETE FROM files WHERE accountId = ?", [accountId]);
+  await SqlDbutils.execSQL(span, "DELETE FROM folders WHERE accountId = ?", [accountId]);
   span.end();
 }
 

@@ -92,10 +92,10 @@ export async function FileDataAdd(context: Span, file: File): Promise<void> {
       file.accountId,
       file.filename,
       file.folderId,
-      file.hash,
+      file.hash || "",
       file.dateUpdated.toISOString(),
       file.dateSync.toISOString(),
-      file.dateMedia.toISOString(),
+      file.dateMedia ? file.dateMedia.toISOString() : null,
       JSON.stringify(file.info),
       JSON.stringify(file.metadata),
     ]

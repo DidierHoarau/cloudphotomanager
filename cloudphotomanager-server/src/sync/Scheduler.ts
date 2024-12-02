@@ -1,5 +1,5 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import { AccountDataList } from "../accounts/AccountData";
+import { AccountDataDeleteAllFilesAndFolders, AccountDataList } from "../accounts/AccountData";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { Config } from "../Config";
 import {

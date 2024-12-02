@@ -1,5 +1,4 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { Auth } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { SyncInventorySyncFolder } from "../sync/SyncInventory";
@@ -8,6 +7,7 @@ import { Logger } from "../utils-std-ts/Logger";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
 import { FileDataDelete, FileDataGet } from "./FileData";
+import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
 
 const logger = new Logger("FileOperationsRoutes");
 export class FileOperationsRoutes {
@@ -25,8 +25,8 @@ export class FileOperationsRoutes {
     }
     fastify.put<PostFilesAccountIdRequest>("/folder", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
-      if (!Auth.isAdmin(userSession)) {
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       if (!req.body.folderpath) {
@@ -81,8 +81,8 @@ export class FileOperationsRoutes {
     }
     fastify.delete<DeleteFilesAccountIdFileId>("/delete", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
-      if (!Auth.isAdmin(userSession)) {
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
 

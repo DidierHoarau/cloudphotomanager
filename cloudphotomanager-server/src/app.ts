@@ -4,7 +4,6 @@ import { watchFile } from "fs-extra";
 import { Config } from "./Config";
 import { Logger } from "./utils-std-ts/Logger";
 import { UserRoutes } from "./users/UserRoutes";
-import { Auth } from "./users/Auth";
 import { StandardTracerApi } from "./StandardTracerApi";
 import { SqlDbutils } from "./utils-std-ts/SqlDbUtils";
 import { AccountRoutes } from "./accounts/AccountRoutes";
@@ -20,6 +19,7 @@ import { StandardTracerInitTelemetry, StandardTracerStartSpan } from "./utils-st
 import { SchedulerInit } from "./sync/Scheduler";
 import { SyncFileCacheInit } from "./sync/SyncFileCache";
 import { FolderDataInit } from "./folders/FolderData";
+import { AuthInit } from "./users/Auth";
 
 const logger = new Logger("app");
 
@@ -40,7 +40,7 @@ Promise.resolve().then(async () => {
 
   await SyncFileCacheInit(span, config);
   await SqlDbutils.init(span, config);
-  await Auth.init(span, config);
+  await AuthInit(span, config);
   await FileDataInit(span, config);
   await FolderDataInit(span);
   await SchedulerInit(span, config);

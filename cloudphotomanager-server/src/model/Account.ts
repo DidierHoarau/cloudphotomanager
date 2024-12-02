@@ -8,7 +8,7 @@ export interface Account {
   validate(context: Span): Promise<boolean>;
   listFilesInFolder(context: Span, folder: Folder): Promise<File[]>;
   listFoldersInFolder(context: Span, folder: Folder): Promise<Folder[]>;
-  downloadFile(context: Span, file: File, folder: string, filename: string): Promise<void>;
+  downloadFile(context: Span, file: File, destinationFolderpath: string, destinationFilename: string): Promise<void>;
   downloadPreview(context: Span, file: File, folder: string, filename: string): Promise<void>;
   downloadThumbnail(context: Span, file: File, folder: string, filename: string): Promise<void>;
   getAccountDefinition(): AccountDefinition;

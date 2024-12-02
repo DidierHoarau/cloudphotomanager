@@ -22,6 +22,7 @@ export async function FolderDataInit(context: Span) {
 
 export async function FolderDataAdd(context: Span, folder: Folder): Promise<void> {
   const span = StandardTracerStartSpan("FolderData_add", context);
+  await SqlDbutils.execSQL(span, "DELETE FROM folders WHERE id = ? AND accountId = ?", [folder.id, folder.accountId]);
   await SqlDbutils.execSQL(
     span,
     "INSERT INTO folders (id, idCloud, accountId, folderpath, dateUpdated, dateSync, info) " +

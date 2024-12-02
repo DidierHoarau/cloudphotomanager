@@ -1,11 +1,11 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { UserPassword } from "./UserPassword";
-import { Auth } from "./Auth";
 import { User } from "../model/User";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { UserPermission } from "../model/UserPermission";
 import { UserPermissionData } from "./UserPermissionData";
 import { UserDataAdd, UserDataDelete, UserDataGet, UserDataGetByName, UserDataList, UserDataUpdate } from "./UserData";
+import { AuthGenerateJWT, AuthGetUserSession, AuthIsAdmin, AuthIsTokenValid } from "./Auth";
 
 export class UserRoutes {
   //
@@ -30,10 +30,10 @@ export class UserRoutes {
       const span = StandardTracerGetSpanFromRequest(req);
       let user: User;
       // From token
-      const userSession = await Auth.getUserSession(req);
+      const userSession = await AuthGetUserSession(req);
       if (userSession.isAuthenticated) {
         user = await UserDataGet(span, userSession.userId);
-        const token = await Auth.generateJWT(span, user);
+        const token = await AuthGenerateJWT(span, user);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (res as any).setCookie("token", token, {
           path: "/",
@@ -53,7 +53,7 @@ export class UserRoutes {
       if (!user) {
         return res.status(403).send({ error: "Authentication Failed" });
       } else if (await UserPassword.checkPassword(span, user, req.body.password)) {
-        const token = await Auth.generateJWT(span, user);
+        const token = await AuthGenerateJWT(span, user);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (res as any).setCookie("token", token, {
           path: "/",
@@ -67,8 +67,8 @@ export class UserRoutes {
 
     fastify.get("/", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
-      if (!Auth.isAdmin(userSession)) {
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       res.status(201).send({ users: await UserDataList(span) });
@@ -86,8 +86,8 @@ export class UserRoutes {
       if ((await UserDataList(span)).length === 0) {
         isInitialized = false;
       }
-      const userSession = await Auth.getUserSession(req);
-      if (isInitialized && !Auth.isAdmin(userSession)) {
+      const userSession = await AuthGetUserSession(req);
+      if (isInitialized && !AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       const newUser = new User();
@@ -121,8 +121,8 @@ export class UserRoutes {
     }
     fastify.delete<DeletetUser>("/:userId", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
-      if (!Auth.isAdmin(userSession)) {
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       if (!(await UserDataGetByName(span, req.params.userId))) {
@@ -141,7 +141,7 @@ export class UserRoutes {
     }
     fastify.put<PutNewPassword>("/password", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
+      const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
@@ -164,8 +164,8 @@ export class UserRoutes {
     }
     fastify.get<GetUserIdPermissions>("/:userId/permissions", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
-      if (!Auth.isAdmin(userSession)) {
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       if (!(await UserDataGetByName(span, req.params.userId))) {
@@ -185,8 +185,8 @@ export class UserRoutes {
     }
     fastify.put<PutUserIdPermissions>("/:userId/permissions", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
-      if (!Auth.isAdmin(userSession)) {
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       if (!(await UserDataGetByName(span, req.params.userId))) {
@@ -206,7 +206,7 @@ export class UserRoutes {
       } catch (err) {
         tokenCokkie = null;
       }
-      if (!tokenCokkie || !tokenCokkie.valid || !Auth.isTokenValid(tokenCokkie.value)) {
+      if (!tokenCokkie || !tokenCokkie.valid || !AuthIsTokenValid(tokenCokkie.value)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       res.status(200).send({});

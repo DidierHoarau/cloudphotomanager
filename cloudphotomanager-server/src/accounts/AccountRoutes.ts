@@ -1,11 +1,11 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountDefinition } from "../model/AccountDefinition";
-import { Auth } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { AccountDataAdd, AccountDataDelete, AccountDataGet, AccountDataList, AccountDataUpdate } from "./AccountData";
 import { AccountFactoryGetAccountFromDefinition } from "./AccountFactory";
 import { Logger } from "../utils-std-ts/Logger";
 import { SchedulerStartAccountSync } from "../sync/Scheduler";
+import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
 
 const logger = new Logger("AccountRoutes");
 
@@ -15,7 +15,7 @@ export class AccountRoutes {
     //
     fastify.get("/", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
+      const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
@@ -33,7 +33,7 @@ export class AccountRoutes {
     }
     fastify.get<GetAccount>("/:accountId", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
+      const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
@@ -51,7 +51,7 @@ export class AccountRoutes {
     }
     fastify.post<PostAccountValidation>("/validation", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
+      const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
@@ -76,8 +76,8 @@ export class AccountRoutes {
     }
     fastify.post<PostAccount>("/", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
-      if (!Auth.isAdmin(userSession)) {
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       if (!req.body.name) {
@@ -113,8 +113,8 @@ export class AccountRoutes {
     }
     fastify.put<PutAccount>("/:accountId", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
-      if (!Auth.isAdmin(userSession)) {
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       if (!req.body.name) {
@@ -140,8 +140,8 @@ export class AccountRoutes {
     }
     fastify.delete<DeleteAccount>("/:accountId", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
-      if (!Auth.isAdmin(userSession)) {
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       const account = await AccountDataGet(span, req.params.accountId);
@@ -153,8 +153,8 @@ export class AccountRoutes {
     });
 
     fastify.get("/onedrive/info", async (req, res) => {
-      const userSession = await Auth.getUserSession(req);
-      if (!Auth.isAdmin(userSession)) {
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       if (

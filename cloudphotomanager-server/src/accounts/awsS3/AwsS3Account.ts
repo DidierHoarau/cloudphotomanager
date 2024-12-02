@@ -11,8 +11,10 @@ import { AccountCapabilities } from "../../model/AccountCapabilities";
 import {
   AwsS3AccountInventoryGetFolder,
   AwsS3AccountInventoryGetFolderByPath,
+  AwsS3AccountInventoryListFilesInFolder,
   AwsS3AccountInventoryListFoldersInFolder,
 } from "./AwsS3AccountInventory";
+import { AwsS3AccountFileOperationsDownloadFile } from "./AwsS3AccountFileOperations";
 
 export class AwsS3Account implements Account {
   //
@@ -50,8 +52,8 @@ export class AwsS3Account implements Account {
   listFolders(context: Span): Promise<Folder[]> {
     throw new Error("Method not implemented.");
   }
-  listFilesInFolder(context: Span, folder: Folder): Promise<File[]> {
-    throw new Error("Method not implemented.");
+  async listFilesInFolder(context: Span, folder: Folder): Promise<File[]> {
+    return AwsS3AccountInventoryListFilesInFolder(context, this, await this.getS3Client(), folder);
   }
   updateFileMetadata(context: Span, file: File): Promise<void> {
     throw new Error("Method not implemented.");
@@ -67,22 +69,20 @@ export class AwsS3Account implements Account {
     return this.accountDefinition;
   }
 
-  public async downloadFile(context: Span, file: File, folder: string, filename: string): Promise<void> {
-    const span = StandardTracerStartSpan("AwsS3Account_downloadFile", context);
-    const params = {
-      Bucket: this.accountDefinition.infoPrivate.bucket + "bla",
-      Key: `${file.folderId}/${file.filename}`,
-    };
-    const fileStream = (await this.getS3Client()).getObject(params).createReadStream();
-    const writeStream = fs.createWriteStream(`${folder}/${filename}`);
-
-    await new Promise((resolve, reject) => {
-      fileStream.on("error", reject);
-      writeStream.on("error", reject);
-      writeStream.on("finish", resolve);
-      fileStream.pipe(writeStream);
-    });
-    span.end();
+  public async downloadFile(
+    context: Span,
+    file: File,
+    destinationFolderpath: string,
+    destinationFilename: string
+  ): Promise<void> {
+    await AwsS3AccountFileOperationsDownloadFile(
+      context,
+      this,
+      await this.getS3Client(),
+      file,
+      destinationFolderpath,
+      destinationFilename
+    );
   }
 
   public async validate(context: Span): Promise<boolean> {

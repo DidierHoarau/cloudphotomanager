@@ -1,5 +1,5 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { Auth } from "../users/Auth";
+import { AuthGetUserSession } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { FileDataGet, FileDataGetFileCacheDir } from "./FileData";
 import * as fs from "fs-extra";
@@ -18,7 +18,7 @@ export class FileRoutes {
     }
     fastify.get<GetFilesAccountIdFileIdThumbnailRequest>("/:fileId/thumbnail", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
+      const userSession = await AuthGetUserSession(req);
       // if (!userSession.isAuthenticated) {
       //   return res.status(403).send({ error: "Access Denied" });
       // }
@@ -49,7 +49,7 @@ export class FileRoutes {
     }
     fastify.get<GetFilesAccountIdFileIdPreviewRequest>("/:fileId/preview", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
+      const userSession = await AuthGetUserSession(req);
       // if (!userSession.isAuthenticated) {
       //   return res.status(403).send({ error: "Access Denied" });
       // }

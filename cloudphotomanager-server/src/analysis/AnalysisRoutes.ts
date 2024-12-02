@@ -1,7 +1,7 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { Auth } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { AnalysisDataListAccountDuplicates } from "./AnalysisData";
+import { AuthGetUserSession } from "../users/Auth";
 
 export class AnalysisRoutes {
   //
@@ -14,7 +14,7 @@ export class AnalysisRoutes {
     }
     fastify.get<GetFilesAccountIdFileIdThumbnailRequest>("/duplicates", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
+      const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }

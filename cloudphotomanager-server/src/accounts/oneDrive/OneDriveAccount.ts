@@ -120,8 +120,13 @@ export class OneDriveAccount implements Account {
     return await OneDriveInventoryListFoldersInFolder(context, this, folder);
   }
 
-  public async downloadFile(context: Span, file: File, folderpath: string, filename: string): Promise<void> {
-    await OneDriveFileOperationsDownloadFile(context, this, file, folderpath, filename);
+  public async downloadFile(
+    context: Span,
+    file: File,
+    destinationFolderpath: string,
+    destinationFilename: string
+  ): Promise<void> {
+    await OneDriveFileOperationsDownloadFile(context, this, file, destinationFolderpath, destinationFilename);
   }
 
   public async downloadPreview(context: Span, file: File, folder: string, filename: string): Promise<void> {

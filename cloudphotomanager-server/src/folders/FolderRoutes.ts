@@ -1,13 +1,13 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { Auth } from "../users/Auth";
 import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { FolderDataGet, FolderDataListCountsForAccount, FolderDataListForAccount } from "./FolderData";
 import { UserPermissionCheck } from "../users/UserPermissionCheck";
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
 import { SyncInventorySyncFolder } from "../sync/SyncInventory";
 import { FileDataListByFolder } from "../files/FileData";
+import { AuthGetUserSession } from "../users/Auth";
 
 export class FolderRoutes {
   //
@@ -20,7 +20,7 @@ export class FolderRoutes {
     }
     fastify.get<GetFoldersAccountIdRequest>("/", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
+      const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
@@ -39,7 +39,7 @@ export class FolderRoutes {
     }
     fastify.get<GetFoldersCountAccountIdRequest>("/counts", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
+      const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
@@ -55,7 +55,7 @@ export class FolderRoutes {
     }
     fastify.get<GetAccountIdFolderIdFilesRequest>("/:folderId/files", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
+      const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
@@ -75,7 +75,7 @@ export class FolderRoutes {
     }
     fastify.put<PutAccountIdFolderIdSyncRequest>("/:folderId/sync", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
-      const userSession = await Auth.getUserSession(req);
+      const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
