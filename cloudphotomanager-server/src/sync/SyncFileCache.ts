@@ -57,13 +57,17 @@ export async function SyncFileCacheCheckFile(context: Span, account: Account, fi
     await SyncQueueQueueItem(account, file.id, file, syncVideoFromFull, SyncQueueItemPriority.BATCH);
   }
 
+  if (isVideo && hasVideoPreview && !hasThumbnail) {
+    await SyncQueueQueueItem(account, file.id, file, syncThumbnailFromVideoPreview, SyncQueueItemPriority.NORMAL);
+  }
+
   span.end();
 }
 
 // Private Functions
 
 async function syncVideoFromFull(account: Account, file: File) {
-  const span = StandardTracerStartSpan("SyncFileCache_syncVideoFromFull");
+  const span = StandardTracerStartSpan("syncVideoFromFull");
   const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
   const tmpDir = await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id);
   await fs.ensureDir(cacheDir);
@@ -105,7 +109,7 @@ async function syncVideoFromFull(account: Account, file: File) {
 }
 
 async function syncPhotoFromFull(account: Account, file: File) {
-  const span = StandardTracerStartSpan("SyncFileCache_syncPhotoFromFull");
+  const span = StandardTracerStartSpan("syncPhotoFromFull");
   const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
   const tmpDir = await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id);
   await fs.ensureDir(cacheDir);
@@ -132,7 +136,7 @@ async function syncPhotoFromFull(account: Account, file: File) {
 }
 
 async function syncThumbnail(account: Account, file: File) {
-  const span = StandardTracerStartSpan("SyncFileCache_syncThumbnail");
+  const span = StandardTracerStartSpan("syncThumbnail");
   const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
   const tmpDir = await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id);
   await fs.ensureDir(cacheDir);
@@ -151,5 +155,30 @@ async function syncThumbnail(account: Account, file: File) {
       logger.error(err);
     });
   await fs.remove(`${tmpDir}/tmp_tumbnail`);
+  span.end();
+}
+
+async function syncThumbnailFromVideoPreview(account: Account, file: File) {
+  const span = StandardTracerStartSpan("syncThumbnailFromVideoPreview");
+  const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
+  const tmpDir = await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id);
+  await fs.ensureDir(cacheDir);
+  await fs.remove(`${tmpDir}/tmp_thumbnail`);
+  await fs.ensureDir(`${tmpDir}/tmp_thumbnail`);
+  logger.info(`Generating video thumbnail ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
+  await SystemCommand.execute(
+    `${config.TOOLS_DIR}/tools-video-generate-thumbnail.sh ${cacheDir}/preview.mp4 ${tmpDir}/tmp_thumbnail/thumbnail.jpg`
+  )
+    .then(async (output: string) => {
+      logger.info(output);
+      await sharp(`${tmpDir}/tmp_thumbnail/thumbnail.jpg`)
+        .withMetadata()
+        .resize({ width: 300 })
+        .toFile(`${cacheDir}/thumbnail.webp`);
+    })
+    .catch((err) => {
+      logger.error(err);
+    });
+  await fs.remove(`${tmpDir}/tmp_preview`);
   span.end();
 }

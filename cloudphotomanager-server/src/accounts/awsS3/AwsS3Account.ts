@@ -14,7 +14,10 @@ import {
   AwsS3AccountInventoryListFilesInFolder,
   AwsS3AccountInventoryListFoldersInFolder,
 } from "./AwsS3AccountInventory";
-import { AwsS3AccountFileOperationsDownloadFile } from "./AwsS3AccountFileOperations";
+import {
+  AwsS3AccountFileOperationsDeleteFile,
+  AwsS3AccountFileOperationsDownloadFile,
+} from "./AwsS3AccountFileOperations";
 
 export class AwsS3Account implements Account {
   //
@@ -34,8 +37,8 @@ export class AwsS3Account implements Account {
       downloadVideoPreview: false,
     };
   }
-  deleteFile(context: Span, file: File): Promise<void> {
-    throw new Error("Method not implemented.");
+  async deleteFile(context: Span, file: File): Promise<void> {
+    await AwsS3AccountFileOperationsDeleteFile(context, this, await this.getS3Client(), file);
   }
   async listFoldersInFolder(context: Span, folder: Folder): Promise<Folder[]> {
     return AwsS3AccountInventoryListFoldersInFolder(context, this, await this.getS3Client(), folder);

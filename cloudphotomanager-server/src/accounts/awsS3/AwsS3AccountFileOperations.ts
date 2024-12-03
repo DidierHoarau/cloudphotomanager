@@ -29,3 +29,19 @@ export async function AwsS3AccountFileOperationsDownloadFile(
   });
   span.end();
 }
+
+export async function AwsS3AccountFileOperationsDeleteFile(
+  context: Span,
+  awsS3Account: AwsS3Account,
+  s3: S3,
+  file: File
+): Promise<void> {
+  const span = StandardTracerStartSpan("AwsS3AccountFileOperationsDownloadFile", context);
+
+  const params = {
+    Bucket: awsS3Account.getAccountDefinition().infoPrivate.bucket,
+    Key: file.idCloud,
+  };
+  await s3.deleteObject(params).promise();
+  span.end();
+}
