@@ -82,6 +82,7 @@ export async function FileDataListByFolder(context: Span, accountId: string, fol
 
 export async function FileDataAdd(context: Span, file: File): Promise<void> {
   const span = StandardTracerStartSpan("FileData_add", context);
+  await SqlDbutils.execSQL(span, "DELETE FROM files WHERE id = ?", [file.id]);
   await SqlDbutils.execSQL(
     span,
     "INSERT INTO files (id, idCloud, accountId, filename, folderId, hash, dateUpdated, dateSync, dateMedia, info, metadata) " +

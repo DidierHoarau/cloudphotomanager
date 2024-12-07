@@ -5,7 +5,6 @@ import * as AWS from "aws-sdk";
 import { StandardTracerStartSpan } from "../../utils-std-ts/StandardTracer";
 import { S3 } from "aws-sdk";
 import { File } from "../../model/File";
-import * as fs from "fs-extra";
 import { Folder } from "../../model/Folder";
 import { AccountCapabilities } from "../../model/AccountCapabilities";
 import {
@@ -17,6 +16,7 @@ import {
 import {
   AwsS3AccountFileOperationsDeleteFile,
   AwsS3AccountFileOperationsDownloadFile,
+  AwsS3AccountFileOperationsMoveFile,
 } from "./AwsS3AccountFileOperations";
 
 export class AwsS3Account implements Account {
@@ -49,8 +49,8 @@ export class AwsS3Account implements Account {
   async getFolderByPath(context: Span, folderpath: string): Promise<Folder> {
     return AwsS3AccountInventoryGetFolderByPath(context, this, await this.getS3Client(), folderpath);
   }
-  moveFile(context: Span, file: File, folderpathDestination: string): Promise<void> {
-    throw new Error("Method not implemented.");
+  async moveFile(context: Span, file: File, folderpathDestination: string): Promise<void> {
+    await AwsS3AccountFileOperationsMoveFile(context, this, await this.getS3Client(), file, folderpathDestination);
   }
   listFolders(context: Span): Promise<Folder[]> {
     throw new Error("Method not implemented.");

@@ -78,21 +78,21 @@ async function syncVideoFromFull(account: Account, file: File) {
   await account
     .downloadFile(span, file, `${tmpDir}/tmp_preview`, tmpFileName)
     .then(async () => {
-      let targetWidth = 900;
+      let targetWidth = config.VIDEO_PREVIEW_WIDTH;
       await probe(`${tmpDir}/tmp_preview/${tmpFileName}`)
         .then((probeData) => {
           if (!probeData || !probeData.streams || probeData.streams.length == 0 || !probeData.streams[0].width) {
             return;
           }
-          if (probeData.streams[0].width > 900) {
-            targetWidth = 900;
+          if (probeData.streams[0].width > config.VIDEO_PREVIEW_WIDTH) {
+            targetWidth = config.VIDEO_PREVIEW_WIDTH;
           } else {
             targetWidth = probeData.streams[0].width;
           }
         })
         .catch((err) => {
           logger.error(err);
-          targetWidth = 900;
+          targetWidth = config.VIDEO_PREVIEW_WIDTH;
         });
       logger.info(
         await SystemCommand.execute(
