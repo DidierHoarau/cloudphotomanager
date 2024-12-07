@@ -1,11 +1,18 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import { FileDataGetFileCacheDir, FileDataGetFileTmpDir, FileDataListByFolder } from "../files/FileData";
+import {
+  FileDataGetFileCacheDir,
+  FileDataGetFileTmpDir,
+  FileDataListByFolder,
+  FileDataListForAccount,
+} from "../files/FileData";
 import { Account } from "../model/Account";
 import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import * as fs from "fs-extra";
+import * as path from "path";
 import { Logger } from "../utils-std-ts/Logger";
 import { FileMediaType } from "../model/FileMediaType";
 import { File } from "../model/File";
+import { find } from "lodash";
 import * as sharp from "sharp";
 import { SyncQueueQueueItem } from "./SyncQueue";
 import { Folder } from "../model/Folder";
@@ -61,6 +68,26 @@ export async function SyncFileCacheCheckFile(context: Span, account: Account, fi
     await SyncQueueQueueItem(account, file.id, file, syncThumbnailFromVideoPreview, SyncQueueItemPriority.NORMAL);
   }
 
+  span.end();
+}
+
+export async function SyncFileCacheCleanUp(context: Span, account: Account) {
+  const span = StandardTracerStartSpan("SyncFileCacheCleanUp", context);
+  const accountFiles = await FileDataListForAccount(span, account.getAccountDefinition().id);
+  const accountCacheRoot = `${config.DATA_DIR}/cache/${account.getAccountDefinition().id}/`;
+  const cacheFolders = listFoldersRecursively(accountCacheRoot);
+  for (const cacheFolder of cacheFolders) {
+    const targetFileId = path.basename(cacheFolder);
+    if (
+      targetFileId &&
+      targetFileId !== account.getAccountDefinition().id &&
+      countSlashesInPath(cacheFolder.replace(accountCacheRoot, "")) === 2 &&
+      !find(accountFiles, { id: targetFileId })
+    ) {
+      logger.info(`Cleaning Cache: ${account.getAccountDefinition().id} ${targetFileId}`);
+      await fs.remove(cacheFolder);
+    }
+  }
   span.end();
 }
 
@@ -181,4 +208,37 @@ async function syncThumbnailFromVideoPreview(account: Account, file: File) {
     });
   await fs.remove(`${tmpDir}/tmp_preview`);
   span.end();
+}
+
+// Private Fucntions
+
+function listFoldersRecursively(folderPath: string) {
+  const folders = [];
+
+  function traverseDirectory(currentPath: string) {
+    const files = fs.readdirSync(currentPath);
+
+    files.forEach((file) => {
+      const filePath = path.join(currentPath, file);
+      const stat = fs.statSync(filePath);
+
+      if (stat.isDirectory()) {
+        folders.push(filePath);
+        traverseDirectory(filePath);
+      }
+    });
+  }
+
+  traverseDirectory(folderPath);
+  return folders;
+}
+
+function countSlashesInPath(folderPath: string) {
+  let count = 0;
+  for (let char of folderPath) {
+    if (char === "/") {
+      count++;
+    }
+  }
+  return count;
 }

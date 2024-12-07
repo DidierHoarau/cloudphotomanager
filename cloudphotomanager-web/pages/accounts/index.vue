@@ -9,7 +9,6 @@
         <tr>
           <td>Type</td>
           <td>Name</td>
-          <td>Update</td>
           <td>Delete</td>
         </tr>
       </thead>
@@ -21,9 +20,6 @@
           </td>
           <td>
             {{ account.name }}
-          </td>
-          <td>
-            <NuxtLink :to="'/accounts/' + account.id"><i class="bi bi-pen-fill"></i></NuxtLink>
           </td>
           <td>
             <i class="bi bi-trash-fill" v-on:click="clickedDelete(account)"></i>

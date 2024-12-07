@@ -17,6 +17,8 @@ import { Timeout } from "../utils-std-ts/Timeout";
 import { Logger } from "../utils-std-ts/Logger";
 import { SyncQueueQueueItem } from "./SyncQueue";
 import { SyncInventoryInit, SyncInventorySyncFolder } from "./SyncInventory";
+import { FileDataListForAccount } from "../files/FileData";
+import { SyncFileCacheCleanUp } from "./SyncFileCache";
 
 const logger = new Logger("Scheduler");
 
@@ -74,6 +76,8 @@ export async function SchedulerStartAccountSync(context: Span, accountDefinition
   for (const folder of await FolderDataGetNewstUpdate(span, account.getAccountDefinition().id, 10)) {
     await SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.NORMAL);
   }
+
+  await SyncFileCacheCleanUp(span, account);
 
   span.end();
 }
