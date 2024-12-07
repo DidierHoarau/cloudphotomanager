@@ -55,7 +55,7 @@ export async function AwsS3AccountFileOperationsMoveFile(
   const span = StandardTracerStartSpan("AwsS3AccountFileOperationsMoveFile", context);
   const paramsCopy = {
     Bucket: awsS3Account.getAccountDefinition().infoPrivate.bucket,
-    CopySource: path.join("/", awsS3Account.getAccountDefinition().infoPrivate.bucket, file.idCloud),
+    CopySource: encodeURI(path.join("/", awsS3Account.getAccountDefinition().infoPrivate.bucket, file.idCloud)),
     Key: toAwsFilePath(path.join(awsS3Account.getAccountDefinition().rootpath, folderpathDestination, file.filename)),
   };
   await s3.copyObject(paramsCopy).promise();

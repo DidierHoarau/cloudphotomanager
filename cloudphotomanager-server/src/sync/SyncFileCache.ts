@@ -80,7 +80,6 @@ export async function SyncFileCacheCleanUp(context: Span, account: Account) {
     const targetFileId = path.basename(cacheFolder);
     if (
       targetFileId &&
-      targetFileId !== account.getAccountDefinition().id &&
       countSlashesInPath(cacheFolder.replace(accountCacheRoot, "")) === 2 &&
       !find(accountFiles, { id: targetFileId })
     ) {
@@ -126,6 +125,9 @@ async function syncVideoFromFull(account: Account, file: File) {
           `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/tmp_preview/${tmpFileName} ${tmpDir}/tmp_preview/${tmpFileName}.mp4 ${targetWidth}`
         )
       );
+      if ((await fs.stat(`${tmpDir}/tmp_preview/${tmpFileName}.mp4`)).size === 0) {
+        throw new Error("Generated file empty");
+      }
       await fs.move(`${tmpDir}/tmp_preview/${tmpFileName}.mp4`, `${cacheDir}/preview.mp4`);
     })
     .catch((err) => {
@@ -235,7 +237,7 @@ function listFoldersRecursively(folderPath: string) {
 
 function countSlashesInPath(folderPath: string) {
   let count = 0;
-  for (let char of folderPath) {
+  for (const char of folderPath) {
     if (char === "/") {
       count++;
     }
