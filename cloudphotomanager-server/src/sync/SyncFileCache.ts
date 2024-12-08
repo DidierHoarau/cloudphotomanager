@@ -27,6 +27,7 @@ let config: Config;
 export async function SyncFileCacheInit(context: Span, configIn: Config) {
   const span = StandardTracerStartSpan("Scheduler_init", context);
   config = configIn;
+  await fs.remove(config.TMP_DIR);
   span.end();
 }
 
@@ -97,15 +98,15 @@ async function syncVideoFromFull(account: Account, file: File) {
   const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
   const tmpDir = await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id);
   await fs.ensureDir(cacheDir);
-  await fs.remove(`${tmpDir}/tmp_preview`);
-  await fs.ensureDir(`${tmpDir}/tmp_preview`);
+  await fs.remove(tmpDir);
+  await fs.ensureDir(tmpDir);
   const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
   logger.info(`Caching video ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
   await account
-    .downloadFile(span, file, `${tmpDir}/tmp_preview`, tmpFileName)
+    .downloadFile(span, file, tmpDir, tmpFileName)
     .then(async () => {
       let targetWidth = config.VIDEO_PREVIEW_WIDTH;
-      await probe(`${tmpDir}/tmp_preview/${tmpFileName}`)
+      await probe(`${tmpDir}/${tmpFileName}`)
         .then((probeData) => {
           if (!probeData || !probeData.streams || probeData.streams.length == 0 || !probeData.streams[0].width) {
             return;
@@ -122,18 +123,18 @@ async function syncVideoFromFull(account: Account, file: File) {
         });
       logger.info(
         await SystemCommand.execute(
-          `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/tmp_preview/${tmpFileName} ${tmpDir}/tmp_preview/${tmpFileName}.mp4 ${targetWidth}`
+          `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}.mp4 ${targetWidth}`
         )
       );
-      if ((await fs.stat(`${tmpDir}/tmp_preview/${tmpFileName}.mp4`)).size === 0) {
+      if ((await fs.stat(`${tmpDir}/${tmpFileName}.mp4`)).size === 0) {
         throw new Error("Generated file empty");
       }
-      await fs.move(`${tmpDir}/tmp_preview/${tmpFileName}.mp4`, `${cacheDir}/preview.mp4`);
+      await fs.move(`${tmpDir}/${tmpFileName}.mp4`, `${cacheDir}/preview.mp4`);
     })
     .catch((err) => {
       logger.error(err);
     });
-  await fs.remove(`${tmpDir}/tmp_preview`);
+  await fs.remove(tmpDir);
   span.end();
 }
 
@@ -142,25 +143,22 @@ async function syncPhotoFromFull(account: Account, file: File) {
   const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
   const tmpDir = await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id);
   await fs.ensureDir(cacheDir);
-  await fs.ensureDir(`${tmpDir}/tmp_preview`);
+  await fs.ensureDir(tmpDir);
   const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
   logger.info(`Caching photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
   await account
-    .downloadFile(span, file, `${tmpDir}/tmp_preview`, tmpFileName)
+    .downloadFile(span, file, tmpDir, tmpFileName)
     .then(async () => {
-      await sharp(`${tmpDir}/tmp_preview/${tmpFileName}`)
+      await sharp(`${tmpDir}/${tmpFileName}`)
         .withMetadata()
         .resize({ width: 300 })
         .toFile(`${cacheDir}/thumbnail.webp`);
-      await sharp(`${tmpDir}/tmp_preview/${tmpFileName}`)
-        .withMetadata()
-        .resize({ width: 2000 })
-        .toFile(`${cacheDir}/preview.webp`);
+      await sharp(`${tmpDir}/${tmpFileName}`).withMetadata().resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
     })
     .catch((err) => {
       logger.error(err);
     });
-  await fs.remove(`${tmpDir}/tmp_preview`);
+  await fs.remove(tmpDir);
   span.end();
 }
 
@@ -192,23 +190,20 @@ async function syncThumbnailFromVideoPreview(account: Account, file: File) {
   const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
   const tmpDir = await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id);
   await fs.ensureDir(cacheDir);
-  await fs.remove(`${tmpDir}/tmp_thumbnail`);
-  await fs.ensureDir(`${tmpDir}/tmp_thumbnail`);
+  await fs.remove(tmpDir);
+  await fs.ensureDir(tmpDir);
   logger.info(`Generating video thumbnail ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
   await SystemCommand.execute(
-    `${config.TOOLS_DIR}/tools-video-generate-thumbnail.sh ${cacheDir}/preview.mp4 ${tmpDir}/tmp_thumbnail/thumbnail.jpg`
+    `${config.TOOLS_DIR}/tools-video-generate-thumbnail.sh ${cacheDir}/preview.mp4 ${tmpDir}/thumbnail.jpg`
   )
     .then(async (output: string) => {
       logger.info(output);
-      await sharp(`${tmpDir}/tmp_thumbnail/thumbnail.jpg`)
-        .withMetadata()
-        .resize({ width: 300 })
-        .toFile(`${cacheDir}/thumbnail.webp`);
+      await sharp(`${tmpDir}/thumbnail.jpg`).withMetadata().resize({ width: 300 }).toFile(`${cacheDir}/thumbnail.webp`);
     })
     .catch((err) => {
       logger.error(err);
     });
-  await fs.remove(`${tmpDir}/tmp_preview`);
+  await fs.remove(tmpDir);
   span.end();
 }
 

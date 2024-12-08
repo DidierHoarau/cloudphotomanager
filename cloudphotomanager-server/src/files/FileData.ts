@@ -14,14 +14,12 @@ export async function FileDataInit(context: Span, configIn: Config) {
   span.end();
 }
 
-export async function FileDataGetFileCacheDir(context: Span, accountId: String, fileId: string): Promise<string> {
-  const cacheDir = `${config.DATA_DIR}/cache/${accountId}/${fileId[0]}/${fileId[1]}/${fileId}`;
-  return cacheDir;
+export async function FileDataGetFileCacheDir(context: Span, accountId: string, fileId: string): Promise<string> {
+  return `${config.DATA_DIR}/cache/${accountId}/${fileId[0]}/${fileId[1]}/${fileId}`;
 }
 
-export async function FileDataGetFileTmpDir(context: Span, accountId: String, fileId: string): Promise<string> {
-  const cacheDir = `${config.TMP_DIR}/cache/${accountId}/${fileId[0]}/${fileId[1]}/${fileId}`;
-  return cacheDir;
+export async function FileDataGetFileTmpDir(context: Span, accountId: string, fileId: string): Promise<string> {
+  return `${config.TMP_DIR}/cache/${accountId}/${Date.now()}_${fileId}`;
 }
 
 export async function FileDataGet(context: Span, id: string): Promise<File> {
