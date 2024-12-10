@@ -44,7 +44,6 @@ export default {
     };
   },
   async created() {
-    console.log(this.accountId);
     EventBus.on(EventTypes.FOLDERS_UPDATED, (message) => {
       FoldersStore().fetch();
     });
