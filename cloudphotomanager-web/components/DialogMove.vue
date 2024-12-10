@@ -6,7 +6,12 @@
         Move File
       </header>
       <label>Destination Folder</label>
-      <FolderList class="dialog-folder-selection" @onFolderSelected="onFolderSelected" />
+      <FolderList
+        v-if="accountId"
+        class="dialog-folder-selection"
+        :accountId="accountId"
+        @onFolderSelected="onFolderSelected"
+      />
       <input id="name" v-model="selectedFolderpath" type="text" />
       <button :disabled="loading || selectedFolderpath === ''" v-on:click="doAction()">Move</button>
     </article>
@@ -32,10 +37,12 @@ export default {
       serverUrl: "",
       selectedFolderpath: "",
       loading: false,
+      accountId: "",
     };
   },
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
+    this.accountId = this.target.files[0].accountId;
   },
   methods: {
     async clickedClose() {

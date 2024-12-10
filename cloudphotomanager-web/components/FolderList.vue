@@ -35,6 +35,7 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 export default {
   props: {
     monitorRoute: false,
+    accountId: "",
   },
   data() {
     return {
@@ -43,6 +44,7 @@ export default {
     };
   },
   async created() {
+    console.log(this.accountId);
     EventBus.on(EventTypes.FOLDERS_UPDATED, (message) => {
       FoldersStore().fetch();
     });
@@ -71,6 +73,9 @@ export default {
       this.selectedFolderId = folder.id;
     },
     isVisible(folder) {
+      if (this.accountId && this.accountId !== folder.accountId) {
+        return false;
+      }
       if (this.folderFilter) {
         return folder.folderpath.toLowerCase().indexOf(this.folderFilter.toLowerCase().trim()) >= 0;
       }
