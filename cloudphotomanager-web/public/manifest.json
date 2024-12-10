@@ -1,0 +1,16 @@
+{
+  "name": "CloudPhotoManager",
+  "short_name": "CloudPhotoManager",
+  "lang": "en-US",
+  "start_url": "/gallery",
+  "display": "standalone",
+  "background_color": "#12191f",
+  "theme_color": "#12191f",
+  "icons": [
+    {
+      "src": "images/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

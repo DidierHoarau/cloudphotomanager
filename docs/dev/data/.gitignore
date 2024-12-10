@@ -1,0 +1,6 @@
+*.json
+/logs/*
+*.db
+*.db-journal
+/cache
+/tmp

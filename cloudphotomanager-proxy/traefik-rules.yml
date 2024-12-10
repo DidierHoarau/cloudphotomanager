@@ -1,0 +1,21 @@
+http:
+  routers:
+    web:
+      service: service-web
+      rule: PathPrefix(`/`)
+    server:
+      service: service-server
+      rule: PathPrefix(`/api/`)
+    static:
+      service: service-server
+      rule: PathPrefix(`/static/`)
+
+  services:
+    service-web:
+      loadBalancer:
+        servers:
+          - url: http://localhost:3000/
+    service-server:
+      loadBalancer:
+        servers:
+          - url: http://localhost:8080/
