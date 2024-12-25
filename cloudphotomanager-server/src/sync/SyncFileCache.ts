@@ -76,6 +76,9 @@ export async function SyncFileCacheCleanUp(context: Span, account: Account) {
   const span = StandardTracerStartSpan("SyncFileCacheCleanUp", context);
   const accountFiles = await FileDataListForAccount(span, account.getAccountDefinition().id);
   const accountCacheRoot = `${config.DATA_DIR}/cache/${account.getAccountDefinition().id}/`;
+  if (!fs.existsSync(accountCacheRoot)) {
+    return;
+  }
   const cacheFolders = listFoldersRecursively(accountCacheRoot);
   for (const cacheFolder of cacheFolders) {
     const targetFileId = path.basename(cacheFolder);

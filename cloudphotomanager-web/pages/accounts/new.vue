@@ -10,6 +10,7 @@
       <option value="select" selected>Select Type...</option>
       <option value="awsS3" selected>AWS S3</option>
       <option value="oneDrive" selected>One Drive</option>
+      <option value="localDrive" selected>Local Drive</option>
     </select>
     <AccountAwsS3Edit
       v-if="account.info.type == 'awsS3'"
@@ -18,6 +19,11 @@
     />
     <AccountOneDriveEdit
       v-if="account.info.type == 'oneDrive'"
+      @onInfoPrivateValid="infoPrivateValid"
+      @onInfoPrivateInvalid="infoPrivateInvalid"
+    />
+    <AccountLocalEdit
+      v-if="account.info.type == 'localDrive'"
       @onInfoPrivateValid="infoPrivateValid"
       @onInfoPrivateInvalid="infoPrivateInvalid"
     />

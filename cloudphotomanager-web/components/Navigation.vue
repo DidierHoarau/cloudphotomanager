@@ -6,9 +6,6 @@
       </li>
     </ul>
     <ul class="menu-links">
-      <li class="sync-count" v-if="syncStore.countTotal > 0">
-        <kbd>Sync:&nbsp;{{ syncStore.countTotal }}</kbd>
-      </li>
       <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink to="/gallery" :class="baseFolder === 'gallery' ? 'active' : 'inactive'"
           ><i class="bi bi-images"></i
