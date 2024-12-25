@@ -90,11 +90,9 @@ async function startSchedule() {
     const accountDefinitions = await AccountDataList(span);
     accountDefinitions.forEach(async (accountDefinition) => {
       logger.info(`Start Sync of Account ${accountDefinition.name}`);
-      if (accountDefinition.name === "Local Drive") {
-        SchedulerStartAccountSync(span, accountDefinition).catch((err) => {
-          logger.error(err);
-        });
-      }
+      SchedulerStartAccountSync(span, accountDefinition).catch((err) => {
+        logger.error(err);
+      });
     });
     await Timeout.wait(config.SOURCE_FETCH_FREQUENCY);
   }
