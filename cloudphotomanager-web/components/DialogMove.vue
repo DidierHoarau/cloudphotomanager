@@ -60,6 +60,7 @@ export default {
     },
     async doAction() {
       this.loading = true;
+      SyncStore().markOperationInProgress();
       for (const file of this.target.files) {
         axios
           .put(

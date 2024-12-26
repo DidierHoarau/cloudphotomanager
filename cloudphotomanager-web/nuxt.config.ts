@@ -4,7 +4,8 @@ export default defineNuxtConfig({
   app: {
     head: {
       charset: "utf-16",
-      viewport: "width=device-width, initial-scale=1",
+      viewport:
+        "width=device-width, initial-scale=1, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no",
       title: "CloudPhotoManager",
       meta: [
         { name: "description", content: "CloudPhotoManager" },
@@ -19,6 +20,7 @@ export default defineNuxtConfig({
       ],
     },
   },
+  css: ["~/assets/css/main.css"],
   modules: ["@pinia/nuxt"],
   imports: {
     dirs: ["./stores"],

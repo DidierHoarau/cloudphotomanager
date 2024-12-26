@@ -17,6 +17,7 @@
           <td>
             <i v-if="account.info.type == 'oneDrive'" class="bi bi-windows"></i>
             <i v-else-if="account.info.type == 'awsS3'" class="bi bi-amazon"></i>
+            <i v-else-if="account.info.type == 'localDrive'" class="bi bi-device-hdd-fill"></i>
           </td>
           <td>
             {{ account.name }}
