@@ -1,6 +1,6 @@
 # cloudphotomanager
 
-CloudPhotoManager is a self hosted free and open source photo managegement tool. Photoes and videos are not stored directly in the application, they are stored on 3rd party storage providers that the application needs to be connected to.
+CloudPhotoManager is a self-hosted free and open source photo managegement tool. Photos and videos are not stored directly in the application, they are stored on 3rd party storage providers that the application needs to be connected to.
 
 ![](docs/images/cloudphotomanager_preview.png?raw=true)
 
@@ -8,7 +8,7 @@ CloudPhotoManager is a self hosted free and open source photo managegement tool.
 
 - Supported Storage Providers: OneDrive, AWS S3, Local Drive
 - Organize Photos by Folders
-- Multiple user to be able to shared some folder to some users
+- Multiple users to be able to shared some folder to some users
 - Detection of duplicates
 
 # Installation
