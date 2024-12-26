@@ -116,12 +116,24 @@ export async function OneDriveFileOperationsMoveFile(
   );
 }
 
-export async function OneDriveFileOperationsdeleteFile(
+export async function OneDriveFileOperationsDeleteFile(
   context: Span,
   oneDriveAccount: OneDriveAccount,
   file: File
 ): Promise<void> {
   await axios.delete(`https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`, {
+    headers: {
+      Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+    },
+  });
+}
+
+export async function OneDriveFileOperationsDeleteFolder(
+  context: Span,
+  oneDriveAccount: OneDriveAccount,
+  folder: Folder
+): Promise<void> {
+  await axios.delete(`https://graph.microsoft.com/v1.0/me/drive/items/${folder.idCloud}`, {
     headers: {
       Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
     },

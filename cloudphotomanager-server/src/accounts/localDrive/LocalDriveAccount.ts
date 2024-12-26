@@ -76,6 +76,10 @@ export class LocalAccount implements Account {
     await fs.copyFile(file.idCloud, path.join(destinationFolderpath, destinationFilename));
   }
 
+  public async deleteFolder(context: Span, folder: Folder): Promise<void> {
+    await fs.rm(folder.idCloud, { recursive: true, force: true });
+  }
+
   public async validate(context: Span): Promise<boolean> {
     const span = StandardTracerStartSpan("LocalAccount_validate", context);
     let valid = false;

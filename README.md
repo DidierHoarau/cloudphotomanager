@@ -15,6 +15,8 @@ CloudPhotoManager is a self-hosted free and open source photo managegement tool.
 
 The only supported way to setup the application is with Docker containers.
 
+[https://hub.docker.com/r/didierhoarau/cloudphotomanager]
+
 ## Kubernetes Setup
 
 The following basic configuration can be used to setup the application on Kubernetes:

@@ -18,4 +18,5 @@ export interface Account {
   getFolder(context: Span, folder: Folder): Promise<Folder>;
   getFolderByPath(context: Span, folderpath: string): Promise<Folder>;
   getCapabilities(): AccountCapabilities;
+  deleteFolder(context: Span, folder: Folder): Promise<void>;
 }

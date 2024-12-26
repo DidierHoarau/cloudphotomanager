@@ -16,7 +16,8 @@ import {
   OneDriveInventoryListFoldersInFolder,
 } from "./OneDriveInventory";
 import {
-  OneDriveFileOperationsdeleteFile,
+  OneDriveFileOperationsDeleteFile,
+  OneDriveFileOperationsDeleteFolder,
   OneDriveFileOperationsDownloadFile,
   OneDriveFileOperationsDownloadThumbnail,
   OneDriveFileOperationsMoveFile,
@@ -142,7 +143,7 @@ export class OneDriveAccount implements Account {
   }
 
   public async deleteFile(context: Span, file: File): Promise<void> {
-    await OneDriveFileOperationsdeleteFile(context, this, file);
+    await OneDriveFileOperationsDeleteFile(context, this, file);
   }
 
   public async getFolder(context: Span, folder: Folder): Promise<Folder> {
@@ -155,6 +156,10 @@ export class OneDriveAccount implements Account {
 
   public folderToEncodedAbsolute(relativePath: string): string {
     return encodeURI(`${this.accountDefinition.rootpath}/${relativePath.replace(/\/+$/, "")}`.replace(/\/+/g, "/"));
+  }
+
+  public async deleteFolder(context: Span, folder: Folder): Promise<void> {
+    await OneDriveFileOperationsDeleteFolder(context, this, folder);
   }
 
   public folderToDecodedRelative(absolutePath: string): string {
