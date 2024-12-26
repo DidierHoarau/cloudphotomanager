@@ -2,10 +2,6 @@
   <dialog open>
     <article>
       <fieldset>
-        <legend>Per name:</legend>
-        <input type="text" placeholder="Regular expression" />
-      </fieldset>
-      <fieldset>
         <legend>Per date:</legend>
         <label v-for="daySelection in daySelections" :key="daySelection.day"
           ><input v-model="daySelection.selected" type="checkbox" @change="onDaySelected()" />{{ daySelection.day }} ({{
