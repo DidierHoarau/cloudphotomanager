@@ -7,6 +7,9 @@
       <button class="secondary outline" v-on:click="clickedRefresh()">
         <i class="bi bi-arrow-clockwise"></i> Refresh
       </button>
+      <button v-if="authenticationStore.isAdmin" class="secondary outline" v-on:click="clickedSelect()">
+        <i class="bi bi-check2-square"></i> Select...
+      </button>
       <kbd v-if="selectedFiles.length > 0">Selected: {{ selectedFiles.length }}</kbd>
       <button
         v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
@@ -36,7 +39,7 @@
           />
         </div>
         <div class="gallery-file-selected">
-          <input v-on:input="onFileSelected(file)" type="checkbox" />
+          <input v-on:input="onFileSelected(file)" type="checkbox" :checked="isFileSelected(file)" />
         </div>
         <div class="gallery-file-name">
           {{ file.filename }}
@@ -54,6 +57,12 @@
       @onFileClosed="unFocusGalleryItem"
     />
     <DialogMove v-if="activeOperation == 'move'" :target="{ files: selectedFiles }" @onDone="onOperationDone" />
+    <DialogSelect
+      v-if="activeOperation == 'select'"
+      :selectedFiles="selectedFiles"
+      :files="files"
+      @onDone="onDialogClosed"
+    />
   </div>
 </template>
 
@@ -177,6 +186,9 @@ export default {
         this.selectedFiles.splice(selectedIndex, 1);
       }
     },
+    isFileSelected(file) {
+      return findIndex(this.selectedFiles, { id: file.id }) >= 0;
+    },
     onFolderSelected(event) {
       useRouter().push({ query: { accountId: event.folder.accountId, folderId: event.folder.id } });
       this.fetchFiles(event.folder.accountId, event.folder.id);
@@ -224,6 +236,9 @@ export default {
         return "";
       }
     },
+    onDialogClosed() {
+      this.activeOperation = "";
+    },
     onOperationDone(result) {
       this.selectedFiles = [];
       this.activeOperation = "";
@@ -233,6 +248,9 @@ export default {
     },
     clickedMove() {
       this.activeOperation = "move";
+    },
+    clickedSelect() {
+      this.activeOperation = "select";
     },
     async clickedDelete() {
       let message = `Delete the ${this.selectedFiles.length} selected files? (Can't be undone!)\n`;
@@ -261,7 +279,6 @@ export default {
     },
     getType(file) {
       return FileUtils.getType(file);
-      // return "HELLO";
     },
   },
 };
@@ -440,5 +457,9 @@ export default {
   right: 0.1em;
   bottom: 0em;
   opacity: 0.5;
+}
+
+.gallery-files-actions kbd {
+  margin-right: 1em;
 }
 </style>
