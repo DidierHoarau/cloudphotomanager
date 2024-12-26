@@ -131,9 +131,9 @@ export async function FolderDataListCountsForAccount(
   return counts;
 }
 
-export async function FolderDataDeleteForAccount(context: Span, accountId: string, folderpath: string): Promise<void> {
+export async function FolderDataDelete(context: Span, accountId: string, id: string): Promise<void> {
   const span = StandardTracerStartSpan("FolderData_listForAccount", context);
-  await SqlDbutils.execSQL(span, "DELETE FROM files WHERE accountId = ? AND folderpath = ?", [accountId, folderpath]);
+  await SqlDbutils.execSQL(span, "DELETE FROM files WHERE accountId = ? AND id = ?", [accountId, id]);
   span.end();
 }
 

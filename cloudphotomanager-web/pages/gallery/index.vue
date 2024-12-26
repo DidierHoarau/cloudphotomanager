@@ -7,7 +7,11 @@
       <button class="secondary outline" v-on:click="clickedRefresh()">
         <i class="bi bi-arrow-clockwise"></i> Refresh
       </button>
-      <button v-if="authenticationStore.isAdmin" class="secondary outline" v-on:click="clickedSelect()">
+      <button
+        v-if="files.length > 0 && authenticationStore.isAdmin"
+        class="secondary outline"
+        v-on:click="clickedSelect()"
+      >
         <i class="bi bi-check2-square"></i> Select...
       </button>
       <kbd v-if="selectedFiles.length > 0">Selected: {{ selectedFiles.length }}</kbd>
@@ -17,6 +21,13 @@
         v-on:click="clickedDelete()"
       >
         <i class="bi bi-trash-fill"></i> Delete
+      </button>
+      <button
+        v-if="files.length == 0 && folder.children == 0 && folder.parentIndex >= 0 && authenticationStore.isAdmin"
+        class="secondary outline"
+        v-on:click="clickedDeleteFolder()"
+      >
+        <i class="bi bi-trash-fill"></i> Del. Folder
       </button>
       <button
         v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
@@ -81,6 +92,7 @@ import { FileUtils } from "~~/services/FileUtils";
 export default {
   data() {
     return {
+      folder: {},
       files: [],
       menuOpened: true,
       serverUrl: "",
@@ -165,6 +177,7 @@ export default {
           this.requestEtag = "";
           this.loading = false;
         });
+      this.folder = find(FoldersStore().folders, { id: folderId }) || {};
     },
     async clickedRefresh() {
       await axios
@@ -275,6 +288,29 @@ export default {
             })
             .catch(handleError);
         }
+        this.loading = false;
+      }
+    },
+    async clickedDeleteFolder() {
+      let message = `Delete the current Folder? (Can't be undone!)\n`;
+      if (confirm(message) == true) {
+        this.loading = true;
+        SyncStore().markOperationInProgress();
+        axios
+          .delete(
+            `${(await Config.get()).SERVER_URL}/accounts/${this.folder.accountId}/folders/${
+              this.folder.id
+            }/operations/delete`,
+            await AuthService.getAuthHeader()
+          )
+          .then((res) => {
+            SyncStore().fetch();
+            EventBus.emit(EventTypes.ALERT_MESSAGE, {
+              text: "File deleted",
+            });
+            this.onOperationDone({ status: "invalidated" });
+          })
+          .catch(handleError);
         this.loading = false;
       }
     },

@@ -104,6 +104,10 @@ export class AwsS3Account implements Account {
     return valid;
   }
 
+  deleteFolder(context: Span, folder: Folder): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
   private async getS3Client(): Promise<S3> {
     if (this.s3Client) {
       return this.s3Client;

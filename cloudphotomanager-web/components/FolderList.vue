@@ -7,7 +7,8 @@
         <div v-if="isVisible(folder)" class="folder-layout" :class="{ 'source-active': selectedFolderId == folder.id }">
           <span v-on:click="toggleFolderCollapsed(folder, index)" class="folder-layout-indent">
             <span v-if="!folderFilter" v-html="folder.indentation"></span>
-            <i v-if="folder.isCollapsed" class="bi bi-folder"></i>
+            <i v-if="folder.children === 0" class="bi bi-images"></i>
+            <i v-else-if="folder.isCollapsed" class="bi bi-folder"></i>
             <i v-else class="bi bi-folder2-open"></i>
           </span>
           <div v-on:click="selectFolder(folder, index)" class="folder-layout-name">

@@ -35,12 +35,14 @@ export const FoldersStore = defineStore("FoldersStore", {
                   parentIndex: -1,
                   isCollapsed: PreferencesFolders.isCollapsed(folder.accountId, folder.id),
                   isVisible: true,
+                  children: 0,
                 });
               } else {
                 let parentPath = folder.folderpath.substring(0, folder.folderpath.lastIndexOf("/"));
                 if (parentPath === "") {
                   parentPath = "/";
                 }
+                const parentIndex = findIndex(folders, { folderpath: parentPath, accountId: account.id });
                 folders.push({
                   id: folder.id,
                   name: folder.folderpath.split("/").pop(),
@@ -51,8 +53,10 @@ export const FoldersStore = defineStore("FoldersStore", {
                   indentation: this.getIndentation(folder.folderpath),
                   isCollapsed: PreferencesFolders.isCollapsed(folder.accountId, folder.id),
                   isVisible: true,
-                  parentIndex: findIndex(folders, { folderpath: parentPath, accountId: account.id }),
+                  parentIndex,
+                  children: 0,
                 });
+                folders[parentIndex].children++;
               }
             }
           })
