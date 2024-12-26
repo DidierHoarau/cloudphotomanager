@@ -2,7 +2,7 @@ import { AuthService } from "~~/services/AuthService";
 import Config from "~~/services/Config";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import axios from "axios";
-import { find, sortBy } from "lodash";
+import { find, findIndex, sortBy } from "lodash";
 import { PreferencesFolders } from "~~/services/PreferencesFolders";
 
 export const FoldersStore = defineStore("FoldersStore", {
@@ -21,12 +21,16 @@ export const FoldersStore = defineStore("FoldersStore", {
       const folders: any[] = [];
       for (const accountIn of AccountsStore().accounts) {
         const account: any = accountIn;
-        folders.push({ name: account.name, accountId: account.id, folderpath: "/", depth: 0 });
+        folders.push({ name: account.name, accountId: account.id, folderpath: "/", depth: 0, parentIndex: -1 });
         await axios
           .get(`${(await Config.get()).SERVER_URL}/accounts/${account.id}/folders`, await AuthService.getAuthHeader())
           .then((res) => {
             for (const folder of sortBy(res.data.folders, ["folderpath"])) {
               if (folder.folderpath !== "/") {
+                let parentPath = folder.folderpath.substring(0, folder.folderpath.lastIndexOf("/"));
+                if (parentPath === "") {
+                  parentPath = "/";
+                }
                 folders.push({
                   name: folder.folderpath.split("/").pop(),
                   type: "folder",
@@ -37,9 +41,11 @@ export const FoldersStore = defineStore("FoldersStore", {
                   indentation: this.getIndentation(folder.folderpath),
                   isCollapsed: PreferencesFolders.isCollapsed(folder.accountId, folder.id),
                   isVisible: true,
+                  parentIndex: findIndex(folders, { folderpath: parentPath, accountId: account.id }),
                 });
               } else {
                 folders[0].id = folder.id;
+                folders[0].isCollapsed = PreferencesFolders.isCollapsed(folder.accountId, folder.id);
               }
             }
           })
@@ -61,21 +67,20 @@ export const FoldersStore = defineStore("FoldersStore", {
       return indent;
     },
     checkVisibility(folders: any[], accountId: string) {
-      let parentCollapsedPath = "";
       for (let i = 0; i < folders.length; i++) {
         const folder = folders[i] as any;
-        if (folder.accountId === accountId) {
-          if (parentCollapsedPath && `${folder.folderpath}/`.indexOf(parentCollapsedPath) === 0) {
-            folder.isVisible = false;
-          } else if (!folder.isCollapsed) {
-            folder.isVisible = true;
-          } else if (folder.isCollapsed) {
-            folder.isVisible = true;
-            parentCollapsedPath = folder.folderpath;
-          } else {
-            folder.isVisible = true;
-          }
+        if (folder.accountId !== accountId) {
+          continue;
         }
+        if (folder.parentIndex < 0) {
+          folder.isVisible = true;
+          continue;
+        }
+        if (!folders[folder.parentIndex].isVisible || folders[folder.parentIndex].isCollapsed) {
+          folder.isVisible = false;
+          continue;
+        }
+        folder.isVisible = true;
       }
     },
     async fetchCounts(folders: any[], accountId: string) {

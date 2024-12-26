@@ -18,7 +18,6 @@ export const AuthenticationStore = defineStore("AuthenticationStore", {
       } else {
         this.isAdmin = false;
       }
-
       return this.isAuthenticated;
     },
   },

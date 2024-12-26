@@ -259,6 +259,7 @@ export default {
       }
       if (confirm(message) == true) {
         this.loading = true;
+        SyncStore().markOperationInProgress();
         for (const file of this.selectedFiles) {
           axios
             .delete(

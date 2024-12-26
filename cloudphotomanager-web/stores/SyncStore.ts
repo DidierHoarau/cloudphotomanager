@@ -21,11 +21,14 @@ export const SyncStore = defineStore("SyncStore", {
       this.checking = true;
       await axios
         .get(`${(await Config.get()).SERVER_URL}/sync/status`, await AuthService.getAuthHeader())
-        .then((res) => {
+        .then(async (res) => {
           let count = 0;
           for (const item of res.data.sync) {
             count += item.count;
             if (item.type === "blocking") {
+              if (item.count === 0) {
+                await FoldersStore().fetch();
+              }
               this.countBlocking = item.count;
             }
           }
@@ -43,6 +46,9 @@ export const SyncStore = defineStore("SyncStore", {
       Timeout.wait(this.checkFrequency).then(() => {
         this.fetch();
       });
+    },
+    markOperationInProgress() {
+      this.countBlocking++;
     },
   },
 });
