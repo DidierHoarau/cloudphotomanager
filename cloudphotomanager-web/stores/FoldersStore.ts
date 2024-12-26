@@ -108,12 +108,14 @@ export const FoldersStore = defineStore("FoldersStore", {
         }
       }
     },
-
     toggleFolderCollapsed(index: number) {
       const folder = this.folders[index] as any;
       folder.isCollapsed = !folder.isCollapsed;
       PreferencesFolders.toggleCollapsed(folder.accountId, folder.id);
       this.checkVisibility(this.folders, folder.accountId);
+    },
+    getParentFolder(folder: any) {
+      return this.folders[folder.parentIndex];
     },
   },
 });

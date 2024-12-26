@@ -293,6 +293,7 @@ export default {
     },
     async clickedDeleteFolder() {
       let message = `Delete the current Folder? (Can't be undone!)\n`;
+      const parentFolderId = FoldersStore().getParentFolder(this.folder).id;
       if (confirm(message) == true) {
         this.loading = true;
         SyncStore().markOperationInProgress();
@@ -306,9 +307,14 @@ export default {
           .then((res) => {
             SyncStore().fetch();
             EventBus.emit(EventTypes.ALERT_MESSAGE, {
-              text: "File deleted",
+              text: "Folder deleted",
             });
             this.onOperationDone({ status: "invalidated" });
+            FoldersStore().fetch();
+            useRouter().push({
+              path: "/gallery",
+              query: { accountId: this.folder.accountId, folderId: parentFolderId },
+            });
           })
           .catch(handleError);
         this.loading = false;
