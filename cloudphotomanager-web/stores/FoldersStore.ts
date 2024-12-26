@@ -21,20 +21,30 @@ export const FoldersStore = defineStore("FoldersStore", {
       const folders: any[] = [];
       for (const accountIn of AccountsStore().accounts) {
         const account: any = accountIn;
-        folders.push({ name: account.name, accountId: account.id, folderpath: "/", depth: 0, parentIndex: -1 });
         await axios
           .get(`${(await Config.get()).SERVER_URL}/accounts/${account.id}/folders`, await AuthService.getAuthHeader())
           .then((res) => {
             for (const folder of sortBy(res.data.folders, ["folderpath"])) {
-              if (folder.folderpath !== "/") {
+              if (folder.folderpath === "/") {
+                folders.push({
+                  id: folder.id,
+                  name: account.name,
+                  accountId: account.id,
+                  folderpath: "/",
+                  depth: 0,
+                  parentIndex: -1,
+                  isCollapsed: PreferencesFolders.isCollapsed(folder.accountId, folder.id),
+                  isVisible: true,
+                });
+              } else {
                 let parentPath = folder.folderpath.substring(0, folder.folderpath.lastIndexOf("/"));
                 if (parentPath === "") {
                   parentPath = "/";
                 }
                 folders.push({
+                  id: folder.id,
                   name: folder.folderpath.split("/").pop(),
                   type: "folder",
-                  id: folder.id,
                   accountId: account.id,
                   folderpath: folder.folderpath,
                   childrenCount: folder.childrenCount,
@@ -43,9 +53,6 @@ export const FoldersStore = defineStore("FoldersStore", {
                   isVisible: true,
                   parentIndex: findIndex(folders, { folderpath: parentPath, accountId: account.id }),
                 });
-              } else {
-                folders[0].id = folder.id;
-                folders[0].isCollapsed = PreferencesFolders.isCollapsed(folder.accountId, folder.id);
               }
             }
           })
