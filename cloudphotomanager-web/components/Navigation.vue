@@ -28,7 +28,7 @@
       </li>
     </ul>
     <dialog v-if="syncStore.countBlocking > 0" open>
-      <i class="bi bi-hourglass-split"></i>&nbsp;&nbsp; Operations in Progress: {{ syncStore.countBlocking }}
+      <i class="bi bi-hourglass-split"></i>&nbsp;&nbsp; Operations in Progress, please wait
     </dialog>
   </nav>
 </template>
