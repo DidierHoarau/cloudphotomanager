@@ -73,7 +73,6 @@ export default {
           .then((res) => {
             this.$emit("onDone", { status: "invalidated" });
             EventBus.emit(EventTypes.FOLDERS_UPDATED, {});
-            SyncStore().fetch();
           })
           .catch(handleError);
       }

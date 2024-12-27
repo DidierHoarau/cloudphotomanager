@@ -64,7 +64,6 @@ export default {
   },
   async created() {
     await AccountsStore().fetch();
-    SyncStore().fetch();
     FoldersStore().fetch();
     await AuthenticationStore().ensureAuthenticated();
     if (!(await AuthenticationStore()).isAdmin) {

@@ -14,6 +14,9 @@ import { Folder } from "../model/Folder";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { SyncQueueQueueItem } from "./SyncQueue";
 import { SyncFileCacheCheckFolder } from "./SyncFileCache";
+import { SyncEventHistoryAdd } from "./SyncEventHistory";
+import { SyncEventObjectTypes } from "../model/SyncEventObjectTypes";
+import { SyncEventActions } from "../model/SyncEventActions";
 
 const logger = new Logger("SyncInventory");
 
@@ -23,7 +26,7 @@ export async function SyncInventoryInit(context: Span): Promise<void> {
 }
 
 export async function SyncInventorySyncFolder(account: Account, knownFolder: Folder): Promise<void> {
-  const span = StandardTracerStartSpan("SyncInventory_syncFolder");
+  const span = StandardTracerStartSpan("SyncInventorySyncFolder");
   logger.info(`Sync folder: ${account.getAccountDefinition().id}: ${knownFolder.folderpath}`);
 
   const cloudFolder = await account.getFolder(span, knownFolder);
@@ -32,10 +35,13 @@ export async function SyncInventorySyncFolder(account: Account, knownFolder: Fol
   const knownSubFiles = await FileDataListByFolder(span, account.getAccountDefinition().id, knownFolder.id);
   const knownSubFolders = await FolderDataListSubFolders(span, knownFolder);
 
+  let updated = false;
+
   // New Folder
   for (const cloudSubFolder of cloudSubFolders) {
     const knownSubFolder = _.find(knownSubFolders, { id: cloudSubFolder.id });
     if (!knownSubFolder) {
+      updated = true;
       await FolderDataAdd(span, cloudSubFolder);
       await SyncQueueQueueItem(
         account,
@@ -51,6 +57,7 @@ export async function SyncInventorySyncFolder(account: Account, knownFolder: Fol
   for (const cloudSubFile of cloudSubFiles) {
     const knownSubFile = _.find(knownSubFiles, { id: cloudSubFile.id });
     if (!knownSubFile) {
+      updated = true;
       cloudSubFile.folderId = knownFolder.id;
       await FileDataAdd(span, cloudSubFile);
     }
@@ -60,6 +67,7 @@ export async function SyncInventorySyncFolder(account: Account, knownFolder: Fol
   for (const knownSubFolder of knownSubFolders) {
     const cloudSubFolder = _.find(cloudSubFolders, { id: knownSubFolder.id });
     if (!cloudSubFolder) {
+      updated = true;
       await FolderDataDeletePathRecursive(span, account.getAccountDefinition().id, knownSubFolder.folderpath);
     }
   }
@@ -68,6 +76,7 @@ export async function SyncInventorySyncFolder(account: Account, knownFolder: Fol
   for (const knownSubFile of knownSubFiles) {
     const cloudSubFile = _.find(cloudSubFiles, { id: knownSubFile.id });
     if (!cloudSubFile) {
+      updated = true;
       await FileDataDelete(span, knownSubFile.id);
     }
   }
@@ -79,6 +88,15 @@ export async function SyncInventorySyncFolder(account: Account, knownFolder: Fol
   await FolderDataUpdate(span, knownFolder);
 
   SyncFileCacheCheckFolder(span, account, knownFolder);
+
+  if (updated) {
+    SyncEventHistoryAdd({
+      objectType: SyncEventObjectTypes.FOLDER,
+      objectId: knownFolder.id,
+      date: new Date(),
+      action: SyncEventActions.UPDATED,
+    });
+  }
 
   span.end();
 }

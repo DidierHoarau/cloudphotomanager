@@ -17,7 +17,6 @@ import { Timeout } from "../utils-std-ts/Timeout";
 import { Logger } from "../utils-std-ts/Logger";
 import { SyncQueueQueueItem } from "./SyncQueue";
 import { SyncInventoryInit, SyncInventorySyncFolder } from "./SyncInventory";
-import { FileDataListForAccount } from "../files/FileData";
 import { SyncFileCacheCleanUp } from "./SyncFileCache";
 
 const logger = new Logger("Scheduler");
