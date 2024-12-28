@@ -116,7 +116,9 @@ export default {
       FoldersStore().fetch();
     }
     EventBus.on(EventTypes.FOLDER_UPDATED, (message) => {
-      FoldersStore().fetch();
+      if (message.folderId === this.currentFolderId) {
+        FoldersStore().fetch();
+      }
     });
     EventBus.on(EventTypes.FILE_UPDATED, (message) => {
       FoldersStore().fetch();
@@ -280,7 +282,6 @@ export default {
               await AuthService.getAuthHeader()
             )
             .then((res) => {
-              SyncStore().fetch();
               EventBus.emit(EventTypes.ALERT_MESSAGE, {
                 text: "File deleted",
               });
@@ -305,7 +306,6 @@ export default {
             await AuthService.getAuthHeader()
           )
           .then((res) => {
-            SyncStore().fetch();
             EventBus.emit(EventTypes.ALERT_MESSAGE, {
               text: "Folder deleted",
             });

@@ -9,43 +9,60 @@ export const SyncStore = defineStore("SyncStore", {
     countTotal: 0,
     countBlocking: 0,
     counts: [],
+    checkFrequencyMin: 800,
     checkFrequency: 1000,
+    checkFrequencyMax: 30000,
     checking: false,
+    monitoring: false,
+    lastUpdate: new Date(),
   }),
 
   actions: {
-    async fetch() {
+    async monitor() {
       if (this.checking) {
         return;
       }
       this.checking = true;
+      this.checkFrequency = Math.min(this.checkFrequencyMax, this.checkFrequency + this.checkFrequencyMin);
       await axios
         .get(`${(await Config.get()).SERVER_URL}/sync/status`, await AuthService.getAuthHeader())
         .then(async (res) => {
+          let countBlocking = 0;
           let count = 0;
           for (const item of res.data.sync) {
             count += item.count;
             if (item.type === "blocking") {
-              if (item.count === 0) {
-                await FoldersStore().fetch();
-              }
               this.countBlocking = item.count;
             }
           }
           this.countTotal = count;
+
+          let latestUpdate = this.lastUpdate;
+          for (const recentEvent of res.data.recentEvents) {
+            if (new Date(recentEvent.date) <= this.lastUpdate) {
+              continue;
+            }
+            this.checkFrequency = this.checkFrequencyMin;
+
+            if (latestUpdate < new Date(recentEvent.date)) {
+              latestUpdate = new Date(recentEvent.date);
+              if (recentEvent.objectType === "folder") {
+                EventBus.emit(EventTypes.FOLDER_UPDATED, {
+                  folderId: recentEvent.objectId,
+                  action: recentEvent.action,
+                });
+              }
+            }
+          }
+          this.lastUpdate = latestUpdate;
         })
         .catch((err) => {
           console.error(err);
         });
-      this.checking = false;
-      if (this.countBlocking > 0) {
-        this.checkFrequency = 1000;
-      } else {
-        this.checkFrequency = 10 * 1000;
-      }
-      Timeout.wait(this.checkFrequency).then(() => {
-        this.fetch();
-      });
+      setTimeout(() => {
+        this.checking = false;
+        this.monitor();
+      }, this.checkFrequency);
     },
     markOperationInProgress() {
       this.countBlocking++;

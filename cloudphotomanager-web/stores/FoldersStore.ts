@@ -62,7 +62,7 @@ export const FoldersStore = defineStore("FoldersStore", {
           })
           .catch(handleError);
         this.checkVisibility(folders, account.id);
-        this.fetchCounts(folders, account.id);
+        await this.fetchCounts(folders, account.id);
       }
       (this.folders as any[]) = folders;
       this.loading = false;

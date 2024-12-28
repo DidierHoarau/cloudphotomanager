@@ -19,11 +19,7 @@ export default {
       baseFolder: "",
     };
   },
-  async created() {
-    if (await AuthenticationStore().ensureAuthenticated()) {
-      SyncStore().fetch();
-    }
-  },
+  async created() {},
 };
 </script>
 

@@ -56,7 +56,7 @@ export default {
   },
   async created() {
     if (await AuthenticationStore().ensureAuthenticated()) {
-      SyncStore().fetch();
+      SyncStore().monitor();
       setTimeout(async () => {
         // Renew session tocken
         axios
