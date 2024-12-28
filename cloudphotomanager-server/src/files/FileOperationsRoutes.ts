@@ -17,13 +17,13 @@ export class FileOperationsRoutes {
     interface PostFilesAccountIdRequest extends RequestGenericInterface {
       Params: {
         accountId: string;
-        fileId: string;
       };
       Body: {
         folderpath: string;
+        fileIdList: string[];
       };
     }
-    fastify.put<PostFilesAccountIdRequest>("/folder", async (req, res) => {
+    fastify.post<PostFilesAccountIdRequest>("/folderMove", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
@@ -32,16 +32,23 @@ export class FileOperationsRoutes {
       if (!req.body.folderpath) {
         return res.status(400).send({ error: "Missing parameter: folderpath" });
       }
-      const file = await FileDataGet(span, req.params.fileId);
-      if (!file) {
-        return res.status(404).send({ error: "File not found" });
+      if (!req.body.fileIdList || req.body.fileIdList.length === 0) {
+        return res.status(400).send({ error: "Missing parameter: fileIdList" });
       }
+      let initialFolderId = "";
       const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
-      await account.moveFile(span, file, req.body.folderpath);
+      for (const fileId of req.body.fileIdList) {
+        const file = await FileDataGet(span, fileId);
+        if (!file) {
+          return res.status(404).send({ error: "File not found" });
+        }
+        initialFolderId = file.folderId;
+        await account.moveFile(span, file, req.body.folderpath);
+        await FileDataDelete(span, file.id);
+      }
 
       // Sync
-      await FileDataDelete(span, file.id);
-      FolderDataGet(span, file.folderId)
+      FolderDataGet(span, initialFolderId)
         .then((folder) => {
           SyncQueueQueueItem(
             account,
@@ -73,33 +80,42 @@ export class FileOperationsRoutes {
       return res.status(201).send({});
     });
 
-    interface DeleteFilesAccountIdFileId extends RequestGenericInterface {
+    interface PostDeleteFilesAccountIdFileId extends RequestGenericInterface {
       Params: {
         accountId: string;
-        fileId: string;
+      };
+      Body: {
+        folderpath: string;
+        fileIdList: string[];
       };
     }
-    fastify.delete<DeleteFilesAccountIdFileId>("/delete", async (req, res) => {
+    fastify.post<PostDeleteFilesAccountIdFileId>("/fileDelete", async (req, res) => {
       const span = StandardTracerGetSpanFromRequest(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
 
-      const file = await FileDataGet(span, req.params.fileId);
-      if (!file) {
-        return res.status(404).send({ error: "File Not Found" });
+      if (!req.body.fileIdList || req.body.fileIdList.length === 0) {
+        return res.status(400).send({ error: "Missing parameter: fileIdList" });
+      }
+      let initialFolderId = "";
+      const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
+      for (const fileId of req.body.fileIdList) {
+        const file = await FileDataGet(span, fileId);
+        if (!file) {
+          return res.status(404).send({ error: "File not found" });
+        }
+        initialFolderId = file.folderId;
+        await account.deleteFile(span, file);
+        await FileDataDelete(span, file.id);
       }
 
-      const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
-      await account.deleteFile(span, file);
-      await FileDataDelete(span, file.id);
-
-      FolderDataGet(span, file.folderId)
+      FolderDataGet(span, initialFolderId)
         .then(async (folder) => {
           SyncQueueQueueItem(
             account,
-            file.folderId,
+            initialFolderId,
             folder,
             SyncInventorySyncFolder,
             SyncQueueItemPriority.INTERACTIVE_BLOCKING

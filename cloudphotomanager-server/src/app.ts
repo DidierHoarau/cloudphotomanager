@@ -88,7 +88,7 @@ Promise.resolve().then(async () => {
   });
 
   fastify.register(new FileOperationsRoutes().getRoutes, {
-    prefix: "/api/accounts/:accountId/files/:fileId/operations",
+    prefix: "/api/accounts/:accountId/files/batch/operations",
   });
 
   fastify.register(new AnalysisRoutes().getRoutes, {

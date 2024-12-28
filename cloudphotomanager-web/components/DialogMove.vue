@@ -61,21 +61,23 @@ export default {
     async doAction() {
       this.loading = true;
       SyncStore().markOperationInProgress();
+      const fileIdList = [];
       for (const file of this.target.files) {
-        axios
-          .put(
-            `${(await Config.get()).SERVER_URL}/accounts/${file.accountId}/files/${file.id}/operations/folder`,
-            {
-              folderpath: this.selectedFolderpath,
-            },
-            await AuthService.getAuthHeader()
-          )
-          .then((res) => {
-            this.$emit("onDone", { status: "invalidated" });
-            EventBus.emit(EventTypes.FOLDERS_UPDATED, {});
-          })
-          .catch(handleError);
+        fileIdList.push(file.id);
       }
+      await axios
+        .post(
+          `${(await Config.get()).SERVER_URL}/accounts/${this.accountId}/files/batch/operations/folderMove`,
+          {
+            folderpath: this.selectedFolderpath,
+            fileIdList,
+          },
+          await AuthService.getAuthHeader()
+        )
+        .then((res) => {
+          this.$emit("onDone", { status: "invalidated" });
+        })
+        .catch(handleError);
       this.loading = false;
     },
   },

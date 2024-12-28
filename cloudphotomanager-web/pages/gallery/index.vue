@@ -116,7 +116,8 @@ export default {
       FoldersStore().fetch();
     }
     EventBus.on(EventTypes.FOLDER_UPDATED, (message) => {
-      if (message.folderId === this.currentFolderId) {
+      if (message.accountId === this.currentAccountId && message.folderId === this.currentFolderId) {
+        this.fetchFiles(message.accountId, message.folderId, true);
         FoldersStore().fetch();
       }
     });
@@ -275,20 +276,26 @@ export default {
       if (confirm(message) == true) {
         this.loading = true;
         SyncStore().markOperationInProgress();
+        const fileIdList = [];
         for (const file of this.selectedFiles) {
-          axios
-            .delete(
-              `${(await Config.get()).SERVER_URL}/accounts/${file.accountId}/files/${file.id}/operations/delete`,
-              await AuthService.getAuthHeader()
-            )
-            .then((res) => {
-              EventBus.emit(EventTypes.ALERT_MESSAGE, {
-                text: "File deleted",
-              });
-              this.onOperationDone({ status: "invalidated" });
-            })
-            .catch(handleError);
+          fileIdList.push(file.id);
         }
+        await axios
+          .post(
+            `${(await Config.get()).SERVER_URL}/accounts/${this.currentAccountId}/files/batch/operations/fileDelete`,
+            {
+              fileIdList,
+            },
+            await AuthService.getAuthHeader()
+          )
+          .then((res) => {
+            EventBus.emit(EventTypes.ALERT_MESSAGE, {
+              text: "File deleted",
+            });
+            this.onOperationDone({ status: "invalidated" });
+          })
+          .catch(handleError);
+
         this.loading = false;
       }
     },

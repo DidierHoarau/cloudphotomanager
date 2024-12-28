@@ -27,7 +27,6 @@ export const SyncStore = defineStore("SyncStore", {
       await axios
         .get(`${(await Config.get()).SERVER_URL}/sync/status`, await AuthService.getAuthHeader())
         .then(async (res) => {
-          let countBlocking = 0;
           let count = 0;
           for (const item of res.data.sync) {
             count += item.count;
@@ -36,19 +35,18 @@ export const SyncStore = defineStore("SyncStore", {
             }
           }
           this.countTotal = count;
-
           let latestUpdate = this.lastUpdate;
           for (const recentEvent of res.data.recentEvents) {
             if (new Date(recentEvent.date) <= this.lastUpdate) {
               continue;
             }
             this.checkFrequency = this.checkFrequencyMin;
-
             if (latestUpdate < new Date(recentEvent.date)) {
               latestUpdate = new Date(recentEvent.date);
               if (recentEvent.objectType === "folder") {
                 EventBus.emit(EventTypes.FOLDER_UPDATED, {
                   folderId: recentEvent.objectId,
+                  accountId: recentEvent.accountId,
                   action: recentEvent.action,
                 });
               }
