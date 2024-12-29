@@ -82,10 +82,9 @@ export default {
     async clickedDelete() {
       if (confirm(`Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`) == true) {
         await axios
-          .delete(
-            `${(await Config.get()).SERVER_URL}/accounts/${this.file.accountId}/files/${
-              this.file.id
-            }/operations/delete`,
+          .post(
+            `${(await Config.get()).SERVER_URL}/accounts/${this.file.accountId}/files/batch/operations/fileDelete`,
+            { fileIdList: [this.file.id] },
             await AuthService.getAuthHeader()
           )
           .then((res) => {

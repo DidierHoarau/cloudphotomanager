@@ -5,7 +5,11 @@ import { SyncInventorySyncFolder } from "../sync/SyncInventory";
 import { FolderDataGet } from "../folders/FolderData";
 import { Logger } from "../utils-std-ts/Logger";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { SyncQueueQueueItem } from "../sync/SyncQueue";
+import {
+  SyncQueueQueueItem,
+  SyncQueueSetBlockingOperationEnd,
+  SyncQueueSetBlockingOperationStart,
+} from "../sync/SyncQueue";
 import { FileDataDelete, FileDataGet } from "./FileData";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
 
@@ -35,47 +39,29 @@ export class FileOperationsRoutes {
       if (!req.body.fileIdList || req.body.fileIdList.length === 0) {
         return res.status(400).send({ error: "Missing parameter: fileIdList" });
       }
-      let initialFolderId = "";
-      const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
-      for (const fileId of req.body.fileIdList) {
-        const file = await FileDataGet(span, fileId);
-        if (!file) {
-          return res.status(404).send({ error: "File not found" });
+
+      setTimeout(async () => {
+        SyncQueueSetBlockingOperationStart();
+        try {
+          let initialFolderId = "";
+          const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
+          for (const fileId of req.body.fileIdList) {
+            const file = await FileDataGet(span, fileId);
+            if (!file) {
+              continue;
+            }
+            initialFolderId = file.folderId;
+            await account.moveFile(span, file, req.body.folderpath);
+          }
+          const initialFolder = await FolderDataGet(span, initialFolderId);
+          await SyncInventorySyncFolder(account, initialFolder);
+          const targetFolder = await account.getFolderByPath(span, req.body.folderpath);
+          await SyncInventorySyncFolder(account, targetFolder);
+        } catch (err) {
+          logger.error(err);
         }
-        initialFolderId = file.folderId;
-        await account.moveFile(span, file, req.body.folderpath);
-        await FileDataDelete(span, file.id);
-      }
-
-      // Sync
-      FolderDataGet(span, initialFolderId)
-        .then((folder) => {
-          SyncQueueQueueItem(
-            account,
-            folder.id,
-            folder,
-            SyncInventorySyncFolder,
-            SyncQueueItemPriority.INTERACTIVE_BLOCKING
-          );
-        })
-        .catch((err) => {
-          logger.error(err);
-        });
-
-      account
-        .getFolderByPath(span, req.body.folderpath)
-        .then((folder) => {
-          SyncQueueQueueItem(
-            account,
-            folder.id,
-            folder,
-            SyncInventorySyncFolder,
-            SyncQueueItemPriority.INTERACTIVE_BLOCKING
-          );
-        })
-        .catch((err) => {
-          logger.error(err);
-        });
+        SyncQueueSetBlockingOperationEnd();
+      }, 50);
 
       return res.status(201).send({});
     });
@@ -99,31 +85,29 @@ export class FileOperationsRoutes {
       if (!req.body.fileIdList || req.body.fileIdList.length === 0) {
         return res.status(400).send({ error: "Missing parameter: fileIdList" });
       }
-      let initialFolderId = "";
-      const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
-      for (const fileId of req.body.fileIdList) {
-        const file = await FileDataGet(span, fileId);
-        if (!file) {
-          return res.status(404).send({ error: "File not found" });
-        }
-        initialFolderId = file.folderId;
-        await account.deleteFile(span, file);
-        await FileDataDelete(span, file.id);
-      }
 
-      FolderDataGet(span, initialFolderId)
-        .then(async (folder) => {
-          SyncQueueQueueItem(
-            account,
-            initialFolderId,
-            folder,
-            SyncInventorySyncFolder,
-            SyncQueueItemPriority.INTERACTIVE_BLOCKING
-          );
-        })
-        .catch((err) => {
+      setTimeout(async () => {
+        SyncQueueSetBlockingOperationStart();
+        try {
+          let folderId = "";
+          const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
+          for (const fileId of req.body.fileIdList) {
+            const file = await FileDataGet(span, fileId);
+            if (!file) {
+              continue;
+            }
+            folderId = file.folderId;
+            await account.deleteFile(span, file);
+          }
+          if (folderId) {
+            const folder = await FolderDataGet(span, folderId);
+            await SyncInventorySyncFolder(account, folder);
+          }
+        } catch (err) {
           logger.error(err);
-        });
+        }
+        SyncQueueSetBlockingOperationEnd();
+      }, 50);
 
       return res.status(202).send({});
     });

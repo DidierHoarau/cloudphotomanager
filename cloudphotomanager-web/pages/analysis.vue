@@ -1,9 +1,12 @@
 <template>
   <div class="gallery-layout page">
     <div class="gallery-layout-actions actions">
-      <div v-for="account in accountsStore.accounts" v-bind:key="account.id">
+      <p>Select the account to analyze</p>
+      <span v-for="account in accountsStore.accounts" v-bind:key="account.id">
         <button v-on:click="loadAccountDuplicate(account.id)">{{ account.name }}</button>
-      </div>
+      </span>
+      <br />
+      <br />
       <input v-if="analysis.length > 0" v-model="analysisFilter" type="text" v-on:input="analysisFilterChanged" />
       <kbd v-if="analysis.length > 0">Duplicates Found: {{ analysisFiltered.length }}</kbd>
     </div>
@@ -23,7 +26,6 @@
               {{ displayFolderPath(item.folders, file.folderId) }}/{{ file.filename }}
             </div>
             <div class="analysis-file-list-file-actions">
-              <i class="bi bi-arrows-move"></i>
               <i v-on:click="deleteDuplicate(file, item.folders)" class="bi bi-trash-fill"></i>
             </div>
           </div>
@@ -103,8 +105,9 @@ export default {
         ) == true
       ) {
         await axios
-          .delete(
-            `${(await Config.get()).SERVER_URL}/accounts/${file.accountId}/files/${file.id}/operations/delete`,
+          .post(
+            `${(await Config.get()).SERVER_URL}/accounts/${file.accountId}/files/batch/operations/fileDelete`,
+            { fileIdList: [file.id] },
             await AuthService.getAuthHeader()
           )
           .then((res) => {
