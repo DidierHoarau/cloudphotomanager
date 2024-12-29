@@ -24,6 +24,7 @@ export class LocalAccount implements Account {
   constructor(accountDefinition: AccountDefinition) {
     this.accountDefinition = accountDefinition;
   }
+
   getCapabilities(): AccountCapabilities {
     return {
       downloadPhotoThumbnail: false,
@@ -32,39 +33,37 @@ export class LocalAccount implements Account {
       downloadVideoPreview: false,
     };
   }
+
   async deleteFile(context: Span, file: File): Promise<void> {
     await fs.remove(file.idCloud);
   }
+
   async listFoldersInFolder(context: Span, folder: Folder): Promise<Folder[]> {
     return LocalAccountInventoryListFoldersInFolder(context, this, folder);
   }
+
   async getFolder(context: Span, folder: Folder): Promise<Folder> {
     return LocalAccountInventoryGetFolder(context, this, folder);
   }
+
   async getFolderByPath(context: Span, folderpath: string): Promise<Folder> {
     return LocalAccountInventoryGetFolderByPath(context, this, folderpath);
   }
+
   async moveFile(context: Span, file: File, folderpathDestination: string): Promise<void> {
     await fs.move(file.idCloud, path.join(this.accountDefinition.rootpath, folderpathDestination, file.filename));
   }
-  listFolders(context: Span): Promise<Folder[]> {
-    throw new Error("Method not implemented.");
-  }
+
   async listFilesInFolder(context: Span, folder: Folder): Promise<File[]> {
     return LocalAccountInventoryListFilesInFolder(context, this, folder);
-  }
-  updateFileMetadata(context: Span, file: File): Promise<void> {
-    throw new Error("Method not implemented.");
-  }
-  downloadPreview(context: Span, file: File, folder: string, filename: string): Promise<void> {
-    throw new Error("Method not implemented.");
-  }
-  downloadThumbnail(context: Span, file: File, folder: string, filename: string): Promise<void> {
-    throw new Error("Method not implemented.");
   }
 
   getAccountDefinition(): AccountDefinition {
     return this.accountDefinition;
+  }
+
+  async renameFile(context: Span, file: File, filename: string): Promise<void> {
+    await fs.move(file.idCloud, path.join(path.dirname(file.idCloud), filename));
   }
 
   public async downloadFile(
@@ -96,5 +95,23 @@ export class LocalAccount implements Account {
     }
     span.end();
     return valid;
+  }
+
+  // Non Supported Features
+
+  updateFileMetadata(context: Span, file: File): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  downloadPreview(context: Span, file: File, folder: string, filename: string): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  downloadThumbnail(context: Span, file: File, folder: string, filename: string): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  listFolders(context: Span): Promise<Folder[]> {
+    throw new Error("Method not implemented.");
   }
 }

@@ -36,10 +36,20 @@
       >
         <i class="bi bi-arrows-move"></i> Move...
       </button>
+      <button
+        v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
+        class="secondary outline"
+        v-on:click="clickedAdvanced()"
+      >
+        <i class="bi bi-three-dots"></i> More...
+      </button>
+      <div class="option-outtakes" v-if="outtakesCount > 0">
+        <label><input v-model="showOutakes" type="checkbox" /> OutTakes ({{ outtakesCount }})</label>
+      </div>
     </div>
     <div class="gallery-file-list">
       <Loading v-if="loading" />
-      <div v-else class="card gallery-file" v-for="file in files" v-bind:key="file.id">
+      <div v-else class="card gallery-file" v-for="file in filterOuttakes(files)" v-bind:key="file.id">
         <div class="gallery-file-image" v-on:click="focusGalleryItem(file)">
           <i v-if="getType(file) == 'video'" class="bi bi-play-circle gallery-file-video-type-overlay"></i>
           <img
@@ -67,11 +77,17 @@
       class="gallery-item-focus"
       @onFileClosed="unFocusGalleryItem"
     />
-    <DialogMove v-if="activeOperation == 'move'" :target="{ files: selectedFiles }" @onDone="onOperationDone" />
+    <DialogMove v-if="activeOperation == 'move'" :files="selectedFiles" @onDone="onOperationDone" />
     <DialogSelect
       v-if="activeOperation == 'select'"
       :selectedFiles="selectedFiles"
       :files="files"
+      @onDone="onDialogClosed"
+    />
+    <DialogAdvanced
+      v-if="activeOperation == 'advanced'"
+      :selectedFiles="selectedFiles"
+      :files="selectedFiles"
       @onDone="onDialogClosed"
     />
   </div>
@@ -83,7 +99,7 @@ const authenticationStore = AuthenticationStore();
 
 <script>
 import axios from "axios";
-import { find, findIndex, sortBy } from "lodash";
+import { find, findIndex, sortBy, filter } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
@@ -106,6 +122,8 @@ export default {
       activeOperation: "",
       displayFullScreen: false,
       positionFocus: 0,
+      showOutakes: false,
+      outtakesCount: 0,
     };
   },
   async created() {
@@ -156,6 +174,12 @@ export default {
     );
   },
   methods: {
+    filterOuttakes() {
+      if (!this.showOutakes) {
+        return filter(this.files, { isOuttake: false });
+      }
+      return this.files;
+    },
     async fetchFiles(accountId, folderId, forceLoading = false) {
       const requestEtag = new Date().toISOString();
       if (forceLoading || this.currentAccountId !== accountId || this.currentFolderId !== folderId) {
@@ -171,8 +195,16 @@ export default {
           await AuthService.getAuthHeader()
         )
         .then((res) => {
+          this.outtakesCount = 0;
           if (this.requestEtag === requestEtag) {
             this.files = sortBy(res.data.files, ["dateMedia"]);
+            for (const file of this.files) {
+              file.isOuttake = false;
+              if (file.filename.indexOf("-outtake.") > 0) {
+                file.isOuttake = true;
+                this.outtakesCount++;
+              }
+            }
           }
         })
         .catch(handleError)
@@ -267,6 +299,9 @@ export default {
     },
     clickedSelect() {
       this.activeOperation = "select";
+    },
+    clickedAdvanced() {
+      this.activeOperation = "advanced";
     },
     async clickedDelete() {
       let message = `Delete the ${this.selectedFiles.length} selected files? (Can't be undone!)\n`;
@@ -511,5 +546,9 @@ export default {
 
 .gallery-files-actions kbd {
   margin-right: 1em;
+}
+
+.option-outtakes {
+  opacity: 30%;
 }
 </style>

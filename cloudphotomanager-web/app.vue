@@ -6,7 +6,6 @@
     <main>
       <NuxtPage />
     </main>
-    <Footer id="page-footer" />
     <AlertMessages id="page-alert-messages" />
   </div>
 </template>
@@ -36,13 +35,6 @@ main {
 #page-alert-messages {
   position: fixed;
   right: 1rem;
-  bottom: 1rem;
-  max-width: 80vw;
-}
-
-#page-footer {
-  position: fixed;
-  left: 1rem;
   bottom: 1rem;
   max-width: 80vw;
 }

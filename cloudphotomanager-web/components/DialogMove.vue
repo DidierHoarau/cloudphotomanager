@@ -30,7 +30,7 @@ import { AuthService } from "~~/services/AuthService";
 
 export default {
   props: {
-    target: {},
+    files: [],
   },
   data() {
     return {
@@ -42,14 +42,14 @@ export default {
   },
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
-    this.accountId = this.target.files[0].accountId;
+    this.accountId = this.files[0].accountId;
   },
   methods: {
     async clickedClose() {
       this.$emit("onDone", {});
     },
     onFolderSelected(event) {
-      if (event.folder.accountId !== this.target.files[0].accountId) {
+      if (event.folder.accountId !== this.files[0].accountId) {
         EventBus.emit(EventTypes.ALERT_MESSAGE, {
           type: "error",
           text: "Destination must be in the same account",
@@ -62,7 +62,7 @@ export default {
       this.loading = true;
       SyncStore().markOperationInProgress();
       const fileIdList = [];
-      for (const file of this.target.files) {
+      for (const file of this.files) {
         fileIdList.push(file.id);
       }
       await axios

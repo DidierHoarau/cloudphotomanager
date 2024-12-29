@@ -28,11 +28,15 @@
         </tr>
       </tbody>
     </table>
+    <span class="sync-count" v-if="syncStore.countTotal > 0">
+      <kbd>Sync:&nbsp;{{ syncStore.countTotal }}</kbd>
+    </span>
   </div>
 </template>
 
 <script setup>
 const accountsStore = AccountsStore();
+const syncStore = SyncStore();
 </script>
 
 <script>

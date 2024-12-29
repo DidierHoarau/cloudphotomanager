@@ -11,7 +11,7 @@ import { FileRoutes } from "./files/FileRoutes";
 import { FileDataInit } from "./files/FileData";
 import { FolderRoutes } from "./folders/FolderRoutes";
 import { SyncRoutes } from "./sync/SyncRoutes";
-import { FileOperationsRoutes } from "./files/FileOperationsRoutes";
+import { FileOperationsDeleteRoutes } from "./files/FileOperationsDeleteRoutes";
 import { AnalysisRoutes } from "./analysis/AnalysisRoutes";
 import type { FastifyCookieOptions } from "@fastify/cookie";
 import cookie from "@fastify/cookie";
@@ -20,6 +20,8 @@ import { SchedulerInit } from "./sync/Scheduler";
 import { SyncFileCacheInit } from "./sync/SyncFileCache";
 import { FolderDataInit } from "./folders/FolderData";
 import { AuthInit } from "./users/Auth";
+import { FileOperationsFolderMoveRoutes } from "./files/FileOperationsFolderMoveRoutes";
+import { FileOperationsRenameRoutes } from "./files/FileOperationsRenameRoutes";
 
 const logger = new Logger("app");
 
@@ -87,8 +89,16 @@ Promise.resolve().then(async () => {
     prefix: "/api/accounts/:accountId/folders",
   });
 
-  fastify.register(new FileOperationsRoutes().getRoutes, {
-    prefix: "/api/accounts/:accountId/files/batch/operations",
+  fastify.register(new FileOperationsDeleteRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/batch/operations/fileDelete",
+  });
+
+  fastify.register(new FileOperationsFolderMoveRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/batch/operations/folderMove",
+  });
+
+  fastify.register(new FileOperationsRenameRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/batch/operations/fileRename",
   });
 
   fastify.register(new AnalysisRoutes().getRoutes, {

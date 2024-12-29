@@ -29,6 +29,7 @@ export class AwsS3Account implements Account {
   constructor(accountDefinition: AccountDefinition) {
     this.accountDefinition = accountDefinition;
   }
+
   getCapabilities(): AccountCapabilities {
     return {
       downloadPhotoThumbnail: false,
@@ -37,35 +38,29 @@ export class AwsS3Account implements Account {
       downloadVideoPreview: false,
     };
   }
+
   async deleteFile(context: Span, file: File): Promise<void> {
     await AwsS3AccountFileOperationsDeleteFile(context, this, await this.getS3Client(), file);
   }
+
   async listFoldersInFolder(context: Span, folder: Folder): Promise<Folder[]> {
     return AwsS3AccountInventoryListFoldersInFolder(context, this, await this.getS3Client(), folder);
   }
+
   async getFolder(context: Span, folder: Folder): Promise<Folder> {
     return AwsS3AccountInventoryGetFolder(context, this, await this.getS3Client(), folder);
   }
+
   async getFolderByPath(context: Span, folderpath: string): Promise<Folder> {
     return AwsS3AccountInventoryGetFolderByPath(context, this, await this.getS3Client(), folderpath);
   }
+
   async moveFile(context: Span, file: File, folderpathDestination: string): Promise<void> {
     await AwsS3AccountFileOperationsMoveFile(context, this, await this.getS3Client(), file, folderpathDestination);
   }
-  listFolders(context: Span): Promise<Folder[]> {
-    throw new Error("Method not implemented.");
-  }
+
   async listFilesInFolder(context: Span, folder: Folder): Promise<File[]> {
     return AwsS3AccountInventoryListFilesInFolder(context, this, await this.getS3Client(), folder);
-  }
-  updateFileMetadata(context: Span, file: File): Promise<void> {
-    throw new Error("Method not implemented.");
-  }
-  downloadPreview(context: Span, file: File, folder: string, filename: string): Promise<void> {
-    throw new Error("Method not implemented.");
-  }
-  downloadThumbnail(context: Span, file: File, folder: string, filename: string): Promise<void> {
-    throw new Error("Method not implemented.");
   }
 
   getAccountDefinition(): AccountDefinition {
@@ -104,8 +99,8 @@ export class AwsS3Account implements Account {
     return valid;
   }
 
-  deleteFolder(context: Span, folder: Folder): Promise<void> {
-    throw new Error("Method not implemented.");
+  async renameFile(context: Span, file: File, filename: string): Promise<void> {
+    await AwsS3AccountFileOperationsMoveFile(context, this, await this.getS3Client(), file, filename);
   }
 
   private async getS3Client(): Promise<S3> {
@@ -118,5 +113,27 @@ export class AwsS3Account implements Account {
       region: this.accountDefinition.infoPrivate.region,
     });
     return new AWS.S3();
+  }
+
+  // Non Supported Features
+
+  updateFileMetadata(context: Span, file: File): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  downloadPreview(context: Span, file: File, folder: string, filename: string): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  downloadThumbnail(context: Span, file: File, folder: string, filename: string): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  listFolders(context: Span): Promise<Folder[]> {
+    throw new Error("Method not implemented.");
+  }
+
+  deleteFolder(context: Span, folder: Folder): Promise<void> {
+    throw new Error("Method not implemented.");
   }
 }
