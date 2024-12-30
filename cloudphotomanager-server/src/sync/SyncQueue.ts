@@ -14,14 +14,23 @@ const queue: SyncQueueItem[] = [];
 const promisePoolInteractive = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
 const promisePoolNormal = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
 const promisePoolBatch = new PromisePool(1, 5 * 3600 * 1000);
+let blockingOperations = 0;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function SyncQueueGetCounts(): any[] {
   return [
     { type: SyncQueueItemStatus.ACTIVE, count: _.filter(queue, { status: SyncQueueItemStatus.ACTIVE }).length },
     { type: SyncQueueItemStatus.WAITING, count: _.filter(queue, { status: SyncQueueItemStatus.WAITING }).length },
-    { type: "blocking", count: _.filter(queue, { priority: SyncQueueItemPriority.INTERACTIVE_BLOCKING }).length },
+    { type: "blocking", count: blockingOperations },
   ];
+}
+
+export function SyncQueueSetBlockingOperationStart() {
+  blockingOperations++;
+}
+
+export function SyncQueueSetBlockingOperationEnd() {
+  blockingOperations--;
 }
 
 export function SyncQueueRemoveItem(id: string): void {
@@ -65,7 +74,7 @@ export function SyncQueueQueueItem(
       });
   };
 
-  if (priority === SyncQueueItemPriority.INTERACTIVE || priority === SyncQueueItemPriority.INTERACTIVE_BLOCKING) {
+  if (priority === SyncQueueItemPriority.INTERACTIVE) {
     promisePoolInteractive.add(itemProcess);
   } else if (priority === SyncQueueItemPriority.BATCH) {
     promisePoolBatch.add(itemProcess);

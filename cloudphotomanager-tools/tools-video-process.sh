@@ -13,7 +13,7 @@ nice -20 ffmpeg \
   -hide_banner \
   -loglevel error \
   -i ${FILE_IN} \
-  -vf scale=${FILE_WIDTH}:-1 \
+  -vf scale="${FILE_WIDTH}:trunc(ih*${FILE_WIDTH}/iw/2)*2" \
   -b:v 1M \
   -r 30 \
   -c:v libx264 \

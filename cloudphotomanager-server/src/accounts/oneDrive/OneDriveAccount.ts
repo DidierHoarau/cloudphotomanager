@@ -21,6 +21,7 @@ import {
   OneDriveFileOperationsDownloadFile,
   OneDriveFileOperationsDownloadThumbnail,
   OneDriveFileOperationsMoveFile,
+  OneDriveFileOperationsRenameFile,
 } from "./OneDriveFileOperations";
 
 const logger = new Logger("OneDriveAccount");
@@ -160,6 +161,10 @@ export class OneDriveAccount implements Account {
 
   public async deleteFolder(context: Span, folder: Folder): Promise<void> {
     await OneDriveFileOperationsDeleteFolder(context, this, folder);
+  }
+
+  async renameFile(context: Span, file: File, filename: string): Promise<void> {
+    await OneDriveFileOperationsRenameFile(context, this, file, filename);
   }
 
   public folderToDecodedRelative(absolutePath: string): string {

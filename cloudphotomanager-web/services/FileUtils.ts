@@ -12,4 +12,12 @@ export class FileUtils {
       return "unknown";
     }
   }
+
+  public static getExtention(file: any) {
+    return file.filename.split(".").pop();
+  }
+
+  public static getWithoutExtention(file: any) {
+    return file.filename.substring(0, file.filename.lastIndexOf("."));
+  }
 }

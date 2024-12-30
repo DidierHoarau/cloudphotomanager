@@ -45,7 +45,7 @@ export default {
     };
   },
   async created() {
-    EventBus.on(EventTypes.FOLDERS_UPDATED, (message) => {
+    EventBus.on(EventTypes.FOLDER_UPDATED, (message) => {
       FoldersStore().fetch();
     });
     FoldersStore().fetch();

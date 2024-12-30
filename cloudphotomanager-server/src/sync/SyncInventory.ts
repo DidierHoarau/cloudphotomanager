@@ -93,6 +93,7 @@ export async function SyncInventorySyncFolder(account: Account, knownFolder: Fol
     SyncEventHistoryAdd({
       objectType: SyncEventObjectTypes.FOLDER,
       objectId: knownFolder.id,
+      accountId: account.getAccountDefinition().id,
       date: new Date(),
       action: SyncEventActions.UPDATED,
     });

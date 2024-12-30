@@ -50,6 +50,28 @@ export async function AwsS3AccountFileOperationsMoveFile(
   awsS3Account: AwsS3Account,
   s3: S3,
   file: File,
+  filename: string
+): Promise<void> {
+  const span = StandardTracerStartSpan("AwsS3AccountFileOperationsMoveFile", context);
+  const paramsCopy = {
+    Bucket: awsS3Account.getAccountDefinition().infoPrivate.bucket,
+    CopySource: encodeURI(path.join("/", awsS3Account.getAccountDefinition().infoPrivate.bucket, file.idCloud)),
+    Key: toAwsFilePath(path.join(path.dirname(file.idCloud), filename)),
+  };
+  await s3.copyObject(paramsCopy).promise();
+  const paramsDelete = {
+    Bucket: awsS3Account.getAccountDefinition().infoPrivate.bucket,
+    Key: file.idCloud,
+  };
+  await s3.deleteObject(paramsDelete).promise();
+  span.end();
+}
+
+export async function AwsS3AccountFileOperationsRename(
+  context: Span,
+  awsS3Account: AwsS3Account,
+  s3: S3,
+  file: File,
   folderpathDestination: string
 ): Promise<void> {
   const span = StandardTracerStartSpan("AwsS3AccountFileOperationsMoveFile", context);

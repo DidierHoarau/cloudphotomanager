@@ -1,6 +1,10 @@
 <template>
   <dialog open>
     <article>
+      <header>
+        <a href="#close" aria-label="Close" class="close" v-on:click="clickedClose()"></a>
+        Selection
+      </header>
       <fieldset>
         <legend>Per date:</legend>
         <label v-for="daySelection in daySelections" :key="daySelection.day"

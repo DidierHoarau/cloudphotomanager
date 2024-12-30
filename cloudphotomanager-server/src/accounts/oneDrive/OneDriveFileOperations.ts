@@ -99,7 +99,7 @@ export async function OneDriveFileOperationsMoveFile(
   file: File,
   folderpathDestination: string
 ): Promise<void> {
-  const parentFolder = await OneDriveFileOperationsensureFolder(context, oneDriveAccount, folderpathDestination);
+  const parentFolder = await OneDriveFileOperationsEnsureFolder(context, oneDriveAccount, folderpathDestination);
   await axios.patch(
     `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`,
     {
@@ -107,6 +107,25 @@ export async function OneDriveFileOperationsMoveFile(
         id: parentFolder.idCloud,
       },
       name: file.filename,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+      },
+    }
+  );
+}
+
+export async function OneDriveFileOperationsRenameFile(
+  context: Span,
+  oneDriveAccount: OneDriveAccount,
+  file: File,
+  filename: string
+): Promise<void> {
+  await axios.patch(
+    `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`,
+    {
+      name: filename,
     },
     {
       headers: {
@@ -140,7 +159,7 @@ export async function OneDriveFileOperationsDeleteFolder(
   });
 }
 
-export async function OneDriveFileOperationscreateFolder(
+export async function OneDriveFileOperationsCreateFolder(
   context: Span,
   oneDriveAccount: OneDriveAccount,
   parentFolder: Folder,
@@ -169,7 +188,7 @@ export async function OneDriveFileOperationscreateFolder(
   return folder;
 }
 
-export async function OneDriveFileOperationsensureFolder(
+export async function OneDriveFileOperationsEnsureFolder(
   context: Span,
   oneDriveAccount: OneDriveAccount,
   folderpath: string
@@ -182,7 +201,7 @@ export async function OneDriveFileOperationsensureFolder(
       subfolderPath = subfolderPath.replace(/\/\//g, "/");
       let subFolder = await OneDriveInventoryGetFolderByPath(context, oneDriveAccount, subfolderPath);
       if (!subFolder) {
-        subFolder = await OneDriveFileOperationscreateFolder(context, oneDriveAccount, parentFolder, subFolderName);
+        subFolder = await OneDriveFileOperationsCreateFolder(context, oneDriveAccount, parentFolder, subFolderName);
       }
       parentFolder = subFolder;
     }
