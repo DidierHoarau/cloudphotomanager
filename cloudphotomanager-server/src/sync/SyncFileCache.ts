@@ -43,7 +43,9 @@ export async function SyncFileCacheCheckFolder(context: Span, account: Account, 
 export async function SyncFileCacheCheckFile(context: Span, account: Account, file: File) {
   const span = StandardTracerStartSpan("SyncFileCache_checkFile", context);
   const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
-  const isImage = File.getMediaType(file.filename) === FileMediaType.image;
+  const isImage =
+    File.getMediaType(file.filename) === FileMediaType.image ||
+    File.getMediaType(file.filename) === FileMediaType.imageRaw;
   const isVideo = File.getMediaType(file.filename) === FileMediaType.video;
   const hasThumbnail = fs.existsSync(`${cacheDir}/thumbnail.webp`);
   const hasImagePreview = fs.existsSync(`${cacheDir}/preview.webp`);
@@ -147,11 +149,20 @@ async function syncPhotoFromFull(account: Account, file: File) {
   const tmpDir = await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id);
   await fs.ensureDir(cacheDir);
   await fs.ensureDir(tmpDir);
-  const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
+  let tmpFileName = `tmp.${file.filename.split(".").pop()}`;
   logger.info(`Caching photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
   await account
     .downloadFile(span, file, tmpDir, tmpFileName)
     .then(async () => {
+      if (File.getMediaType(file.filename) === FileMediaType.imageRaw) {
+        logger.info("Converting from RAW");
+        logger.info(
+          await SystemCommand.execute(
+            `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`
+          )
+        );
+        tmpFileName += "_raw.jpg";
+      }
       await sharp(`${tmpDir}/${tmpFileName}`)
         .withMetadata()
         .resize({ width: 300 })
