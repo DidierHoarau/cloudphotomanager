@@ -7,14 +7,13 @@ RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repos
     apk add --no-cache --update \
         build-base \
         vips-dev \
+        vips-heif \
         fftw-dev \
         gcc \
         g++ \
         make \
         python3 \
-        wget \
-        vips-dev \
-        vips-heif
+        wget
 
 COPY cloudphotomanager-server cloudphotomanager-server
 
