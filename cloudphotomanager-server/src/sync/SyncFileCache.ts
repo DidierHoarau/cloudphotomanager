@@ -59,6 +59,7 @@ export async function SyncFileCacheCheckFile(context: Span, account: Account, fi
   const hasVideoPreview = fs.existsSync(`${cacheDir}/preview.mp4`);
   const accountCapabilities = account.getCapabilities();
 
+  console.log(file.filename, isImage, hasThumbnail, hasImagePreview, hasVideoPreview);
   if (
     (isImage && !hasThumbnail && accountCapabilities.downloadPhotoThumbnail) ||
     (isVideo && !hasThumbnail && accountCapabilities.downloadVideoThumbnail)
