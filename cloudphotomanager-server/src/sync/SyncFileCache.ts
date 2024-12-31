@@ -27,7 +27,7 @@ let config: Config;
 export async function SyncFileCacheInit(context: Span, configIn: Config) {
   const span = StandardTracerStartSpan("Scheduler_init", context);
   config = configIn;
-  await fs.remove(config.TMP_DIR);
+  await fs.rm(config.TMP_DIR, { recursive: true, force: true });
   span.end();
 }
 
@@ -43,7 +43,7 @@ export async function SyncFileCacheCheckFolder(context: Span, account: Account, 
 export async function SyncFileCacheRemoveFile(context: Span, account: Account, file: File) {
   const span = StandardTracerStartSpan("SyncFileCacheRemoveFile", context);
   const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
-  await fs.remove(cacheDir);
+  await fs.rm(cacheDir, { recursive: true, force: true });
   span.end();
 }
 

@@ -35,16 +35,17 @@ COPY docker-config/entrypoint.sh /entrypoint.sh
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories && \
     apk add --no-cache --update \
         build-base \
-        vips-dev \
         fftw-dev \
-        gcc \
         g++ \
+        gcc \
+        imagemagick \
+        libraw \
         make \
+        nginx \
         python3 \
-        wget \
         vips-dev \
         vips-heif \
-        nginx \
+        wget \
         ffmpeg && \
     npm install -g pm2
     
