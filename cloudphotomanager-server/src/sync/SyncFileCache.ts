@@ -168,6 +168,7 @@ async function syncPhotoFromFull(account: Account, file: File) {
             `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`
           )
         );
+        logger.info(await SystemCommand.execute(`ls -lshR ${tmpDir}`));
         tmpFileName += "_raw.jpg";
       }
       await sharp(`${tmpDir}/${tmpFileName}`)
