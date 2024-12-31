@@ -284,8 +284,11 @@ export default {
         return "";
       }
     },
-    onDialogClosed() {
+    onDialogClosed(result) {
       this.activeOperation = "";
+      if (result && result.status === "invalidated") {
+        this.selectedFiles = [];
+      }
     },
     onOperationDone(result) {
       this.selectedFiles = [];

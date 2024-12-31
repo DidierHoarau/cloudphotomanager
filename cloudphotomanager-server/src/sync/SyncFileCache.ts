@@ -32,7 +32,7 @@ export async function SyncFileCacheInit(context: Span, configIn: Config) {
 }
 
 export async function SyncFileCacheCheckFolder(context: Span, account: Account, folder: Folder) {
-  const span = StandardTracerStartSpan("SyncFileCache_checkFolder", context);
+  const span = StandardTracerStartSpan("SyncFileCacheCheckFolder", context);
   const files = await FileDataListByFolder(span, account.getAccountDefinition().id, folder.id);
   for (const file of files) {
     SyncFileCacheCheckFile(span, account, file);
@@ -40,8 +40,15 @@ export async function SyncFileCacheCheckFolder(context: Span, account: Account, 
   span.end();
 }
 
+export async function SyncFileCacheRemoveFile(context: Span, account: Account, file: File) {
+  const span = StandardTracerStartSpan("SyncFileCacheRemoveFile", context);
+  const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
+  await fs.remove(cacheDir);
+  span.end();
+}
+
 export async function SyncFileCacheCheckFile(context: Span, account: Account, file: File) {
-  const span = StandardTracerStartSpan("SyncFileCache_checkFile", context);
+  const span = StandardTracerStartSpan("SyncFileCacheCheckFile", context);
   const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
   const isImage =
     File.getMediaType(file.filename) === FileMediaType.image ||

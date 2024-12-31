@@ -12,6 +12,8 @@
       </legend>
       <button v-on:click="doActionSetOuttake()">Mark As Outtakes</button>
       <button v-on:click="doActionUnSetOuttake()">Un-Mark As Outtakes</button>
+      <legend>Rebuild Cache</legend>
+      <button v-on:click="doActionRebuildCache()">Rebuild Cache</button>
     </article>
   </dialog>
 </template>
@@ -48,6 +50,28 @@ export default {
   methods: {
     async clickedClose() {
       this.$emit("onDone", {});
+    },
+    async doActionRebuildCache() {
+      this.loading = true;
+      let accountId = "";
+      const fileIdList = [];
+      for (const file of this.files) {
+        accountId = file.accountId;
+        fileIdList.push(file.id);
+      }
+      if (fileIdList.length > 0) {
+        await axios
+          .post(
+            `${(await Config.get()).SERVER_URL}/accounts/${accountId}/files/batch/operations/fileCacheDelete`,
+            { fileIdList },
+            await AuthService.getAuthHeader()
+          )
+          .then((res) => {
+            this.$emit("onDone", { status: "invalidated" });
+          })
+          .catch(handleError);
+      }
+      this.loading = false;
     },
     async doActionSetOuttake() {
       this.loading = true;

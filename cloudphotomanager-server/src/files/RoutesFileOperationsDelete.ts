@@ -8,9 +8,9 @@ import { SyncQueueSetBlockingOperationEnd, SyncQueueSetBlockingOperationStart } 
 import { FileDataGet } from "./FileData";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
 
-const logger = new Logger("FileOperationsRenameRoutes");
+const logger = new Logger("FileOperationsDeleteRoutes");
 
-export class FileOperationsRenameRoutes {
+export class RoutesFileOperationsDelete {
   //
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     //
@@ -19,7 +19,7 @@ export class FileOperationsRenameRoutes {
         accountId: string;
       };
       Body: {
-        fileIdNames: any[];
+        fileIdList: string[];
       };
     }
     fastify.post<PostFilesRequest>("/", async (req, res) => {
@@ -29,8 +29,8 @@ export class FileOperationsRenameRoutes {
         return res.status(403).send({ error: "Access Denied" });
       }
 
-      if (!req.body.fileIdNames || req.body.fileIdNames.length === 0) {
-        return res.status(400).send({ error: "Missing parameter: fileIdNames" });
+      if (!req.body.fileIdList || req.body.fileIdList.length === 0) {
+        return res.status(400).send({ error: "Missing parameter: fileIdList" });
       }
 
       setTimeout(async () => {
@@ -38,13 +38,13 @@ export class FileOperationsRenameRoutes {
         try {
           let folderId = "";
           const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
-          for (const fileIdName of req.body.fileIdNames) {
-            const file = await FileDataGet(span, fileIdName.id);
+          for (const fileId of req.body.fileIdList) {
+            const file = await FileDataGet(span, fileId);
             if (!file) {
               continue;
             }
             folderId = file.folderId;
-            await account.renameFile(span, file, fileIdName.filename);
+            await account.deleteFile(span, file);
           }
           if (folderId) {
             const folder = await FolderDataGet(span, folderId);
@@ -56,7 +56,7 @@ export class FileOperationsRenameRoutes {
         SyncQueueSetBlockingOperationEnd();
       }, 50);
 
-      return res.status(201).send({});
+      return res.status(202).send({});
     });
   }
 }
