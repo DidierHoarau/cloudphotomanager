@@ -59,7 +59,6 @@ export async function SyncFileCacheCheckFile(context: Span, account: Account, fi
   const hasVideoPreview = fs.existsSync(`${cacheDir}/preview.mp4`);
   const accountCapabilities = account.getCapabilities();
 
-  console.log(file.filename, isImage, hasThumbnail, hasImagePreview, hasVideoPreview);
   if (
     (isImage && !hasThumbnail && accountCapabilities.downloadPhotoThumbnail) ||
     (isVideo && !hasThumbnail && accountCapabilities.downloadVideoThumbnail)
@@ -163,13 +162,11 @@ async function syncPhotoFromFull(account: Account, file: File) {
     .downloadFile(span, file, tmpDir, tmpFileName)
     .then(async () => {
       if (File.getMediaType(file.filename) === FileMediaType.imageRaw) {
-        logger.info("Converting from RAW");
         logger.info(
           await SystemCommand.execute(
             `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`
           )
         );
-        logger.info(await SystemCommand.execute(`ls -lshR ${tmpDir}`));
         tmpFileName += "_raw.jpg";
       }
       await sharp(`${tmpDir}/${tmpFileName}`)
