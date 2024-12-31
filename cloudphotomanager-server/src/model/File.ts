@@ -28,13 +28,16 @@ export class File {
   }
 
   public static getMediaType(name: string): FileMediaType {
-    const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "dng", "tiff", "heic"];
+    const imageExtensionsRaw = ["dng", "raw", "arw"];
+    const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "tiff", "heic"];
     const videoExtensions = ["mp4", "mov", "wmv", "avi", "mkv"];
     const extension = name.split(".").pop().toLowerCase();
     if (imageExtensions.includes(extension)) {
       return FileMediaType.image;
     } else if (videoExtensions.includes(extension)) {
       return FileMediaType.video;
+    } else if (imageExtensionsRaw.includes(extension)) {
+      return FileMediaType.imageRaw;
     } else {
       return FileMediaType.unknown;
     }

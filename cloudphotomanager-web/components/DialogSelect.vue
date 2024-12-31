@@ -15,6 +15,8 @@
         >
       </fieldset>
       <button v-on:click="doAction()">Done</button>
+      <button v-on:click="doActionSelectAll()">Select All</button>
+      <button v-on:click="doActionUnSelectAll()">Unselect All</button>
     </article>
   </dialog>
 </template>
@@ -45,6 +47,18 @@ export default {
   },
   methods: {
     async clickedClose() {
+      this.$emit("onDone", {});
+    },
+    doActionSelectAll() {
+      for (const file of this.files) {
+        this.selectedFiles.push(file);
+      }
+      this.$emit("onDone", {});
+    },
+    doActionUnSelectAll() {
+      while (this.selectedFiles.length > 0) {
+        this.selectedFiles.pop();
+      }
       this.$emit("onDone", {});
     },
     onDaySelected() {

@@ -11,7 +11,7 @@ import { FileRoutes } from "./files/FileRoutes";
 import { FileDataInit } from "./files/FileData";
 import { FolderRoutes } from "./folders/FolderRoutes";
 import { SyncRoutes } from "./sync/SyncRoutes";
-import { FileOperationsDeleteRoutes } from "./files/FileOperationsDeleteRoutes";
+import { RoutesFileOperationsDelete } from "./files/RoutesFileOperationsDelete";
 import { AnalysisRoutes } from "./analysis/AnalysisRoutes";
 import type { FastifyCookieOptions } from "@fastify/cookie";
 import cookie from "@fastify/cookie";
@@ -20,8 +20,9 @@ import { SchedulerInit } from "./sync/Scheduler";
 import { SyncFileCacheInit } from "./sync/SyncFileCache";
 import { FolderDataInit } from "./folders/FolderData";
 import { AuthInit } from "./users/Auth";
-import { FileOperationsFolderMoveRoutes } from "./files/FileOperationsFolderMoveRoutes";
-import { FileOperationsRenameRoutes } from "./files/FileOperationsRenameRoutes";
+import { RoutesFileOperationsFolderMove } from "./files/RoutesFileOperationsFolderMove";
+import { RoutesFileOperationsRename } from "./files/RoutesFileOperationsRename";
+import { RoutesFileOperationsRebuildCache } from "./files/RoutesFileOperationsRebuildCache";
 
 const logger = new Logger("app");
 
@@ -89,16 +90,20 @@ Promise.resolve().then(async () => {
     prefix: "/api/accounts/:accountId/folders",
   });
 
-  fastify.register(new FileOperationsDeleteRoutes().getRoutes, {
+  fastify.register(new RoutesFileOperationsDelete().getRoutes, {
     prefix: "/api/accounts/:accountId/files/batch/operations/fileDelete",
   });
 
-  fastify.register(new FileOperationsFolderMoveRoutes().getRoutes, {
+  fastify.register(new RoutesFileOperationsFolderMove().getRoutes, {
     prefix: "/api/accounts/:accountId/files/batch/operations/folderMove",
   });
 
-  fastify.register(new FileOperationsRenameRoutes().getRoutes, {
+  fastify.register(new RoutesFileOperationsRename().getRoutes, {
     prefix: "/api/accounts/:accountId/files/batch/operations/fileRename",
+  });
+
+  fastify.register(new RoutesFileOperationsRebuildCache().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/batch/operations/fileCacheDelete",
   });
 
   fastify.register(new AnalysisRoutes().getRoutes, {

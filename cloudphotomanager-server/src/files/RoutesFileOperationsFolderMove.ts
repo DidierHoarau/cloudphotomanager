@@ -10,7 +10,7 @@ import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
 
 const logger = new Logger("FileOperationsFolderMoveRoutes");
 
-export class FileOperationsFolderMoveRoutes {
+export class RoutesFileOperationsFolderMove {
   //
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     //

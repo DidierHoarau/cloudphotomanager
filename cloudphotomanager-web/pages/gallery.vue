@@ -43,9 +43,9 @@
       >
         <i class="bi bi-three-dots"></i> More...
       </button>
-      <div class="option-outtakes" v-if="outtakesCount > 0">
-        <label><input v-model="showOutakes" type="checkbox" /> OutTakes ({{ outtakesCount }})</label>
-      </div>
+      <span class="option-outtakes" v-if="outtakesCount > 0">
+        <label> <input v-model="showOutakes" type="checkbox" /> OutTakes ({{ outtakesCount }}) </label></span
+      >
     </div>
     <div class="gallery-file-list">
       <Loading v-if="loading" />
@@ -284,8 +284,11 @@ export default {
         return "";
       }
     },
-    onDialogClosed() {
+    onDialogClosed(result) {
       this.activeOperation = "";
+      if (result && result.status === "invalidated") {
+        this.selectedFiles = [];
+      }
     },
     onOperationDone(result) {
       this.selectedFiles = [];
@@ -425,9 +428,6 @@ export default {
 }
 
 .gallery-files-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7em, 1fr));
-  grid-gap: 0.3em;
   padding-bottom: 0.3em;
 }
 .gallery-files-actions button,
@@ -550,5 +550,13 @@ export default {
 
 .option-outtakes {
   opacity: 30%;
+  font-size: 0.8em;
+}
+.option-outtakes input {
+  height: 1em;
+  width: 1em;
+}
+.option-outtakes label {
+  display: inline;
 }
 </style>
