@@ -109,6 +109,7 @@ async function startSchedule() {
     } else {
       SOURCE_FETCH_FREQUENCY_DYNAMIC = config.SOURCE_FETCH_FREQUENCY;
     }
+    logger.info(`Next Sync in ${SOURCE_FETCH_FREQUENCY_DYNAMIC / 60000} minutes`);
     await Timeout.wait(SOURCE_FETCH_FREQUENCY_DYNAMIC);
   }
 }
