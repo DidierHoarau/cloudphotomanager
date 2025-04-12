@@ -18,12 +18,15 @@ import { Logger } from "../utils-std-ts/Logger";
 import { SyncQueueQueueItem } from "./SyncQueue";
 import { SyncInventoryInit, SyncInventorySyncFolder } from "./SyncInventory";
 import { SyncFileCacheCleanUp } from "./SyncFileCache";
+import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
 
 const logger = new Logger("Scheduler");
 
 let config: Config;
 
 const OUTDATED_AGE = 7 * 24 * 3600 * 1000;
+let SOURCE_FETCH_FREQUENCY_DYNAMIC = 30 * 60 * 1000;
+const SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR = 5;
 
 export async function SchedulerInit(context: Span, configIn: Config) {
   const span = StandardTracerStartSpan("Scheduler_init", context);
@@ -84,6 +87,7 @@ export async function SchedulerStartAccountSync(context: Span, accountDefinition
 // Private Functions
 
 async function startSchedule() {
+  SOURCE_FETCH_FREQUENCY_DYNAMIC = config.SOURCE_FETCH_FREQUENCY;
   while (true) {
     const span = StandardTracerStartSpan("Scheduler_startSchedule");
     const accountDefinitions = await AccountDataList(span);
@@ -93,6 +97,18 @@ async function startSchedule() {
         logger.error(err);
       });
     });
-    await Timeout.wait(config.SOURCE_FETCH_FREQUENCY);
+    let lastUpdates = await SyncEventHistoryGetRecent();
+    if (
+      lastUpdates.length === 0 ||
+      lastUpdates[0].date < new Date(new Date().getTime() - SOURCE_FETCH_FREQUENCY_DYNAMIC)
+    ) {
+      SOURCE_FETCH_FREQUENCY_DYNAMIC = Math.min(
+        SOURCE_FETCH_FREQUENCY_DYNAMIC + config.SOURCE_FETCH_FREQUENCY,
+        config.SOURCE_FETCH_FREQUENCY * SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR
+      );
+    } else {
+      SOURCE_FETCH_FREQUENCY_DYNAMIC = config.SOURCE_FETCH_FREQUENCY;
+    }
+    await Timeout.wait(SOURCE_FETCH_FREQUENCY_DYNAMIC);
   }
 }
