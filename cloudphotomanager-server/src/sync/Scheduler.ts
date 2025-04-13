@@ -26,7 +26,6 @@ let config: Config;
 
 const OUTDATED_AGE = 7 * 24 * 3600 * 1000;
 let SOURCE_FETCH_FREQUENCY_DYNAMIC = 30 * 60 * 1000;
-const SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR = 5;
 
 export async function SchedulerInit(context: Span, configIn: Config) {
   const span = StandardTracerStartSpan("Scheduler_init", context);
@@ -104,7 +103,7 @@ async function startSchedule() {
     ) {
       SOURCE_FETCH_FREQUENCY_DYNAMIC = Math.min(
         SOURCE_FETCH_FREQUENCY_DYNAMIC + config.SOURCE_FETCH_FREQUENCY,
-        config.SOURCE_FETCH_FREQUENCY * SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR
+        config.SOURCE_FETCH_FREQUENCY * config.SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR
       );
     } else {
       SOURCE_FETCH_FREQUENCY_DYNAMIC = config.SOURCE_FETCH_FREQUENCY;
