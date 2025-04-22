@@ -21,7 +21,7 @@ export async function AwsS3AccountFileOperationsDownloadFile(
   };
   const fileStream = s3.getObject(params).createReadStream();
   const writeStream = createWriteStream(path.join(destinationFolderpath, destinationFilename));
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     fileStream.on("error", reject);
     writeStream.on("error", reject);
     writeStream.on("finish", resolve);
