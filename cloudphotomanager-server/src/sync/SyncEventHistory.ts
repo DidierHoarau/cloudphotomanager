@@ -1,5 +1,5 @@
-import { SyncEvent } from "../model/SyncEvent";
 import { reverse, sortBy, take } from "lodash";
+import { SyncEvent } from "../model/SyncEvent";
 
 let recentEvents: SyncEvent[] = [];
 

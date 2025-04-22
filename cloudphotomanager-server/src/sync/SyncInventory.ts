@@ -1,22 +1,22 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import { FileDataAdd, FileDataDelete, FileDataListByFolder } from "../files/FileData";
-import { Account } from "../model/Account";
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
-import { Logger } from "../utils-std-ts/Logger";
 import * as _ from "lodash";
+import { FileDataAdd, FileDataDelete, FileDataListByFolder } from "../files/FileData";
 import {
   FolderDataAdd,
   FolderDataDeletePathRecursive,
   FolderDataListSubFolders,
   FolderDataUpdate,
 } from "../folders/FolderData";
+import { Account } from "../model/Account";
 import { Folder } from "../model/Folder";
-import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { SyncQueueQueueItem } from "./SyncQueue";
-import { SyncFileCacheCheckFolder } from "./SyncFileCache";
-import { SyncEventHistoryAdd } from "./SyncEventHistory";
-import { SyncEventObjectTypes } from "../model/SyncEventObjectTypes";
 import { SyncEventActions } from "../model/SyncEventActions";
+import { SyncEventObjectTypes } from "../model/SyncEventObjectTypes";
+import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
+import { Logger } from "../utils-std-ts/Logger";
+import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
+import { SyncEventHistoryAdd } from "./SyncEventHistory";
+import { SyncFileCacheCheckFolder } from "./SyncFileCache";
+import { SyncQueueQueueItem } from "./SyncQueue";
 
 const logger = new Logger("SyncInventory");
 

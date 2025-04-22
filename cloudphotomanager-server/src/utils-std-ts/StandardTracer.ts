@@ -1,8 +1,3 @@
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { AWSXRayIdGenerator } from "@opentelemetry/id-generator-aws-xray";
-import { BatchSpanProcessor, Span } from "@opentelemetry/sdk-trace-base";
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import { resourceFromAttributes } from "@opentelemetry/resources";
 import opentelemetry, {
   defaultTextMapGetter,
   defaultTextMapSetter,
@@ -12,9 +7,12 @@ import opentelemetry, {
 } from "@opentelemetry/api";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
 import { W3CTraceContextPropagator } from "@opentelemetry/core";
-import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
-import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { AWSXRayIdGenerator } from "@opentelemetry/id-generator-aws-xray";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import { api } from "@opentelemetry/sdk-node";
+import { BatchSpanProcessor, ConsoleSpanExporter, Span } from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import {
   ATTR_HTTP_REQUEST_METHOD,
   ATTR_HTTP_RESPONSE_STATUS_CODE,
@@ -25,8 +23,8 @@ import {
 } from "@opentelemetry/semantic-conventions";
 import { FastifyInstance } from "fastify";
 import * as os from "os";
-import { Logger } from "./Logger";
 import { Config } from "../Config";
+import { Logger } from "./Logger";
 
 let tracerInstance;
 const propagator = new W3CTraceContextPropagator();
@@ -38,13 +36,16 @@ let config;
 export function StandardTracerInitTelemetry(initConfig: Config) {
   config = initConfig;
   const spanProcessors = [];
+  let exporter;
   if (config.OPENTELEMETRY_COLLECTOR_HTTP) {
-    const exporter = new OTLPTraceExporter({
+    exporter = new OTLPTraceExporter({
       url: config.OPENTELEMETRY_COLLECTOR_HTTP,
       headers: {},
     });
-    spanProcessors.push(new BatchSpanProcessor(exporter));
+  } else {
+    exporter = new ConsoleSpanExporter();
   }
+  spanProcessors.push(new BatchSpanProcessor(exporter));
   const provider = new NodeTracerProvider({
     idGenerator: new AWSXRayIdGenerator(),
     resource: resourceFromAttributes({
