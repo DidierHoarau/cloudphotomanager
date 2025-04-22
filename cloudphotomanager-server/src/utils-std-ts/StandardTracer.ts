@@ -43,7 +43,7 @@ export function StandardTracerInitTelemetry(initConfig: Config) {
       headers: {},
     });
   } else {
-    exporter = new ConsoleSpanExporter();
+    exporter = new CustomConsoleSpanExporter();
   }
   spanProcessors.push(new BatchSpanProcessor(exporter));
   const provider = new NodeTracerProvider({
@@ -152,4 +152,18 @@ export function StandardTracerMetricAdd(key: string, value = 1): void {
   const counter = meter.createCounter(`${config.SERVICE_ID}-${key}`);
   counter.add(value, { key: "value" });
   logger.info(`+ Metric: ${config.SERVICE_ID}-${key}: ${value}`);
+}
+
+class CustomConsoleSpanExporter extends ConsoleSpanExporter {
+  export(spans, resultCallback) {
+    spans.forEach((span) => {
+      const { _spanContext, parentSpanContext, name, attributes, status, duration } = span;
+      console.log(
+        `${parentSpanContext ? parentSpanContext.spanId + " > " : ""}${_spanContext.spanId} ${name}` +
+          ` ${attributes && Object.keys(attributes).length > 0 ? JSON.stringify(attributes) + " " : ""}` +
+          `${status.code === 0 ? "OK" : "ERROR"} ${duration}ns`
+      );
+    });
+    resultCallback({ code: 0 });
+  }
 }
