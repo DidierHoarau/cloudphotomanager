@@ -235,6 +235,7 @@ export async function FolderDataDeletePathRecursive(context: Span, accountId: st
 }
 
 export async function FolderDataRefreshCacheFolders(): Promise<void> {
+  console.log("cacheAccountsFoldersInProgess: "+cacheAccountsFoldersInProgess) 
   if (cacheAccountsFoldersInProgess > 1) {
     return;
   }
@@ -256,6 +257,8 @@ export async function FolderDataRefreshCacheFolders(): Promise<void> {
 }
 
 export async function FolderDataRefreshCacheFoldersCounts(): Promise<void> {
+
+  console.log("cacheAccountsFoldersCountsInProgess: " + cacheAccountsFoldersCountsInProgess);
   if (cacheAccountsFoldersCountsInProgess > 1) {
     return;
   }
