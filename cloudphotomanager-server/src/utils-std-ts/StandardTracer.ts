@@ -36,16 +36,17 @@ let config;
 export function StandardTracerInitTelemetry(initConfig: Config) {
   config = initConfig;
   const spanProcessors = [];
-  let exporter;
   if (config.OPENTELEMETRY_COLLECTOR_HTTP) {
-    exporter = new OTLPTraceExporter({
+    const exporter = new OTLPTraceExporter({
       url: config.OPENTELEMETRY_COLLECTOR_HTTP,
       headers: {},
     });
-  } else {
-    exporter = new CustomConsoleSpanExporter();
+    spanProcessors.push(new BatchSpanProcessor(exporter));
   }
-  spanProcessors.push(new BatchSpanProcessor(exporter));
+  if (config.OPENTELEMETRY_COLLECTOR_CONSOLE) {
+    const exporter = new CustomConsoleSpanExporter();
+    spanProcessors.push(new BatchSpanProcessor(exporter));
+  }
   const provider = new NodeTracerProvider({
     idGenerator: new AWSXRayIdGenerator(),
     resource: resourceFromAttributes({
@@ -164,6 +165,12 @@ class CustomConsoleSpanExporter extends ConsoleSpanExporter {
           `${status.code === 0 ? "OK" : "ERROR"} ${duration}ns`
       );
     });
+    resultCallback({ code: 0 });
+  }
+}
+
+class NoSpanExporter extends ConsoleSpanExporter {
+  export(spans, resultCallback) {
     resultCallback({ code: 0 });
   }
 }

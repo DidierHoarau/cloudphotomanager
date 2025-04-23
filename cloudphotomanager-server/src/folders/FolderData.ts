@@ -15,8 +15,7 @@ let cacheAccountsFoldersCountsInProgess = 0;
 //
 export async function FolderDataInit(context: Span) {
   const span = StandardTracerStartSpan("FolderData_init", context);
-  FolderDataRefreshCacheFolders();
-  FolderDataRefreshCacheFoldersCounts();
+  startAutoCache();
   span.end();
 }
 
@@ -37,8 +36,8 @@ export async function FolderDataAdd(context: Span, folder: Folder): Promise<void
       JSON.stringify(folder.info),
     ]
   );
+  FolderDataRefreshCacheFolders(span);
   span.end();
-  FolderDataRefreshCacheFolders();
 }
 
 export async function FolderDataGet(context: Span, id: string): Promise<Folder> {
@@ -80,8 +79,8 @@ export async function FolderDataUpdate(context: Span, folder: Folder) {
     folder.id,
     folder.accountId,
   ]);
+  FolderDataRefreshCacheFolders(span);
   span.end();
-  FolderDataRefreshCacheFolders();
 }
 
 export async function FolderDataGetByCloudId(context: Span, accountId: string, idCloud: string): Promise<Folder> {
@@ -234,51 +233,44 @@ export async function FolderDataDeletePathRecursive(context: Span, accountId: st
   span.end();
 }
 
-export async function FolderDataRefreshCacheFolders(): Promise<void> {
-  console.log("cacheAccountsFoldersInProgess: "+cacheAccountsFoldersInProgess) 
-  if (cacheAccountsFoldersInProgess > 1) {
-    return;
-  }
-  cacheAccountsFoldersInProgess++;
+export async function FolderDataRefreshCacheFolders(context: Span): Promise<void> {
+  const span = StandardTracerStartSpan("FolderDataRefreshCacheFolders", context);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const newCache: any = {};
-  const span = StandardTracerStartSpan("FolderDataRefreshCacheFolders");
   const accounts = await AccountDataList(span);
   for (const account of accounts) {
     newCache[account.id] = FolderDataListForAccount(span, account.id);
   }
   cacheAccountsFolders = newCache;
+  FolderDataRefreshCacheFoldersCounts(span);
   span.end();
-  cacheAccountsFoldersInProgess--;
-  FolderDataRefreshCacheFoldersCounts();
-  setTimeout(() => {
-    FolderDataRefreshCacheFolders();
-  }, 60 * 1000);
 }
 
-export async function FolderDataRefreshCacheFoldersCounts(): Promise<void> {
-
-  console.log("cacheAccountsFoldersCountsInProgess: " + cacheAccountsFoldersCountsInProgess);
-  if (cacheAccountsFoldersCountsInProgess > 1) {
-    return;
-  }
-  cacheAccountsFoldersCountsInProgess++;
+export async function FolderDataRefreshCacheFoldersCounts(context: Span): Promise<void> {
+  const span = StandardTracerStartSpan("FolderDataRefreshCacheFoldersCounts", context);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const newCache: any = {};
-  const span = StandardTracerStartSpan("FolderDataRefreshCacheFoldersCounts");
   const accounts = await AccountDataList(span);
   for (const account of accounts) {
     newCache[account.id] = FolderDataListCountsForAccount(span, account.id);
   }
   cacheAccountsFoldersCounts = newCache;
   span.end();
-  cacheAccountsFoldersCountsInProgess--;
-  setTimeout(() => {
-    FolderDataRefreshCacheFoldersCounts();
-  }, 60 * 1000);
 }
 
 // Private Functions
+
+// Private Functions
+
+async function startAutoCache() {
+  const span = StandardTracerStartSpan("FolderData_startAutoCache");
+  FolderDataRefreshCacheFolders(span);
+  FolderDataRefreshCacheFoldersCounts(span);
+  span.end();
+  setTimeout(() => {
+    startAutoCache();
+  }, 60 * 1000);
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fromRaw(folderRaw: any): Folder {

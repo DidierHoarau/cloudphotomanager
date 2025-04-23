@@ -22,6 +22,7 @@ export class Config implements ConfigInterface {
   public SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR = 6;
   public OPENTELEMETRY_COLLECTOR_HTTP: string = process.env.OPENTELEMETRY_COLLECTOR_HTTP || "";
   public OPENTELEMETRY_COLLECTOR_AWS = process.env.OPENTELEMETRY_COLLECTOR_AWS === "true";
+  public OPENTELEMETRY_COLLECTOR_CONSOLE = false;
   public PROCESSORS_SYSTEM = "processors-system";
   public PROCESSORS_USER = "processors-user";
   public AUTO_SYNC = process.env.AUTO_SYNC !== "N";
@@ -56,6 +57,7 @@ export class Config implements ConfigInterface {
     setIfSet("SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR");
     setIfSet("OPENTELEMETRY_COLLECTOR_HTTP");
     setIfSet("OPENTELEMETRY_COLLECTOR_AWS");
+    setIfSet("OPENTELEMETRY_COLLECTOR_CONSOLE");
     setIfSet("DATABASE_ASYNC_WRITE");
     setIfSet("VIDEO_PREVIEW_WIDTH");
   }
