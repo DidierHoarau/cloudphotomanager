@@ -99,8 +99,8 @@ export async function FileDataAdd(context: Span, file: File): Promise<void> {
       JSON.stringify(file.metadata),
     ]
   );
+  FolderDataRefreshCacheFoldersCounts(span);
   span.end();
-  FolderDataRefreshCacheFoldersCounts();
 }
 
 export async function FileDataUpdate(context: Span, file: File): Promise<void> {
@@ -125,15 +125,15 @@ export async function FileDataUpdate(context: Span, file: File): Promise<void> {
       file.id,
     ]
   );
+  FolderDataRefreshCacheFoldersCounts(span);
   span.end();
-  FolderDataRefreshCacheFoldersCounts();
 }
 
 export async function FileDataDelete(context: Span, id: string): Promise<void> {
   const span = StandardTracerStartSpan("FileData_delete", context);
   await SqlDbutils.execSQL(span, "DELETE FROM files WHERE id = ?", [id]);
+  FolderDataRefreshCacheFoldersCounts(span);
   span.end();
-  FolderDataRefreshCacheFoldersCounts();
 }
 
 // Private Funciton

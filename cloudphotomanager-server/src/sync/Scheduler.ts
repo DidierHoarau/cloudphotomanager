@@ -12,13 +12,13 @@ import {
 } from "../folders/FolderData";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
+import { Logger } from "../utils-std-ts/Logger";
 import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { Timeout } from "../utils-std-ts/Timeout";
-import { Logger } from "../utils-std-ts/Logger";
-import { SyncQueueQueueItem } from "./SyncQueue";
-import { SyncInventoryInit, SyncInventorySyncFolder } from "./SyncInventory";
-import { SyncFileCacheCleanUp } from "./SyncFileCache";
 import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
+import { SyncFileCacheCleanUp } from "./SyncFileCache";
+import { SyncInventoryInit, SyncInventorySyncFolder } from "./SyncInventory";
+import { SyncQueueQueueItem } from "./SyncQueue";
 
 const logger = new Logger("Scheduler");
 
@@ -92,7 +92,7 @@ async function startSchedule() {
     const accountDefinitions = await AccountDataList(span);
     accountDefinitions.forEach(async (accountDefinition) => {
       logger.info(`Start Sync of Account ${accountDefinition.name}`);
-      SchedulerStartAccountSync(span, accountDefinition).catch((err) => {
+      await SchedulerStartAccountSync(span, accountDefinition).catch((err) => {
         logger.error(err);
       });
     });

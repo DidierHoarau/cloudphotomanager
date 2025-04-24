@@ -1,8 +1,8 @@
 import * as _ from "lodash";
 import { Account } from "../model/Account";
 import { SyncQueueItem } from "../model/SyncQueueItem";
-import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { SyncQueueItemStatus } from "../model/SyncQueueItemStatus";
+import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { Logger } from "../utils-std-ts/Logger";
 import { PromisePool } from "../utils-std-ts/PromisePool";
 

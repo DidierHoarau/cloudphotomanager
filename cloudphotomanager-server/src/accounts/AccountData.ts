@@ -40,8 +40,8 @@ export async function AccountDataAdd(context: Span, accountDefinition: AccountDe
       JSON.stringify(accountDefinition.infoPrivate),
     ]
   );
+  FolderDataRefreshCacheFolders(span);
   span.end();
-  FolderDataRefreshCacheFolders();
 }
 
 export async function AccountDataUpdate(context: Span, accountDefinition: AccountDefinition): Promise<void> {
@@ -53,8 +53,8 @@ export async function AccountDataUpdate(context: Span, accountDefinition: Accoun
     JSON.stringify(accountDefinition.infoPrivate),
     accountDefinition.id,
   ]);
+  FolderDataRefreshCacheFolders(span);
   span.end();
-  FolderDataRefreshCacheFolders();
 }
 
 export async function AccountDataDelete(context: Span, accountId: string): Promise<void> {

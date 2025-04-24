@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
-import { SyncQueueGetCounts } from "./SyncQueue";
 import { AuthGetUserSession } from "../users/Auth";
 import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
+import { SyncQueueGetCounts } from "./SyncQueue";
 
 export class SyncRoutes {
   //

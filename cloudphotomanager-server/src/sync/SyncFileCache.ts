@@ -1,4 +1,10 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
+import * as fs from "fs-extra";
+import { find } from "lodash";
+import * as probe from "node-ffprobe";
+import * as path from "path";
+import * as sharp from "sharp";
+import { Config } from "../Config";
 import {
   FileDataGetFileCacheDir,
   FileDataGetFileTmpDir,
@@ -6,20 +12,14 @@ import {
   FileDataListForAccount,
 } from "../files/FileData";
 import { Account } from "../model/Account";
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
-import * as fs from "fs-extra";
-import * as path from "path";
-import { Logger } from "../utils-std-ts/Logger";
-import { FileMediaType } from "../model/FileMediaType";
 import { File } from "../model/File";
-import { find } from "lodash";
-import * as sharp from "sharp";
-import { SyncQueueQueueItem } from "./SyncQueue";
+import { FileMediaType } from "../model/FileMediaType";
 import { Folder } from "../model/Folder";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { Config } from "../Config";
 import { SystemCommand } from "../SystemCommand";
-import * as probe from "node-ffprobe";
+import { Logger } from "../utils-std-ts/Logger";
+import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
+import { SyncQueueQueueItem } from "./SyncQueue";
 
 const logger = new Logger("SyncFileCache");
 let config: Config;
