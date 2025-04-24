@@ -4,7 +4,12 @@
     <Loading v-if="foldersStore.loading" class="folder-component-layout-list" />
     <div v-else class="folder-component-layout-list">
       <div v-for="(folder, index) in foldersStore.folders" v-bind:key="folder.name">
-        <div v-if="isVisible(folder)" class="folder-layout" :class="{ 'source-active': selectedFolderId == folder.id }">
+        <div
+          v-if="isVisible(folder)"
+          class="folder-layout"
+          :class="{ 'source-active': selectedFolderId == folder.id }"
+          :ref="'folder-' + folder.id"
+        >
           <span v-on:click="toggleFolderCollapsed(folder, index)" class="folder-layout-indent">
             <span v-if="!folderFilter" v-html="folder.indentation"></span>
             <i v-if="folder.children === 0" class="bi bi-images"></i>
@@ -35,7 +40,6 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 
 export default {
   props: {
-    monitorRoute: false,
     accountId: "",
   },
   data() {
@@ -49,12 +53,16 @@ export default {
       FoldersStore().fetch();
     });
     FoldersStore().fetch();
-
-    if (this.monitorRoute) {
-    }
-
     if (useRoute().query.folderId) {
       this.selectedFolderId = useRoute().query.folderId;
+      setTimeout(() => {
+        const element = this.$refs["folder-" + this.selectedFolderId];
+        if (element && element[0]) {
+          element[0].scrollIntoView({
+            behavior: "smooth",
+          });
+        }
+      }, 500);
     }
     watch(
       () => useRoute().query.folderId,
