@@ -52,7 +52,7 @@ export default {
     EventBus.on(EventTypes.FOLDER_UPDATED, (message) => {
       FoldersStore().fetch();
     });
-    FoldersStore().fetch();
+    await FoldersStore().fetch();
     if (useRoute().query.folderId) {
       this.selectedFolderId = useRoute().query.folderId;
       setTimeout(() => {
