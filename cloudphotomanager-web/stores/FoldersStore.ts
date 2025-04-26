@@ -33,12 +33,13 @@ export const FoldersStore = defineStore("FoldersStore", {
                   folderpath: "/",
                   depth: 0,
                   parentIndex: -1,
+                  indentation: "",
                   isCollapsed: PreferencesFolders.isCollapsed(folder.accountId, folder.id),
                   isVisible: true,
                   children: 0,
                 });
               } else {
-                let parentPath = folder.folderpath.substring(0, folder.folderpath.lastIndexOf("/"));
+                let parentPath = getParentFolderPath(folder.folderpath);
                 if (parentPath === "") {
                   parentPath = "/";
                 }
@@ -48,7 +49,7 @@ export const FoldersStore = defineStore("FoldersStore", {
                   name: folder.folderpath.split("/").pop(),
                   type: "folder",
                   accountId: account.id,
-                  folderpath: folder.folderpath,
+                  folderpath: formatFolderPath(folder.folderpath),
                   childrenCount: folder.childrenCount,
                   indentation: this.getIndentation(folder.folderpath),
                   isCollapsed: PreferencesFolders.isCollapsed(folder.accountId, folder.id),
@@ -68,11 +69,8 @@ export const FoldersStore = defineStore("FoldersStore", {
       this.loading = false;
     },
     getIndentation(folderpath: string) {
-      if (folderpath === "/") {
-        return "";
-      }
       let indent = "";
-      for (let i = 0; i < folderpath.split("/").length - 1; i++) {
+      for (let i = 1; i < folderpath.split("/").length; i++) {
         indent += "&nbsp;&nbsp;&nbsp;&nbsp;";
       }
       return indent;
@@ -122,4 +120,20 @@ export const FoldersStore = defineStore("FoldersStore", {
 
 if (import.meta.hot) {
   import.meta.hot.accept(acceptHMRUpdate(FoldersStore, import.meta.hot));
+}
+
+function formatFolderPath(str: string) {
+  if (!str.endsWith("/")) {
+    return str + "/";
+  }
+  return str;
+}
+
+function getParentFolderPath(path: string) {
+  if (!path.endsWith("/")) {
+    path += "/";
+  }
+  const segments = path.slice(0, -1).split("/");
+  segments.pop();
+  return segments.length > 0 ? segments.join("/") + "/" : "/";
 }
