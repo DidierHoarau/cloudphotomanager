@@ -1,6 +1,13 @@
 <template>
   <div class="folder-component-layout">
-    <input v-model="folderFilter" type="text" class="folder-component-layout-filter" />
+    <input
+      v-model="folderFilter"
+      type="search"
+      name="search"
+      placeholder="Filter Folder"
+      aria-label="Search"
+      class="folder-component-layout-filter"
+    />
     <Loading v-if="foldersStore.loading" class="folder-component-layout-list" />
     <div v-else class="folder-component-layout-list">
       <div v-for="(folder, index) in foldersStore.folders" v-bind:key="folder.name">
@@ -100,6 +107,9 @@ export default {
 </script>
 
 <style scoped>
+.folder-component-layout-filter {
+  --pico-border-radius: 0rem;
+}
 @media (prefers-color-scheme: dark) {
   .source-active {
     background-color: #333;
