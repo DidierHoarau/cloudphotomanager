@@ -43,7 +43,8 @@ RUN apt-get update && apt-get install -y \
         nginx \
         python3 \
         libvips-dev \
-        libvips-heif \
+        libheif-dev \
+        libfftw3-dev \
         wget \
         ffmpeg && \
     npm install -g pm2
