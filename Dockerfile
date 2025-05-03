@@ -51,7 +51,7 @@ RUN apt-get update && apt-get install -y \
 COPY docker-config/default.conf /etc/nginx/http.d/default.conf
 COPY docker-config/ecosystem.config.js /opt/app/cloudphotomanager/ecosystem.config.js
 
-COPY docker-config/tools /opt/app/cloudphotomanager/tools
+COPY cloudphotomanager-tools /opt/app/cloudphotomanager/tools
 COPY --from=builder /opt/src/cloudphotomanager-server/node_modules /opt/app/cloudphotomanager/node_modules
 COPY --from=builder /opt/src/cloudphotomanager-server/dist /opt/app/cloudphotomanager/dist
 COPY --from=builder /opt/src/cloudphotomanager-web/.output/public /opt/app/cloudphotomanager/web
