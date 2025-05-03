@@ -6,7 +6,7 @@ WORKDIR /opt/src
 RUN apt-get update && apt-get install -y \
         build-essential \
         libvips-dev \
-        libvips-heif \
+        libheif-dev \
         libfftw3-dev \
         gcc \
         g++ \
