@@ -47,7 +47,8 @@ RUN apt-get update && apt-get install -y \
         libfftw3-dev \
         wget \
         ffmpeg && \
-    npm install -g pm2
+    npm install -g pm2 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY docker-config/default.conf /etc/nginx/http.d/default.conf
 COPY docker-config/ecosystem.config.js /opt/app/cloudphotomanager/ecosystem.config.js
