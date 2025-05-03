@@ -1,4 +1,3 @@
-import { pipeline } from "@huggingface/transformers";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import * as fs from "fs-extra";
 import { find } from "lodash";
@@ -22,6 +21,7 @@ import { SystemCommand } from "../SystemCommand";
 import { Logger } from "../utils-std-ts/Logger";
 import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { SyncQueueQueueItem } from "./SyncQueue";
+import { pipeline } from "@huggingface/transformers";
 
 const logger = new Logger("SyncFileCache");
 let config: Config;

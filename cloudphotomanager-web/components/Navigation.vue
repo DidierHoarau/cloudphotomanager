@@ -11,9 +11,9 @@
           ><i class="bi bi-images"></i
         ></NuxtLink>
       </li>
-      <li v-if="authenticationStore.isAdmin">
-        <NuxtLink to="/analysis" :class="baseFolder === 'analysis' ? 'active' : 'inactive'"
-          ><i class="bi bi-clipboard-data-fill"></i
+      <li v-if="authenticationStore.isAuthenticated">
+        <NuxtLink to="/search" :class="baseFolder === 'search' ? 'active' : 'inactive'"
+          ><i class="bi bi-search"></i
         ></NuxtLink>
       </li>
       <li v-if="authenticationStore.isAdmin">
