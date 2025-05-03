@@ -50,7 +50,7 @@ RUN apt-get update && apt-get install -y \
     npm install -g pm2 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY docker-config/default.conf /etc/nginx/http.d/default.conf
+COPY docker-config/default.conf /etc/nginx/sites-enabled/default
 COPY docker-config/ecosystem.config.js /opt/app/cloudphotomanager/ecosystem.config.js
 
 COPY cloudphotomanager-tools /opt/app/cloudphotomanager/tools
