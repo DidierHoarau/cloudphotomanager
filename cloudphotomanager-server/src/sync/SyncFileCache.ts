@@ -1,3 +1,4 @@
+import { pipeline } from "@huggingface/transformers";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import * as fs from "fs-extra";
 import { find } from "lodash";
@@ -10,6 +11,7 @@ import {
   FileDataGetFileTmpDir,
   FileDataListByFolder,
   FileDataListForAccount,
+  FileDataUpdateKeywords,
 } from "../files/FileData";
 import { Account } from "../model/Account";
 import { File } from "../model/File";
@@ -23,11 +25,13 @@ import { SyncQueueQueueItem } from "./SyncQueue";
 
 const logger = new Logger("SyncFileCache");
 let config: Config;
+let pipe;
 
 export async function SyncFileCacheInit(context: Span, configIn: Config) {
   const span = StandardTracerStartSpan("Scheduler_init", context);
   config = configIn;
   await fs.rm(config.TMP_DIR, { recursive: true, force: true });
+  pipe = await pipeline("image-classification", null, { dtype: "fp32" });
   span.end();
 }
 
@@ -68,6 +72,10 @@ export async function SyncFileCacheCheckFile(context: Span, account: Account, fi
 
   if (isImage && !hasImagePreview) {
     await SyncQueueQueueItem(account, file.id, file, syncPhotoFromFull, SyncQueueItemPriority.NORMAL);
+  }
+
+  if (isImage && !file.keywords) {
+    await SyncQueueQueueItem(account, file.id, file, syncPhotoKeyWords, SyncQueueItemPriority.BATCH);
   }
 
   if (isVideo && !hasVideoPreview) {
@@ -174,6 +182,38 @@ async function syncPhotoFromFull(account: Account, file: File) {
         .resize({ width: 300 })
         .toFile(`${cacheDir}/thumbnail.webp`);
       await sharp(`${tmpDir}/${tmpFileName}`).withMetadata().resize({ width: 2000 }).toFile(`${cacheDir}/preview.webp`);
+    })
+    .catch((err) => {
+      logger.error(err);
+    });
+  await fs.remove(tmpDir);
+  span.end();
+}
+
+async function syncPhotoKeyWords(account: Account, file: File) {
+  const span = StandardTracerStartSpan("syncPhotoKeyWords");
+  const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
+  const tmpDir =
+    (await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id)) + "_image_classification";
+  const hasImagePreview = fs.existsSync(`${cacheDir}/preview.webp`);
+  if (!hasImagePreview) {
+    await syncPhotoFromFull(account, file);
+  }
+  await fs.ensureDir(tmpDir);
+  let tmpFileName = `tmp.${file.filename.split(".").pop()}`;
+  logger.info(`Generating Keywords for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
+  await sharp(`${cacheDir}/preview.webp`)
+    .withMetadata()
+    .toFile(`${tmpDir}/${tmpFileName}.jpeg`)
+    .then(async () => {
+      const classificationResults = await pipe(`${tmpDir}/${tmpFileName}.jpeg`);
+      file.keywords = file.filename;
+      classificationResults.forEach((result) => {
+        if (result.score > 0.5) {
+          file.keywords += " " + result.label;
+        }
+      });
+      await FileDataUpdateKeywords(span, file);
     })
     .catch((err) => {
       logger.error(err);

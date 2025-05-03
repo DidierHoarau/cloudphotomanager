@@ -15,7 +15,7 @@
   },
   "devDependencies": {
     "@types/lodash": "^4.17.16",
-    "nuxt": "3.16.2"
+    "nuxt": "3.17.1"
   },
   "dependencies": {
     "@picocss/pico": "^2.1.1",

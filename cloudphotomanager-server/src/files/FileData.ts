@@ -9,7 +9,7 @@ import { FolderDataRefreshCacheFoldersCounts } from "../folders/FolderData";
 let config: Config;
 
 export async function FileDataInit(context: Span, configIn: Config) {
-  const span = StandardTracerStartSpan("FileData_init", context);
+  const span = StandardTracerStartSpan("FileDataInit", context);
   config = configIn;
   span.end();
 }
@@ -23,7 +23,7 @@ export async function FileDataGetFileTmpDir(context: Span, accountId: string, fi
 }
 
 export async function FileDataGet(context: Span, id: string): Promise<File> {
-  const span = StandardTracerStartSpan("FileData_getByPath", context);
+  const span = StandardTracerStartSpan("FileDataGet", context);
   const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE id = ? ", [id]);
   if (rawData.length === 0) {
     return null;
@@ -39,7 +39,7 @@ export async function FileDataGetByFolderId(
   folderId: string,
   filename: string
 ): Promise<File> {
-  const span = StandardTracerStartSpan("FileData_folderId", context);
+  const span = StandardTracerStartSpan("FileDataGetByFolderId", context);
   const rawData = await SqlDbutils.querySQL(
     span,
     "SELECT * FROM files WHERE accountId = ? AND folderpath = folderId AND filename = ? ",
@@ -54,7 +54,7 @@ export async function FileDataGetByFolderId(
 }
 
 export async function FileDataListForAccount(context: Span, accountId: string): Promise<File[]> {
-  const span = StandardTracerStartSpan("FileData_listForAccount", context);
+  const span = StandardTracerStartSpan("FileDataListForAccount", context);
   const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE accountId = ?", [accountId]);
   const files = [];
   rawData.forEach((fileRaw) => {
@@ -65,7 +65,7 @@ export async function FileDataListForAccount(context: Span, accountId: string): 
 }
 
 export async function FileDataListByFolder(context: Span, accountId: string, folderId: string): Promise<File[]> {
-  const span = StandardTracerStartSpan("FileData_listForAccount", context);
+  const span = StandardTracerStartSpan("FileDataListByFolder", context);
   const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE accountId = ? AND folderId = ?", [
     accountId,
     folderId,
@@ -79,7 +79,7 @@ export async function FileDataListByFolder(context: Span, accountId: string, fol
 }
 
 export async function FileDataAdd(context: Span, file: File): Promise<void> {
-  const span = StandardTracerStartSpan("FileData_add", context);
+  const span = StandardTracerStartSpan("FileDataAdd", context);
   await SqlDbutils.execSQL(span, "DELETE FROM files WHERE id = ?", [file.id]);
   await SqlDbutils.execSQL(
     span,
@@ -104,7 +104,7 @@ export async function FileDataAdd(context: Span, file: File): Promise<void> {
 }
 
 export async function FileDataUpdate(context: Span, file: File): Promise<void> {
-  const span = StandardTracerStartSpan("FileData_add", context);
+  const span = StandardTracerStartSpan("FileDataUpdate", context);
   await SqlDbutils.execSQL(
     span,
     "UPDATE files " +
@@ -129,8 +129,15 @@ export async function FileDataUpdate(context: Span, file: File): Promise<void> {
   span.end();
 }
 
+export async function FileDataUpdateKeywords(context: Span, file: File): Promise<void> {
+  const span = StandardTracerStartSpan("FileDataUpdateKeywords", context);
+  await SqlDbutils.execSQL(span, "UPDATE files SET keywords = ? WHERE id = ? ", [file.keywords, file.id]);
+  FolderDataRefreshCacheFoldersCounts(span);
+  span.end();
+}
+
 export async function FileDataDelete(context: Span, id: string): Promise<void> {
-  const span = StandardTracerStartSpan("FileData_delete", context);
+  const span = StandardTracerStartSpan("FileDataDelete", context);
   await SqlDbutils.execSQL(span, "DELETE FROM files WHERE id = ?", [id]);
   FolderDataRefreshCacheFoldersCounts(span);
   span.end();
@@ -144,6 +151,7 @@ function fromRaw(fileRaw: any): File {
   file.id = fileRaw.id;
   file.idCloud = fileRaw.idCloud;
   file.hash = fileRaw.hash;
+  file.keywords = fileRaw.keywords;
   file.dateSync = new Date(fileRaw.dateSync);
   file.dateUpdated = new Date(fileRaw.dateUpdated);
   file.dateMedia = new Date(fileRaw.dateMedia);
