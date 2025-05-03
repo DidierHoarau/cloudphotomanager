@@ -4,16 +4,16 @@ FROM node:22 as builder
 WORKDIR /opt/src
 
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    libvips-dev \
-    libvips-heif \
-    libfftw3-dev \
-    gcc \
-    g++ \
-    make \
-    python3 \
-    wget \
-    git
+        build-essential \
+        libvips-dev \
+        libvips-heif \
+        libfftw3-dev \
+        gcc \
+        g++ \
+        make \
+        python3 \
+        wget \
+        git
 
 COPY cloudphotomanager-server cloudphotomanager-server
 
