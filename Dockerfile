@@ -1,9 +1,8 @@
-# BUILD STAGE
+# BUILD
 FROM node:22 as builder
 
 WORKDIR /opt/src
 
-# Install build dependencies using Debian packages
 RUN apt-get update && apt-get install -y \
     build-essential \
     libvips-dev \
@@ -28,33 +27,30 @@ RUN cd cloudphotomanager-web && \
     npm ci && \
     npm run generate
 
-# RUN STAGE
+# RUN
 FROM node:22
 
 COPY docker-config/entrypoint.sh /entrypoint.sh
 
-# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    libfftw3-dev \
-    g++ \
-    gcc \
-    imagemagick \
-    libraw-dev \
-    make \
-    nginx \
-    python3 \
-    libvips-dev \
-    libvips-heif \
-    wget \
-    ffmpeg \
-    && npm install -g pm2
+        build-essential \
+        libfftw3-dev \
+        g++ \
+        gcc \
+        imagemagick \
+        libraw-dev \
+        make \
+        nginx \
+        python3 \
+        libvips-dev \
+        libvips-heif \
+        wget \
+        ffmpeg && \
+    npm install -g pm2
 
-# Copy config files
 COPY docker-config/default.conf /etc/nginx/http.d/default.conf
 COPY docker-config/ecosystem.config.js /opt/app/cloudphotomanager/ecosystem.config.js
 
-# Copy application files
 COPY docker-config/tools /opt/app/cloudphotomanager/tools
 COPY --from=builder /opt/src/cloudphotomanager-server/node_modules /opt/app/cloudphotomanager/node_modules
 COPY --from=builder /opt/src/cloudphotomanager-server/dist /opt/app/cloudphotomanager/dist
