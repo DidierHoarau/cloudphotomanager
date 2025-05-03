@@ -213,6 +213,7 @@ async function syncPhotoKeyWords(account: Account, file: File) {
           file.keywords += " " + result.label;
         }
       });
+      file.keywords = file.keywords.toLowerCase();
       await FileDataUpdateKeywords(span, file);
     })
     .catch((err) => {
