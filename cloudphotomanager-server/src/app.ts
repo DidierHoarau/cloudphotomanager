@@ -23,6 +23,7 @@ import { UserRoutes } from "./users/UserRoutes";
 import { Logger } from "./utils-std-ts/Logger";
 import { SqlDbutils } from "./utils-std-ts/SqlDbUtils";
 import { StandardTracerInitTelemetry, StandardTracerStartSpan } from "./utils-std-ts/StandardTracer";
+import { AnalysisImagesInit } from "./analysis/AnalysisImages";
 
 const logger = new Logger("app");
 
@@ -47,6 +48,7 @@ Promise.resolve().then(async () => {
   await FileDataInit(span, config);
   await FolderDataInit(span);
   await SchedulerInit(span, config);
+  await AnalysisImagesInit(span);
 
   span.end();
 

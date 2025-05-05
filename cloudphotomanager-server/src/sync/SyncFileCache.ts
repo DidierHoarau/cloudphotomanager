@@ -21,17 +21,15 @@ import { SystemCommand } from "../SystemCommand";
 import { Logger } from "../utils-std-ts/Logger";
 import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { SyncQueueQueueItem } from "./SyncQueue";
-import { pipeline } from "@huggingface/transformers";
+import { AnalysisImagesGetLabels } from "../analysis/AnalysisImages";
 
 const logger = new Logger("SyncFileCache");
 let config: Config;
-let pipe;
 
 export async function SyncFileCacheInit(context: Span, configIn: Config) {
   const span = StandardTracerStartSpan("Scheduler_init", context);
   config = configIn;
   await fs.rm(config.TMP_DIR, { recursive: true, force: true });
-  pipe = await pipeline("image-classification", null, { dtype: "fp32" });
   span.end();
 }
 
@@ -196,30 +194,32 @@ async function syncPhotoKeyWords(account: Account, file: File) {
   const tmpDir =
     (await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id)) + "_image_classification";
   const hasImagePreview = fs.existsSync(`${cacheDir}/preview.webp`);
-  if (!hasImagePreview) {
-    await syncPhotoFromFull(account, file);
-  }
-  await fs.ensureDir(tmpDir);
-  let tmpFileName = `tmp.${file.filename.split(".").pop()}`;
-  logger.info(`Generating Keywords for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
-  await sharp(`${cacheDir}/preview.webp`)
-    .withMetadata()
-    .toFile(`${tmpDir}/${tmpFileName}.jpeg`)
-    .then(async () => {
-      const classificationResults = await pipe(`${tmpDir}/${tmpFileName}.jpeg`);
-      file.keywords = file.filename;
-      classificationResults.forEach((result) => {
-        if (result.score > 0.5) {
-          file.keywords += " " + result.label;
-        }
+  file.keywords = file.filename;
+  if (config.IMAGE_CLASSIFICATION_ENABLED) {
+    if (!hasImagePreview) {
+      await syncPhotoFromFull(account, file);
+    }
+    await fs.ensureDir(tmpDir);
+    let tmpFileName = `tmp.${file.filename.split(".").pop()}`;
+    logger.info(`Generating Keywords for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
+    await sharp(`${cacheDir}/preview.webp`)
+      .withMetadata()
+      .toFile(`${tmpDir}/${tmpFileName}.jpeg`)
+      .then(async () => {
+        const classificationResults = await AnalysisImagesGetLabels(span, `${tmpDir}/${tmpFileName}.jpeg`);
+        classificationResults.forEach((result) => {
+          if (result.score > 0.5) {
+            file.keywords += " " + result.label;
+          }
+        });
+        file.keywords = file.keywords.toLowerCase();
+      })
+      .catch((err) => {
+        logger.error(err);
       });
-      file.keywords = file.keywords.toLowerCase();
-      await FileDataUpdateKeywords(span, file);
-    })
-    .catch((err) => {
-      logger.error(err);
-    });
-  await fs.remove(tmpDir);
+    await fs.remove(tmpDir);
+  }
+  await FileDataUpdateKeywords(span, file);
   span.end();
 }
 
