@@ -7,11 +7,8 @@ import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
 import { FolderDataListForAccount } from "../folders/FolderData";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function AnalysisDataListAccountDuplicates(
-  context: Span,
-  accountId: string
-): Promise<AnalysisDuplicate[]> {
-  const span = StandardTracerStartSpan("AnalysisData_listAccountDuplicates", context);
+export async function SearchDataListAccountDuplicates(context: Span, accountId: string): Promise<AnalysisDuplicate[]> {
+  const span = StandardTracerStartSpan("SearchDataListAccountDuplicates", context);
   const rawData = await SqlDbutils.querySQL(
     span,
     "SELECT * " +
@@ -40,6 +37,22 @@ export async function AnalysisDataListAccountDuplicates(
   }
   span.end();
   return analysis;
+}
+
+export async function SearchDataListFiles(context: Span, accountId: string, filters: any): Promise<File[]> {
+  const span = StandardTracerStartSpan("SearchDataListFiles", context);
+  const rawData = await SqlDbutils.querySQL(
+    span,
+    "SELECT * " + " FROM files " + " WHERE accountId = ? AND keywords like ? ",
+    [accountId, `%${filters.keywords}%`]
+  );
+  console.log([accountId, `%${filters.keywords}%`]);
+  const files: File[] = [];
+  for (const fileRaw of rawData) {
+    files.push(fromRaw(fileRaw));
+  }
+  span.end();
+  return files;
 }
 
 // Private Function

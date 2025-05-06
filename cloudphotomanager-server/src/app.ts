@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import { watchFile } from "fs-extra";
 import * as path from "path";
 import { AccountRoutes } from "./accounts/AccountRoutes";
-import { AnalysisRoutes } from "./analysis/AnalysisRoutes";
+import { SearchRoutes } from "./analysis/SearchRoutes";
 import { Config } from "./Config";
 import { FileDataInit } from "./files/FileData";
 import { FileRoutes } from "./files/FileRoutes";
@@ -108,8 +108,8 @@ Promise.resolve().then(async () => {
     prefix: "/api/accounts/:accountId/files/batch/operations/fileCacheDelete",
   });
 
-  fastify.register(new AnalysisRoutes().getRoutes, {
-    prefix: "/api/accounts/:accountId/analysis",
+  fastify.register(new SearchRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/search",
   });
 
   fastify.register(new SyncRoutes().getRoutes, {

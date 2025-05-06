@@ -1,5 +1,6 @@
 <template>
   <div class="search-gallery-layout page">
+    <NavigationSearch class="search-gallery-layout-navigation" />
     <div class="search-gallery-criteria">
       <input
         v-model="searchKeyword"
@@ -8,6 +9,7 @@
         placeholder="Search File"
         aria-label="Search"
         class="folder-component-layout-filter"
+        v-on:input="onSearchFilterChanged"
       />
       <div class="search-gallery-layout-actions actions">
         <p>Select the account to analyze</p>
@@ -16,7 +18,7 @@
         </span>
         <br />
         <br />
-        <input v-if="analysis.length > 0" v-model="analysisFilter" type="text" v-on:input="analysisFilterChanged" />
+        <input v-if="analysis.length > 0" v-model="analysisFilter" type="text" v-on:input="onSearchFilterChanged" />
         <kbd v-if="analysis.length > 0">Duplicates Found: {{ analysisFiltered.length }}</kbd>
       </div>
     </div>
@@ -98,7 +100,7 @@ export default {
         .then((res) => {
           if (this.requestEtag === requestEtag) {
             this.analysis = res.data.duplicates;
-            this.analysisFilterChanged();
+            this.onSearchFilterChanged();
           }
         })
         .finally(() => {
@@ -140,7 +142,7 @@ export default {
     displayFolderPath(folders, folderId) {
       return find(folders, { id: folderId }).folderpath;
     },
-    analysisFilterChanged: debounce(async function (e) {
+    onSearchFilterChanged: debounce(async function (e) {
       if (!this.analysisFilter) {
         this.analysisFiltered = this.analysis;
         return;
