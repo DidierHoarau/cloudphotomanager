@@ -34,7 +34,7 @@ const accountsStore = AccountsStore();
 
 <script>
 import axios from "axios";
-import { debounce, find, findIndex } from "lodash";
+import { debounce, filter, find, findIndex } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
@@ -66,7 +66,8 @@ export default {
       if (this.searchKeyword.length > 1) {
         filters.keywords = this.searchKeyword;
       }
-      if (filters != {}) {
+      if (Object.keys(filters).length > 0) {
+        console.log("doingSearch");
         this.loading = true;
         await axios
           .post(
@@ -79,6 +80,8 @@ export default {
             this.loading = false;
           })
           .catch(handleError);
+      } else {
+        this.files = [];
       }
     }, 500),
     onAccountSelected(event) {
@@ -92,7 +95,7 @@ export default {
 .search-gallery-layout {
   display: grid;
   width: 100%;
-  grid-template-rows: auto 2.5em 1fr;
+  grid-template-rows: auto auto 2.5em 1fr;
   grid-template-columns: 1fr;
   gap: 1em;
 }
@@ -143,7 +146,7 @@ export default {
 
 .analysis-item-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(20em, 1fr));
+  grid-template-columns: 1fr;
   gap: 1em;
 }
 </style>

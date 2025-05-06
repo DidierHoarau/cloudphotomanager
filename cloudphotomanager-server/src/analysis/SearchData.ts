@@ -46,7 +46,6 @@ export async function SearchDataListFiles(context: Span, accountId: string, filt
     "SELECT * " + " FROM files " + " WHERE accountId = ? AND keywords like ? ",
     [accountId, `%${filters.keywords}%`]
   );
-  console.log([accountId, `%${filters.keywords}%`]);
   const files: File[] = [];
   for (const fileRaw of rawData) {
     files.push(fromRaw(fileRaw));

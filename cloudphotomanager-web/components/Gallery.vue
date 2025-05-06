@@ -62,7 +62,9 @@ export default {
       outtakesCount: 0,
     };
   },
-  async created() {},
+  async created() {
+    this.staticUrl = (await Config.get()).STATIC_URL;
+  },
   methods: {
     filterOuttakes() {
       if (!this.showOutakes) {
@@ -297,76 +299,30 @@ export default {
   height: 2.2em;
 }
 
-@media (min-width: 701px) {
-  .gallery-layout {
-    display: grid;
-    grid-template-rows: auto 1fr;
-    grid-template-columns: auto 1fr 1fr;
-    column-gap: 1em;
-  }
-  .gallery-files-actions {
-    padding-top: 0.5em;
-    grid-row: 1;
-    grid-column-start: 2;
-    grid-column-end: span 2;
-  }
-  .gallery-file-list {
-    overflow: auto;
-    grid-row: 2;
-    grid-column-start: 2;
-    grid-column-end: span 2;
-  }
-  .gallery-header {
-    grid-row: 1;
-    grid-column-start: 1;
-    grid-column-end: span 2;
-  }
-  .gallery-folders {
-    width: 30vw;
-    max-width: 20em;
-    overflow: auto;
-    height: auto;
-    grid-row-start: 1;
-    grid-row-end: span 2;
-    grid-column: 1;
-  }
-  .gallery-layout-actions-menu-toggle {
-    visibility: hidden;
-    font-size: 0px;
-    padding: 0px;
-    margin: 0px;
-  }
+.gallery-layout {
+  display: grid;
+  grid-template-rows: 1fr auto 2fr;
+  grid-template-columns: 1fr;
+  column-gap: 1em;
 }
-
-@media (max-width: 700px) {
-  .gallery-layout {
-    display: grid;
-    grid-template-rows: 1fr auto 2fr;
-    grid-template-columns: 1fr;
-    column-gap: 1em;
-  }
-  .gallery-files-actions {
-    padding-top: 0.5em;
-    grid-row: 2;
-    grid-column-start: 1;
-    grid-column-end: span 2;
-  }
-  .gallery-file-list {
-    overflow: auto;
-    grid-row: 3;
-    grid-column-start: 1;
-    grid-column-end: span 2;
-  }
-  .gallery-folders {
-    overflow: auto;
-    height: 30vh;
-    grid-row: 1;
-    grid-column-start: 1;
-    grid-column-end: span 2;
-  }
-  .gallery-folders-closed {
-    height: 0px !important;
-  }
+.gallery-files-actions {
+  padding-top: 0.5em;
+  grid-row: 2;
+  grid-column-start: 1;
+  grid-column-end: span 2;
+}
+.gallery-file-list {
+  overflow: auto;
+}
+.gallery-folders {
+  overflow: auto;
+  height: 30vh;
+  grid-row: 1;
+  grid-column-start: 1;
+  grid-column-end: span 2;
+}
+.gallery-folders-closed {
+  height: 0px !important;
 }
 
 @media (prefers-color-scheme: dark) {
