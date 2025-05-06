@@ -63,11 +63,10 @@ export default {
   methods: {
     onSearchFilterChanged: debounce(async function (e) {
       const filters = {};
-      if (this.searchKeyword.length > 1) {
-        filters.keywords = this.searchKeyword;
+      if (this.searchKeyword.trim().length > 1) {
+        filters.keywords = this.searchKeyword.trim();
       }
       if (Object.keys(filters).length > 0) {
-        console.log("doingSearch");
         this.loading = true;
         await axios
           .post(
