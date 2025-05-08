@@ -10,6 +10,7 @@ import {
   FileDataGetFileTmpDir,
   FileDataListByFolder,
   FileDataListForAccount,
+  FileDataUpdateKeywords,
 } from "../files/FileData";
 import { Account } from "../model/Account";
 import { File } from "../model/File";
@@ -20,6 +21,8 @@ import { SystemCommand } from "../SystemCommand";
 import { Logger } from "../utils-std-ts/Logger";
 import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { SyncQueueQueueItem } from "./SyncQueue";
+import { AnalysisImagesGetLabels } from "../analysis/AnalysisImages";
+import * as exifReader from "exif-reader";
 
 const logger = new Logger("SyncFileCache");
 let config: Config;
@@ -68,6 +71,10 @@ export async function SyncFileCacheCheckFile(context: Span, account: Account, fi
 
   if (isImage && !hasImagePreview) {
     await SyncQueueQueueItem(account, file.id, file, syncPhotoFromFull, SyncQueueItemPriority.NORMAL);
+  }
+
+  if (isImage && !file.keywords) {
+    await SyncQueueQueueItem(account, file.id, file, syncPhotoKeyWords, SyncQueueItemPriority.BATCH);
   }
 
   if (isVideo && !hasVideoPreview) {
@@ -179,6 +186,50 @@ async function syncPhotoFromFull(account: Account, file: File) {
       logger.error(err);
     });
   await fs.remove(tmpDir);
+  span.end();
+}
+
+async function syncPhotoKeyWords(account: Account, file: File) {
+  const span = StandardTracerStartSpan("syncPhotoKeyWords");
+  const cacheDir = await FileDataGetFileCacheDir(span, account.getAccountDefinition().id, file.id);
+  const tmpDir =
+    (await FileDataGetFileTmpDir(span, account.getAccountDefinition().id, file.id)) + "_image_classification";
+  const hasImagePreview = fs.existsSync(`${cacheDir}/preview.webp`);
+  file.keywords = file.filename;
+  if (config.IMAGE_CLASSIFICATION_ENABLED) {
+    if (!hasImagePreview) {
+      await syncPhotoFromFull(account, file);
+    }
+    await fs.ensureDir(tmpDir);
+    let tmpFileName = `tmp.${file.filename.split(".").pop()}`;
+    logger.info(`Generating Keywords for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
+    await sharp(`${cacheDir}/preview.webp`)
+      .withMetadata()
+      .toFile(`${tmpDir}/${tmpFileName}.jpeg`)
+      .then(async () => {
+        try {
+          const metadata = await sharp(`${cacheDir}/preview.webp`).metadata();
+          if (metadata && metadata.exif) {
+            const exif = exifReader((await sharp(`${cacheDir}/preview.webp`).metadata()).exif);
+            file.info.exif = exif;
+          }
+        } catch (err) {
+          logger.info(`No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
+        }
+        const classificationResults = await AnalysisImagesGetLabels(span, `${tmpDir}/${tmpFileName}.jpeg`);
+        classificationResults.forEach((result) => {
+          if (result.score > 0.5) {
+            file.keywords += " " + result.label;
+          }
+        });
+        file.keywords = file.keywords.toLowerCase();
+      })
+      .catch((err) => {
+        logger.error(err);
+      });
+    await fs.remove(tmpDir);
+  }
+  await FileDataUpdateKeywords(span, file);
   span.end();
 }
 

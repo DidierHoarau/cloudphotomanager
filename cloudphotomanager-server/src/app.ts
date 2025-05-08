@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import { watchFile } from "fs-extra";
 import * as path from "path";
 import { AccountRoutes } from "./accounts/AccountRoutes";
-import { AnalysisRoutes } from "./analysis/AnalysisRoutes";
+import { SearchRoutes } from "./analysis/SearchRoutes";
 import { Config } from "./Config";
 import { FileDataInit } from "./files/FileData";
 import { FileRoutes } from "./files/FileRoutes";
@@ -23,6 +23,7 @@ import { UserRoutes } from "./users/UserRoutes";
 import { Logger } from "./utils-std-ts/Logger";
 import { SqlDbutils } from "./utils-std-ts/SqlDbUtils";
 import { StandardTracerInitTelemetry, StandardTracerStartSpan } from "./utils-std-ts/StandardTracer";
+import { AnalysisImagesInit } from "./analysis/AnalysisImages";
 
 const logger = new Logger("app");
 
@@ -47,6 +48,7 @@ Promise.resolve().then(async () => {
   await FileDataInit(span, config);
   await FolderDataInit(span);
   await SchedulerInit(span, config);
+  await AnalysisImagesInit(span);
 
   span.end();
 
@@ -106,8 +108,8 @@ Promise.resolve().then(async () => {
     prefix: "/api/accounts/:accountId/files/batch/operations/fileCacheDelete",
   });
 
-  fastify.register(new AnalysisRoutes().getRoutes, {
-    prefix: "/api/accounts/:accountId/analysis",
+  fastify.register(new SearchRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/search",
   });
 
   fastify.register(new SyncRoutes().getRoutes, {

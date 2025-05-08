@@ -28,6 +28,7 @@ export class Config implements ConfigInterface {
   public AUTO_SYNC = process.env.AUTO_SYNC !== "N";
   public DATABASE_ASYNC_WRITE = false;
   public VIDEO_PREVIEW_WIDTH = 900;
+  public IMAGE_CLASSIFICATION_ENABLED = true;
 
   public async reload(): Promise<void> {
     logger.info(`Configuration Value: VERSION: ${this.VERSION}`);
@@ -60,5 +61,6 @@ export class Config implements ConfigInterface {
     setIfSet("OPENTELEMETRY_COLLECTOR_CONSOLE");
     setIfSet("DATABASE_ASYNC_WRITE");
     setIfSet("VIDEO_PREVIEW_WIDTH");
+    setIfSet("IMAGE_CLASSIFICATION_ENABLED");
   }
 }
