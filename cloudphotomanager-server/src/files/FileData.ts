@@ -131,7 +131,11 @@ export async function FileDataUpdate(context: Span, file: File): Promise<void> {
 
 export async function FileDataUpdateKeywords(context: Span, file: File): Promise<void> {
   const span = StandardTracerStartSpan("FileDataUpdateKeywords", context);
-  await SqlDbutils.execSQL(span, "UPDATE files SET keywords = ? WHERE id = ? ", [file.keywords, file.id]);
+  await SqlDbutils.execSQL(span, "UPDATE files SET keywords = ?, info = ? WHERE id = ? ", [
+    file.keywords,
+    JSON.stringify(file.info),
+    file.id,
+  ]);
   FolderDataRefreshCacheFoldersCounts(span);
   span.end();
 }

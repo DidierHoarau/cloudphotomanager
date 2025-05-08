@@ -22,6 +22,7 @@ import { Logger } from "../utils-std-ts/Logger";
 import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { SyncQueueQueueItem } from "./SyncQueue";
 import { AnalysisImagesGetLabels } from "../analysis/AnalysisImages";
+import * as exifReader from "exif-reader";
 
 const logger = new Logger("SyncFileCache");
 let config: Config;
@@ -206,6 +207,15 @@ async function syncPhotoKeyWords(account: Account, file: File) {
       .withMetadata()
       .toFile(`${tmpDir}/${tmpFileName}.jpeg`)
       .then(async () => {
+        try {
+          const metadata = await sharp(`${cacheDir}/preview.webp`).metadata();
+          if (metadata && metadata.exif) {
+            const exif = exifReader((await sharp(`${cacheDir}/preview.webp`).metadata()).exif);
+            file.info.exif = exif;
+          }
+        } catch (err) {
+          logger.info(`No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`);
+        }
         const classificationResults = await AnalysisImagesGetLabels(span, `${tmpDir}/${tmpFileName}.jpeg`);
         classificationResults.forEach((result) => {
           if (result.score > 0.5) {

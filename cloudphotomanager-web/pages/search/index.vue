@@ -11,6 +11,16 @@
         class="folder-component-layout-filter"
         v-on:input="onSearchFilterChanged"
       />
+      <div class="search-gallery-layout-dates">
+        <label>
+          From
+          <input type="date" name="date" aria-label="Date" v-model="dateFrom" v-on:input="onSearchFilterChanged" />
+        </label>
+        <label>
+          To
+          <input type="date" name="date" aria-label="Date" v-model="dateTo" v-on:input="onSearchFilterChanged" />
+        </label>
+      </div>
     </div>
 
     <div class="analysis-items-actions actions"></div>
@@ -30,6 +40,7 @@
 <script setup>
 const syncStore = SyncStore();
 const accountsStore = AccountsStore();
+import Datepicker from "@vuepic/vue-datepicker";
 </script>
 
 <script>
@@ -54,6 +65,8 @@ export default {
       currentFolderId: "",
       analysisFilter: "",
       searchKeyword: "",
+      dateFrom: null,
+      dateTo: null,
     };
   },
   async created() {
@@ -65,6 +78,12 @@ export default {
       const filters = {};
       if (this.searchKeyword.trim().length > 1) {
         filters.keywords = this.searchKeyword.trim();
+      }
+      if (this.dateFrom) {
+        filters.dateFrom = new Date(this.dateFrom);
+      }
+      if (this.dateTo) {
+        filters.dateTo = new Date(this.dateTo);
       }
       if (Object.keys(filters).length > 0) {
         this.loading = true;
@@ -86,6 +105,14 @@ export default {
     onAccountSelected(event) {
       this.currentAccountId = event.id;
     },
+    updateDateFrom(event) {
+      this.dateFrom = new Date(event);
+      this.onSearchFilterChanged();
+    },
+    updateDateTo(event) {
+      this.dateTo = new Date(event);
+      this.onSearchFilterChanged();
+    },
   },
 };
 </script>
@@ -97,6 +124,12 @@ export default {
   grid-template-rows: auto auto 2.5em 1fr;
   grid-template-columns: 1fr;
   gap: 1em;
+}
+
+.search-gallery-layout-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 1em;
 }
 
 @media (prefers-color-scheme: dark) {

@@ -5,13 +5,14 @@ WORKDIR /opt/src
 
 RUN apt-get update && apt-get install -y \
         build-essential \
+        g++ \
+        gcc \
+        make \
+        python3 \
         libvips-dev \
         libheif-dev \
         libfftw3-dev \
-        gcc \
-        g++ \
-        make \
-        python3 \
+        libraw-dev \
         wget \
         git
 
@@ -34,17 +35,16 @@ COPY docker-config/entrypoint.sh /entrypoint.sh
 
 RUN apt-get update && apt-get install -y \
         build-essential \
-        libfftw3-dev \
         g++ \
         gcc \
-        imagemagick \
-        libraw-dev \
         make \
-        nginx \
         python3 \
         libvips-dev \
         libheif-dev \
         libfftw3-dev \
+        libraw-dev \
+        imagemagick \
+        nginx \
         wget \
         ffmpeg && \
     npm install -g pm2 && \

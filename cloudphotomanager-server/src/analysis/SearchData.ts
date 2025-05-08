@@ -41,10 +41,30 @@ export async function SearchDataListAccountDuplicates(context: Span, accountId: 
 
 export async function SearchDataListFiles(context: Span, accountId: string, filters: any): Promise<File[]> {
   const span = StandardTracerStartSpan("SearchDataListFiles", context);
+  console.log(filters);
+  let queryCondition = "";
+  const queryParameters = [accountId];
+  if (filters.dateFrom) {
+    queryCondition += " AND dateMedia > ? ";
+    queryParameters.push(new Date(filters.dateFrom).toISOString());
+  }
+  if (filters.dateTo) {
+    queryCondition += " AND dateMedia < ? ";
+    queryParameters.push(new Date(filters.dateTo).toISOString());
+  }
+  if (filters.keywords) {
+    for (let keyword of filters.keywords.split(" ")) {
+      if (keyword.trim()) {
+        queryCondition += " AND keywords like ? ";
+        queryParameters.push(`%${keyword.trim()}%`);
+      }
+    }
+  }
+  console.log(queryCondition, queryParameters);
   const rawData = await SqlDbutils.querySQL(
     span,
-    "SELECT * " + " FROM files " + " WHERE accountId = ? AND keywords like ? ",
-    [accountId, `%${filters.keywords}%`]
+    "SELECT * FROM files WHERE accountId = ? " + queryCondition,
+    queryParameters
   );
   const files: File[] = [];
   for (const fileRaw of rawData) {
