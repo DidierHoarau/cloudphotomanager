@@ -21,6 +21,7 @@ RUN apt-get update && \
         libfftw3-dev \
         libvips-dev \
         libraw-dev \
+        dcraw \
         imagemagick \
         nginx \
         wget \
