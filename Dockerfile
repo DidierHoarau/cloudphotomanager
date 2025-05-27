@@ -22,6 +22,7 @@ RUN apt-get update && \
         libvips-dev \
         libraw-dev \
         dcraw \
+        darktable \
         imagemagick \
         nginx \
         wget \
