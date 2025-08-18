@@ -1,5 +1,5 @@
 import { FileMediaType } from "./FileMediaType";
-import * as md5 from "md5";
+import md5 from "apache-md5";
 
 export class File {
   //
@@ -29,7 +29,15 @@ export class File {
 
   public static getMediaType(name: string): FileMediaType {
     const imageExtensionsRaw = ["dng", "raw", "arw"];
-    const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "tiff", "heic"];
+    const imageExtensions = [
+      "jpg",
+      "jpeg",
+      "png",
+      "gif",
+      "webp",
+      "tiff",
+      "heic",
+    ];
     const videoExtensions = ["mp4", "mov", "wmv", "avi", "mkv"];
     const extension = name.split(".").pop().toLowerCase();
     if (imageExtensions.includes(extension)) {

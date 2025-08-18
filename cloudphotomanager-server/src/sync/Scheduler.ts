@@ -2,9 +2,11 @@ import { Span } from "@opentelemetry/sdk-trace-base";
 import { AccountDataList } from "../accounts/AccountData";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { Config } from "../Config";
+import { FileDataGetCount } from "../files/FileData";
 import {
   FolderDataAdd,
   FolderDataGet,
+  FolderDataGetCount,
   FolderDataGetNewestSync,
   FolderDataGetNewstUpdate,
   FolderDataGetOlderThan,
@@ -13,8 +15,9 @@ import {
 import { AccountDefinition } from "../model/AccountDefinition";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { Logger } from "../utils-std-ts/Logger";
+import { StandardMeterCreateObservableGauge } from "../utils-std-ts/StandardMeter";
 import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
-import { Timeout } from "../utils-std-ts/Timeout";
+import { TimeoutWait } from "../utils-std-ts/Timeout";
 import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
 import { SyncFileCacheCleanUp } from "./SyncFileCache";
 import { SyncInventoryInit, SyncInventorySyncFolder } from "./SyncInventory";
@@ -31,13 +34,26 @@ export async function SchedulerInit(context: Span, configIn: Config) {
   const span = StandardTracerStartSpan("Scheduler_init", context);
   config = configIn;
   SyncInventoryInit(span);
-  startSchedule();
+  SchedulerStartSchedule();
+  StandardMeterCreateObservableGauge(
+    "photos.files.counts",
+    (observableResult) => {
+      observableResult.observe(stats.nbFiles, { type: "files" });
+      observableResult.observe(stats.nbFolders, { type: "folders" });
+    },
+    { description: "Number of files" }
+  );
   span.end();
 }
 
-export async function SchedulerStartAccountSync(context: Span, accountDefinition: AccountDefinition) {
+export async function SchedulerStartAccountSync(
+  context: Span,
+  accountDefinition: AccountDefinition
+) {
   const span = StandardTracerStartSpan("Scheduler_startAccountSync", context);
-  const account = await AccountFactoryGetAccountImplementation(accountDefinition.id);
+  const account = await AccountFactoryGetAccountImplementation(
+    accountDefinition.id
+  );
 
   // Ensure root folder
   const rootFolderCloud = await account.getFolderByPath(span, "/");
@@ -55,13 +71,33 @@ export async function SchedulerStartAccountSync(context: Span, accountDefinition
   }
 
   // Top Newest sync folder
-  for (const folder of await FolderDataGetNewestSync(span, account.getAccountDefinition().id, 10)) {
-    await SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.NORMAL);
+  for (const folder of await FolderDataGetNewestSync(
+    span,
+    account.getAccountDefinition().id,
+    10
+  )) {
+    await SyncQueueQueueItem(
+      account,
+      folder.id,
+      folder,
+      SyncInventorySyncFolder,
+      SyncQueueItemPriority.NORMAL
+    );
   }
 
   // Top oldest sync folder
-  for (const folder of await FolderDataGetOldestSync(span, account.getAccountDefinition().id, 10)) {
-    await SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.NORMAL);
+  for (const folder of await FolderDataGetOldestSync(
+    span,
+    account.getAccountDefinition().id,
+    10
+  )) {
+    await SyncQueueQueueItem(
+      account,
+      folder.id,
+      folder,
+      SyncInventorySyncFolder,
+      SyncQueueItemPriority.NORMAL
+    );
   }
 
   // Outdated Folder
@@ -70,12 +106,28 @@ export async function SchedulerStartAccountSync(context: Span, accountDefinition
     account.getAccountDefinition().id,
     new Date(new Date().getTime() - OUTDATED_AGE)
   )) {
-    await SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.NORMAL);
+    await SyncQueueQueueItem(
+      account,
+      folder.id,
+      folder,
+      SyncInventorySyncFolder,
+      SyncQueueItemPriority.NORMAL
+    );
   }
 
   // Top oldest sync files
-  for (const folder of await FolderDataGetNewstUpdate(span, account.getAccountDefinition().id, 10)) {
-    await SyncQueueQueueItem(account, folder.id, folder, SyncInventorySyncFolder, SyncQueueItemPriority.NORMAL);
+  for (const folder of await FolderDataGetNewstUpdate(
+    span,
+    account.getAccountDefinition().id,
+    10
+  )) {
+    await SyncQueueQueueItem(
+      account,
+      folder.id,
+      folder,
+      SyncInventorySyncFolder,
+      SyncQueueItemPriority.NORMAL
+    );
   }
 
   await SyncFileCacheCleanUp(span, account);
@@ -85,10 +137,10 @@ export async function SchedulerStartAccountSync(context: Span, accountDefinition
 
 // Private Functions
 
-async function startSchedule() {
+async function SchedulerStartSchedule() {
   SOURCE_FETCH_FREQUENCY_DYNAMIC = config.SOURCE_FETCH_FREQUENCY;
   while (true) {
-    const span = StandardTracerStartSpan("Scheduler_startSchedule");
+    const span = StandardTracerStartSpan("SchedulerStartSchedule");
     const accountDefinitions = await AccountDataList(span);
     accountDefinitions.forEach(async (accountDefinition) => {
       logger.info(`Start Sync of Account ${accountDefinition.name}`);
@@ -96,19 +148,37 @@ async function startSchedule() {
         logger.error(err);
       });
     });
-    let lastUpdates = await SyncEventHistoryGetRecent();
+    const lastUpdates = await SyncEventHistoryGetRecent();
     if (
       lastUpdates.length === 0 ||
-      lastUpdates[0].date < new Date(new Date().getTime() - SOURCE_FETCH_FREQUENCY_DYNAMIC)
+      lastUpdates[0].date <
+        new Date(new Date().getTime() - SOURCE_FETCH_FREQUENCY_DYNAMIC)
     ) {
       SOURCE_FETCH_FREQUENCY_DYNAMIC = Math.min(
         SOURCE_FETCH_FREQUENCY_DYNAMIC + config.SOURCE_FETCH_FREQUENCY,
-        config.SOURCE_FETCH_FREQUENCY * config.SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR
+        config.SOURCE_FETCH_FREQUENCY *
+          config.SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR
       );
     } else {
       SOURCE_FETCH_FREQUENCY_DYNAMIC = config.SOURCE_FETCH_FREQUENCY;
     }
-    logger.info(`Next Sync in ${SOURCE_FETCH_FREQUENCY_DYNAMIC / 60000} minutes`);
-    await Timeout.wait(SOURCE_FETCH_FREQUENCY_DYNAMIC);
+    logger.info(
+      `Next Sync in ${SOURCE_FETCH_FREQUENCY_DYNAMIC / 60000} minutes`
+    );
+    await SchedulerUpdateStats(span);
+    span.end();
+    await TimeoutWait(SOURCE_FETCH_FREQUENCY_DYNAMIC);
   }
 }
+
+async function SchedulerUpdateStats(context: Span) {
+  const span = StandardTracerStartSpan("SchedulerUpdateStats", context);
+  stats.nbFolders = await FolderDataGetCount(span);
+  stats.nbFiles = await FileDataGetCount(span);
+  span.end();
+}
+
+const stats = {
+  nbFiles: 0,
+  nbFolders: 0,
+};

@@ -2,12 +2,22 @@ import { Span } from "@opentelemetry/sdk-trace-base";
 import * as _ from "lodash";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
-import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 import { FolderDataRefreshCacheFolders } from "../folders/FolderData";
+import {
+  SqlDbUtilsExecSQL,
+  SqlDbUtilsQuerySQL,
+} from "../utils-std-ts/SqlDbUtils";
 
-export async function AccountDataGet(context: Span, accountId: string): Promise<AccountDefinition> {
+export async function AccountDataGet(
+  context: Span,
+  accountId: string
+): Promise<AccountDefinition> {
   const span = StandardTracerStartSpan("AccountDataGet", context);
-  const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM accounts WHERE id = ? ", [accountId]);
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT * FROM accounts WHERE id = ? ",
+    [accountId]
+  );
   if (rawData.length === 0) {
     throw new Error("Account Not Found");
   }
@@ -16,9 +26,11 @@ export async function AccountDataGet(context: Span, accountId: string): Promise<
   return account;
 }
 
-export async function AccountDataList(context: Span): Promise<AccountDefinition[]> {
+export async function AccountDataList(
+  context: Span
+): Promise<AccountDefinition[]> {
   const span = StandardTracerStartSpan("AccountDataList", context);
-  const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM accounts");
+  const rawData = await SqlDbUtilsQuerySQL(span, "SELECT * FROM accounts");
   const accounts: AccountDefinition[] = [];
   for (const account of rawData) {
     accounts.push(fromRaw(account));
@@ -27,9 +39,12 @@ export async function AccountDataList(context: Span): Promise<AccountDefinition[
   return accounts;
 }
 
-export async function AccountDataAdd(context: Span, accountDefinition: AccountDefinition): Promise<void> {
+export async function AccountDataAdd(
+  context: Span,
+  accountDefinition: AccountDefinition
+): Promise<void> {
   const span = StandardTracerStartSpan("AccountDataAdd", context);
-  await SqlDbutils.execSQL(
+  await SqlDbUtilsExecSQL(
     span,
     "INSERT INTO accounts (id, name, rootpath, info, infoPrivate) VALUES (?, ?, ?, ?, ?)",
     [
@@ -44,30 +59,51 @@ export async function AccountDataAdd(context: Span, accountDefinition: AccountDe
   span.end();
 }
 
-export async function AccountDataUpdate(context: Span, accountDefinition: AccountDefinition): Promise<void> {
+export async function AccountDataUpdate(
+  context: Span,
+  accountDefinition: AccountDefinition
+): Promise<void> {
   const span = StandardTracerStartSpan("AccountDataUpdate", context);
-  await SqlDbutils.execSQL(span, "UPDATE accounts SET name=?, rootpath=?, info=?, infoPrivate=? WHERE id=?", [
-    accountDefinition.name,
-    accountDefinition.rootpath,
-    JSON.stringify(accountDefinition.info),
-    JSON.stringify(accountDefinition.infoPrivate),
-    accountDefinition.id,
-  ]);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE accounts SET name=?, rootpath=?, info=?, infoPrivate=? WHERE id=?",
+    [
+      accountDefinition.name,
+      accountDefinition.rootpath,
+      JSON.stringify(accountDefinition.info),
+      JSON.stringify(accountDefinition.infoPrivate),
+      accountDefinition.id,
+    ]
+  );
   FolderDataRefreshCacheFolders(span);
   span.end();
 }
 
-export async function AccountDataDelete(context: Span, accountId: string): Promise<void> {
+export async function AccountDataDelete(
+  context: Span,
+  accountId: string
+): Promise<void> {
   const span = StandardTracerStartSpan("AccountDataDelete", context);
-  await SqlDbutils.execSQL(span, "DELETE FROM files WHERE accountId = ?", [accountId]);
-  await SqlDbutils.execSQL(span, "DELETE FROM accounts WHERE id = ?", [accountId]);
+  await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [
+    accountId,
+  ]);
+  await SqlDbUtilsExecSQL(span, "DELETE FROM accounts WHERE id = ?", [
+    accountId,
+  ]);
   span.end();
 }
 
-export async function AccountDataDeleteAllFilesAndFolders(context: Span, accountId: string): Promise<void> {
+export async function AccountDataDeleteAllFilesAndFolders(
+  context: Span,
+  accountId: string
+): Promise<void> {
   const span = StandardTracerStartSpan("AccountDataDeleteAllFiles", context);
-  await SqlDbutils.execSQL(span, "DELETE FROM files WHERE accountId = ?", [accountId]);
-  await SqlDbutils.execSQL(span, "DELETE FROM folders WHERE accountId = ?", [accountId]);
+  await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [
+    accountId,
+  ]);
+  await SqlDbUtilsExecSQL(span, "DELETE FROM folders WHERE accountId = ?", [
+    accountId,
+  ]);
   span.end();
 }
 

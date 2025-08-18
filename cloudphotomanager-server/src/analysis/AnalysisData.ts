@@ -1,18 +1,21 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
 import * as _ from "lodash";
 import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
-import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
 import { File } from "../model/File";
 import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
 import { FolderDataListForAccount } from "../folders/FolderData";
+import { SqlDbUtilsQuerySQL } from "../utils-std-ts/SqlDbUtils";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function AnalysisDataListAccountDuplicates(
   context: Span,
   accountId: string
 ): Promise<AnalysisDuplicate[]> {
-  const span = StandardTracerStartSpan("AnalysisData_listAccountDuplicates", context);
-  const rawData = await SqlDbutils.querySQL(
+  const span = StandardTracerStartSpan(
+    "AnalysisData_listAccountDuplicates",
+    context
+  );
+  const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * " +
       " FROM files " +
@@ -26,7 +29,10 @@ export async function AnalysisDataListAccountDuplicates(
   const knownFolders = await FolderDataListForAccount(span, accountId);
   for (const fileRaw of rawData) {
     const file = fromRaw(fileRaw);
-    if (!currentAnalysisDuplicate || currentAnalysisDuplicate.hash !== file.hash) {
+    if (
+      !currentAnalysisDuplicate ||
+      currentAnalysisDuplicate.hash !== file.hash
+    ) {
       currentAnalysisDuplicate = {
         accountId: file.accountId,
         hash: file.hash,
@@ -36,7 +42,9 @@ export async function AnalysisDataListAccountDuplicates(
       analysis.push(currentAnalysisDuplicate);
     }
     currentAnalysisDuplicate.files.push(file);
-    currentAnalysisDuplicate.folders.push(_.find(knownFolders, { id: file.folderId }));
+    currentAnalysisDuplicate.folders.push(
+      _.find(knownFolders, { id: file.folderId })
+    );
   }
   span.end();
   return analysis;

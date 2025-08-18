@@ -20,9 +20,13 @@ import { SyncFileCacheInit } from "./sync/SyncFileCache";
 import { SyncRoutes } from "./sync/SyncRoutes";
 import { AuthInit } from "./users/Auth";
 import { UserRoutes } from "./users/UserRoutes";
-import { Logger } from "./utils-std-ts/Logger";
-import { SqlDbutils } from "./utils-std-ts/SqlDbUtils";
-import { StandardTracerInitTelemetry, StandardTracerStartSpan } from "./utils-std-ts/StandardTracer";
+import { Logger, LoggerInit } from "./utils-std-ts/Logger";
+import {
+  StandardTracerInitTelemetry,
+  StandardTracerStartSpan,
+} from "./utils-std-ts/StandardTracer";
+import { StandardMeterInitTelemetry } from "./utils-std-ts/StandardMeter";
+import { SqlDbUtilsInit } from "./utils-std-ts/SqlDbUtils";
 
 const logger = new Logger("app");
 
@@ -38,11 +42,13 @@ Promise.resolve().then(async () => {
   });
 
   StandardTracerInitTelemetry(config);
+  StandardMeterInitTelemetry(config);
 
   const span = StandardTracerStartSpan("init");
 
+  LoggerInit(span, config);
   await SyncFileCacheInit(span, config);
-  await SqlDbutils.init(span, config);
+  await SqlDbUtilsInit(span, config);
   await AuthInit(span, config);
   await FileDataInit(span, config);
   await FolderDataInit(span);

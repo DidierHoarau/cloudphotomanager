@@ -7,21 +7,31 @@ const logger = new Logger("config");
 
 export class Config implements ConfigInterface {
   //
-  public CONFIG_FILE = process.env.CONFIG_FILE || "/etc/cloudphotomanager/config.json";
+  public CONFIG_FILE =
+    process.env.CONFIG_FILE || "/etc/cloudphotomanager/config.json";
   public readonly SERVICE_ID = "cloudphotomanager-server";
   public VERSION = 1;
   public readonly API_PORT: number = 8080;
   public JWT_VALIDITY_DURATION: number = 31 * 24 * 3600;
   public CORS_POLICY_ORIGIN = "*";
   public DATA_DIR = process.env.DATA_DIR || "/data";
-  public TOOLS_DIR = process.env.TOOLS_DIR || "/opt/app/cloudphotomanager/tools";
+  public TOOLS_DIR =
+    process.env.TOOLS_DIR || "/opt/app/cloudphotomanager/tools";
   public TMP_DIR = process.env.TMP_DIR || "/tmp";
   public JWT_KEY: string = uuidv4();
   public LOG_LEVEL = "info";
   public SOURCE_FETCH_FREQUENCY = 30 * 60 * 1000;
   public SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR = 6;
-  public OPENTELEMETRY_COLLECTOR_HTTP: string = process.env.OPENTELEMETRY_COLLECTOR_HTTP || "";
-  public OPENTELEMETRY_COLLECTOR_AWS = process.env.OPENTELEMETRY_COLLECTOR_AWS === "true";
+  public OPENTELEMETRY_COLLECTOR_HTTP_TRACES: string =
+    process.env.OPENTELEMETRY_COLLECTOR_HTTP_TRACES || "";
+  public OPENTELEMETRY_COLLECTOR_HTTP_METRICS: string =
+    process.env.OPENTELEMETRY_COLLECTOR_HTTP_METRICS || "";
+  public OPENTELEMETRY_COLLECTOR_HTTP_LOGS: string =
+    process.env.OPENTELEMETRY_COLLECTOR_HTTP_LOGS || "";
+  public OPENTELEMETRY_COLLECTOR_EXPORT_LOGS_INTERVAL_SECONDS = 60;
+  public OPENTELEMETRY_COLLECTOR_EXPORT_METRICS_INTERVAL_SECONDS = 120;
+  public OPENTELEMETRY_COLLECTOR_AWS =
+    process.env.OPENTELEMETRY_COLLECTOR_AWS === "true";
   public OPENTELEMETRY_COLLECTOR_CONSOLE = false;
   public PROCESSORS_SYSTEM = "processors-system";
   public PROCESSORS_USER = "processors-user";
@@ -55,7 +65,11 @@ export class Config implements ConfigInterface {
     setIfSet("LOG_LEVEL");
     setIfSet("SOURCE_FETCH_FREQUENCY");
     setIfSet("SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR");
-    setIfSet("OPENTELEMETRY_COLLECTOR_HTTP");
+    setIfSet("OPENTELEMETRY_COLLECTOR_HTTP_TRACES");
+    setIfSet("OPENTELEMETRY_COLLECTOR_HTTP_METRICS");
+    setIfSet("OPENTELEMETRY_COLLECTOR_HTTP_LOGS");
+    setIfSet("OPENTELEMETRY_COLLECTOR_EXPORT_LOGS_INTERVAL_SECONDS");
+    setIfSet("OPENTELEMETRY_COLLECTOR_EXPORT_METRICS_INTERVAL_SECONDS");
     setIfSet("OPENTELEMETRY_COLLECTOR_AWS");
     setIfSet("OPENTELEMETRY_COLLECTOR_CONSOLE");
     setIfSet("DATABASE_ASYNC_WRITE");

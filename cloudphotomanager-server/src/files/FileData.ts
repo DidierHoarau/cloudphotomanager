@@ -1,10 +1,12 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import * as _ from "lodash";
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
-import { SqlDbutils } from "../utils-std-ts/SqlDbUtils";
-import { File } from "../model/File";
 import { Config } from "../Config";
 import { FolderDataRefreshCacheFoldersCounts } from "../folders/FolderData";
+import { File } from "../model/File";
+import {
+  SqlDbUtilsExecSQL,
+  SqlDbUtilsQuerySQL,
+} from "../utils-std-ts/SqlDbUtils";
+import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 
 let config: Config;
 
@@ -14,17 +16,29 @@ export async function FileDataInit(context: Span, configIn: Config) {
   span.end();
 }
 
-export async function FileDataGetFileCacheDir(context: Span, accountId: string, fileId: string): Promise<string> {
+export async function FileDataGetFileCacheDir(
+  context: Span,
+  accountId: string,
+  fileId: string
+): Promise<string> {
   return `${config.DATA_DIR}/cache/${accountId}/${fileId[0]}/${fileId[1]}/${fileId}`;
 }
 
-export async function FileDataGetFileTmpDir(context: Span, accountId: string, fileId: string): Promise<string> {
+export async function FileDataGetFileTmpDir(
+  context: Span,
+  accountId: string,
+  fileId: string
+): Promise<string> {
   return `${config.TMP_DIR}/cache/${accountId}/${Date.now()}_${fileId}`;
 }
 
 export async function FileDataGet(context: Span, id: string): Promise<File> {
   const span = StandardTracerStartSpan("FileData_getByPath", context);
-  const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE id = ? ", [id]);
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT * FROM files WHERE id = ? ",
+    [id]
+  );
   if (rawData.length === 0) {
     return null;
   }
@@ -40,7 +54,7 @@ export async function FileDataGetByFolderId(
   filename: string
 ): Promise<File> {
   const span = StandardTracerStartSpan("FileData_folderId", context);
-  const rawData = await SqlDbutils.querySQL(
+  const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM files WHERE accountId = ? AND folderpath = folderId AND filename = ? ",
     [accountId, folderId, filename]
@@ -53,9 +67,16 @@ export async function FileDataGetByFolderId(
   return file;
 }
 
-export async function FileDataListForAccount(context: Span, accountId: string): Promise<File[]> {
+export async function FileDataListForAccount(
+  context: Span,
+  accountId: string
+): Promise<File[]> {
   const span = StandardTracerStartSpan("FileData_listForAccount", context);
-  const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE accountId = ?", [accountId]);
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT * FROM files WHERE accountId = ?",
+    [accountId]
+  );
   const files = [];
   rawData.forEach((fileRaw) => {
     files.push(fromRaw(fileRaw));
@@ -64,12 +85,17 @@ export async function FileDataListForAccount(context: Span, accountId: string): 
   return files;
 }
 
-export async function FileDataListByFolder(context: Span, accountId: string, folderId: string): Promise<File[]> {
+export async function FileDataListByFolder(
+  context: Span,
+  accountId: string,
+  folderId: string
+): Promise<File[]> {
   const span = StandardTracerStartSpan("FileData_listForAccount", context);
-  const rawData = await SqlDbutils.querySQL(span, "SELECT * FROM files WHERE accountId = ? AND folderId = ?", [
-    accountId,
-    folderId,
-  ]);
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT * FROM files WHERE accountId = ? AND folderId = ?",
+    [accountId, folderId]
+  );
   const files = [];
   rawData.forEach((fileRaw) => {
     files.push(fromRaw(fileRaw));
@@ -80,8 +106,8 @@ export async function FileDataListByFolder(context: Span, accountId: string, fol
 
 export async function FileDataAdd(context: Span, file: File): Promise<void> {
   const span = StandardTracerStartSpan("FileData_add", context);
-  await SqlDbutils.execSQL(span, "DELETE FROM files WHERE id = ?", [file.id]);
-  await SqlDbutils.execSQL(
+  await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE id = ?", [file.id]);
+  await SqlDbUtilsExecSQL(
     span,
     "INSERT INTO files (id, idCloud, accountId, filename, folderId, hash, dateUpdated, dateSync, dateMedia, info, metadata) " +
       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ",
@@ -105,7 +131,7 @@ export async function FileDataAdd(context: Span, file: File): Promise<void> {
 
 export async function FileDataUpdate(context: Span, file: File): Promise<void> {
   const span = StandardTracerStartSpan("FileData_add", context);
-  await SqlDbutils.execSQL(
+  await SqlDbUtilsExecSQL(
     span,
     "UPDATE files " +
       " SET idCloud = ?, accountId = ?, filename = ?, folderId = ?, hash = ?, " +
@@ -131,9 +157,23 @@ export async function FileDataUpdate(context: Span, file: File): Promise<void> {
 
 export async function FileDataDelete(context: Span, id: string): Promise<void> {
   const span = StandardTracerStartSpan("FileData_delete", context);
-  await SqlDbutils.execSQL(span, "DELETE FROM files WHERE id = ?", [id]);
+  await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE id = ?", [id]);
   FolderDataRefreshCacheFoldersCounts(span);
   span.end();
+}
+
+export async function FileDataGetCount(context: Span): Promise<number> {
+  const span = StandardTracerStartSpan("FileDataGetCount", context);
+  const countRaw = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT COUNT(*) as count FROM files"
+  );
+  let count = 0;
+  if (countRaw.length > 0) {
+    count = countRaw[0].count;
+  }
+  span.end();
+  return count;
 }
 
 // Private Funciton
