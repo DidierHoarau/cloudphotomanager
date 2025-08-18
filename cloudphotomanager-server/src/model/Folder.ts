@@ -1,4 +1,4 @@
-import md5 from "apache-md5";
+import { UtilsMd5 } from "../Utils";
 
 export class Folder {
   //
@@ -13,7 +13,7 @@ export class Folder {
   public info: any;
 
   constructor(accountId: string, folderpath: string) {
-    this.id = md5(encodeURI(`${accountId}/${folderpath}`));
+    this.id = UtilsMd5(encodeURI(`${accountId}/${folderpath}`));
     this.accountId = accountId;
     this.folderpath = folderpath;
     this.info = {};

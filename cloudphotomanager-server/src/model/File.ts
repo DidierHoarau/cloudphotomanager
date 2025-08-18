@@ -1,5 +1,5 @@
+import { UtilsMd5 } from "../Utils";
 import { FileMediaType } from "./FileMediaType";
-import md5 from "apache-md5";
 
 export class File {
   //
@@ -19,7 +19,7 @@ export class File {
   public metadata: any;
 
   constructor(accountId: string, folderId: string, filename: string) {
-    this.id = md5(encodeURI(`${accountId}/${folderId}/${filename}`));
+    this.id = UtilsMd5(encodeURI(`${accountId}/${folderId}/${filename}`));
     this.accountId = accountId;
     this.folderId = folderId;
     this.filename = filename;

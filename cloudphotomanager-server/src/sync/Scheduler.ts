@@ -22,6 +22,7 @@ import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
 import { SyncFileCacheCleanUp } from "./SyncFileCache";
 import { SyncInventoryInit, SyncInventorySyncFolder } from "./SyncInventory";
 import { SyncQueueQueueItem } from "./SyncQueue";
+import { SqlDbUtilsExecSQL } from "../utils-std-ts/SqlDbUtils";
 
 const logger = new Logger("Scheduler");
 
@@ -139,6 +140,11 @@ export async function SchedulerStartAccountSync(
 
 async function SchedulerStartSchedule() {
   SOURCE_FETCH_FREQUENCY_DYNAMIC = config.SOURCE_FETCH_FREQUENCY;
+
+  const spaTmp = StandardTracerStartSpan("SchedulerStartSchedule_tmp");
+
+  SqlDbUtilsExecSQL(spaTmp, "DELETE FROM folders where folderPath = '/'");
+
   while (true) {
     const span = StandardTracerStartSpan("SchedulerStartSchedule");
     const accountDefinitions = await AccountDataList(span);
