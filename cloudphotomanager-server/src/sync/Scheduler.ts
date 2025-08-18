@@ -5,6 +5,7 @@ import { Config } from "../Config";
 import { FileDataGetCount } from "../files/FileData";
 import {
   FolderDataAdd,
+  FolderDataDeleteFoldersWithDuplicates,
   FolderDataGet,
   FolderDataGetCount,
   FolderDataGetNewestSync,
@@ -141,12 +142,11 @@ export async function SchedulerStartAccountSync(
 async function SchedulerStartSchedule() {
   SOURCE_FETCH_FREQUENCY_DYNAMIC = config.SOURCE_FETCH_FREQUENCY;
 
-  const spaTmp = StandardTracerStartSpan("SchedulerStartSchedule_tmp");
-
-  SqlDbUtilsExecSQL(spaTmp, "DELETE FROM folders where folderPath = '/'");
-
   while (true) {
     const span = StandardTracerStartSpan("SchedulerStartSchedule");
+
+    await FolderDataDeleteFoldersWithDuplicates(span);
+
     const accountDefinitions = await AccountDataList(span);
     accountDefinitions.forEach(async (accountDefinition) => {
       logger.info(`Start Sync of Account ${accountDefinition.name}`);

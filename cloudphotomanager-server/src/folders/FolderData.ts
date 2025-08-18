@@ -352,6 +352,31 @@ export async function FolderDataRefreshCacheFoldersCounts(
   span.end();
 }
 
+export async function FolderDataDeleteFoldersWithDuplicates(context: Span) {
+  const span = StandardTracerStartSpan(
+    "FolderDataDeleteFoldersWithDuplicates",
+    context
+  );
+  SqlDbUtilsExecSQL(
+    span,
+    `
+      DELETE FROM folders
+      WHERE rowid IN (
+        SELECT f1.rowid
+        FROM folders f1
+        JOIN (
+          SELECT accountid, folderPath
+          FROM folders
+          GROUP BY accountid, folderPath
+          HAVING COUNT(*) > 1
+        ) dup
+        ON f1.accountid = dup.accountid AND f1.folderPath = dup.folderPath
+      )
+      `
+  );
+  span.end();
+}
+
 export async function FolderDataGetCount(context: Span): Promise<number> {
   const span = StandardTracerStartSpan("FolderDataGetCount", context);
   const countRaw = await SqlDbUtilsQuerySQL(
