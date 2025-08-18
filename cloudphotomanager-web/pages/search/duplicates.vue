@@ -1,6 +1,9 @@
 <template>
   <div class="search-gallery-layout page">
-    <NavigationSearch class="search-gallery-layout-navigation" />
+    <NavigationSearch
+      class="search-gallery-layout-navigation"
+      @onAccountSelected="onAccountSelected"
+    />
     <div class="search-gallery-criteria">
       <input
         v-model="searchKeyword"
@@ -14,32 +17,61 @@
       <div class="search-gallery-layout-actions actions">
         <p>Select the account to analyze</p>
         <span v-for="account in accountsStore.accounts" v-bind:key="account.id">
-          <button v-on:click="loadAccountDuplicate(account.id)">{{ account.name }}</button>
+          <button v-on:click="loadAccountDuplicate(account.id)">
+            {{ account.name }}
+          </button>
         </span>
         <br />
         <br />
-        <input v-if="analysis.length > 0" v-model="analysisFilter" type="text" v-on:input="onSearchFilterChanged" />
-        <kbd v-if="analysis.length > 0">Duplicates Found: {{ analysisFiltered.length }}</kbd>
+        <input
+          v-if="analysis.length > 0"
+          v-model="analysisFilter"
+          type="text"
+          v-on:input="onSearchFilterChanged"
+        />
+        <kbd v-if="analysis.length > 0"
+          >Duplicates Found: {{ analysisFiltered.length }}</kbd
+        >
       </div>
     </div>
 
     <div class="analysis-items-actions actions"></div>
     <div class="analysis-item-list">
       <Loading v-if="loading" />
-      <article class="card analysis-item" v-for="item in analysisFiltered" v-bind:key="item.hash">
+      <article
+        class="card analysis-item"
+        v-for="item in analysisFiltered"
+        v-bind:key="item.hash"
+      >
         <div class="analysis-item-image">
           <img
-            :src="serverUrl + '/accounts/' + item.files[0].accountId + '/files/' + item.files[0].id + '/thumbnail'"
+            :src="
+              serverUrl +
+              '/accounts/' +
+              item.files[0].accountId +
+              '/files/' +
+              item.files[0].id +
+              '/thumbnail'
+            "
             onerror="this.onerror=null; this.src='/images/file-sync-in-progress.webp'"
           />
         </div>
         <div class="analysis-file-list">
-          <div class="analysis-file-list-file" v-for="file in item.files" v-bind:key="file.id">
+          <div
+            class="analysis-file-list-file"
+            v-for="file in item.files"
+            v-bind:key="file.id"
+          >
             <div class="analysis-file-list-file-name">
-              {{ displayFolderPath(item.folders, file.folderId) }}/{{ file.filename }}
+              {{ displayFolderPath(item.folders, file.folderId) }}/{{
+                file.filename
+              }}
             </div>
             <div class="analysis-file-list-file-actions">
-              <i v-on:click="deleteDuplicate(file, item.folders)" class="bi bi-trash-fill"></i>
+              <i
+                v-on:click="deleteDuplicate(file, item.folders)"
+                class="bi bi-trash-fill"
+              ></i>
             </div>
           </div>
         </div>
@@ -94,7 +126,11 @@ export default {
       this.analysis = [];
       await axios
         .get(
-          `${(await Config.get()).SERVER_URL}/accounts/${accountId}/analysis/duplicates`,
+          `${
+            (
+              await Config.get()
+            ).SERVER_URL
+          }/accounts/${accountId}/analysis/duplicates`,
           await AuthService.getAuthHeader()
         )
         .then((res) => {
@@ -112,15 +148,16 @@ export default {
     async deleteDuplicate(file, folders) {
       if (
         confirm(
-          `Delete the file? (Can't be undone!)\nFile: ${file.filename} \nFolder: ${this.displayFolderPath(
-            folders,
-            file.folderId
-          )}`
+          `Delete the file? (Can't be undone!)\nFile: ${
+            file.filename
+          } \nFolder: ${this.displayFolderPath(folders, file.folderId)}`
         ) == true
       ) {
         await axios
           .post(
-            `${(await Config.get()).SERVER_URL}/accounts/${file.accountId}/files/batch/operations/fileDelete`,
+            `${(await Config.get()).SERVER_URL}/accounts/${
+              file.accountId
+            }/files/batch/operations/fileDelete`,
             { fileIdList: [file.id] },
             await AuthService.getAuthHeader()
           )
@@ -129,7 +166,10 @@ export default {
               text: "File deleted",
             });
             const hashIndex = findIndex(this.analysis, { hash: file.hash });
-            this.analysis[hashIndex].files.splice(findIndex(this.analysis[hashIndex].files), 1);
+            this.analysis[hashIndex].files.splice(
+              findIndex(this.analysis[hashIndex].files),
+              1
+            );
             if (this.analysis[hashIndex].files.length === 0) {
               this.analysis.splice(hashIndex, 1);
             }
@@ -151,12 +191,22 @@ export default {
       for (const analysis of this.analysis) {
         let added = false;
         for (const file of analysis.files) {
-          if (!added && file.filename.toLowerCase().indexOf(this.analysisFilter.toLowerCase()) >= 0) {
+          if (
+            !added &&
+            file.filename
+              .toLowerCase()
+              .indexOf(this.analysisFilter.toLowerCase()) >= 0
+          ) {
             added = true;
           }
         }
         for (const folder of analysis.folders) {
-          if (!added && folder.folderpath.toLowerCase().indexOf(this.analysisFilter.toLowerCase()) >= 0) {
+          if (
+            !added &&
+            folder.folderpath
+              .toLowerCase()
+              .indexOf(this.analysisFilter.toLowerCase()) >= 0
+          ) {
             added = true;
           }
         }

@@ -1,6 +1,9 @@
 <template>
   <div class="search-gallery-layout page">
-    <NavigationSearch class="search-gallery-layout-navigation" @onAccountSelected="onAccountSelected" />
+    <NavigationSearch
+      class="search-gallery-layout-navigation"
+      @onAccountSelected="onAccountSelected"
+    />
     <div class="search-gallery-criteria">
       <input
         v-model="searchKeyword"
@@ -14,12 +17,25 @@
       <div class="search-gallery-layout-dates">
         <label>
           From
-          <input type="date" name="date" aria-label="Date" v-model="dateFrom" v-on:input="onSearchFilterChanged" />
+          <input
+            type="date"
+            name="date"
+            aria-label="Date"
+            v-model="dateFrom"
+            v-on:input="onSearchFilterChanged"
+          />
         </label>
         <label>
           To
-          <input type="date" name="date" aria-label="Date" v-model="dateTo" v-on:input="onSearchFilterChanged" />
+          <input
+            type="date"
+            name="date"
+            aria-label="Date"
+            v-model="dateTo"
+            v-on:input="onSearchFilterChanged"
+          />
         </label>
+        <kbd v-if="files.length > 0">Images Found: {{ files.length }}</kbd>
       </div>
     </div>
 
@@ -89,7 +105,9 @@ export default {
         this.loading = true;
         await axios
           .post(
-            `${(await Config.get()).SERVER_URL}/accounts/${this.currentAccountId}/files/search`,
+            `${(await Config.get()).SERVER_URL}/accounts/${
+              this.currentAccountId
+            }/files/search`,
             { filters },
             await AuthService.getAuthHeader()
           )

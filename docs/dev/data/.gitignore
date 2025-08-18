@@ -4,3 +4,4 @@
 *.db-journal
 /cache
 /tmp
+*.ts

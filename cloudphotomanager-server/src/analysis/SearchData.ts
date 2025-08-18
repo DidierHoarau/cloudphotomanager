@@ -7,8 +7,14 @@ import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
 import { FolderDataListForAccount } from "../folders/FolderData";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function SearchDataListAccountDuplicates(context: Span, accountId: string): Promise<AnalysisDuplicate[]> {
-  const span = StandardTracerStartSpan("SearchDataListAccountDuplicates", context);
+export async function SearchDataListAccountDuplicates(
+  context: Span,
+  accountId: string
+): Promise<AnalysisDuplicate[]> {
+  const span = StandardTracerStartSpan(
+    "SearchDataListAccountDuplicates",
+    context
+  );
   const rawData = await SqlDbutils.querySQL(
     span,
     "SELECT * " +
@@ -23,7 +29,10 @@ export async function SearchDataListAccountDuplicates(context: Span, accountId: 
   const knownFolders = await FolderDataListForAccount(span, accountId);
   for (const fileRaw of rawData) {
     const file = fromRaw(fileRaw);
-    if (!currentAnalysisDuplicate || currentAnalysisDuplicate.hash !== file.hash) {
+    if (
+      !currentAnalysisDuplicate ||
+      currentAnalysisDuplicate.hash !== file.hash
+    ) {
       currentAnalysisDuplicate = {
         accountId: file.accountId,
         hash: file.hash,
@@ -33,15 +42,20 @@ export async function SearchDataListAccountDuplicates(context: Span, accountId: 
       analysis.push(currentAnalysisDuplicate);
     }
     currentAnalysisDuplicate.files.push(file);
-    currentAnalysisDuplicate.folders.push(_.find(knownFolders, { id: file.folderId }));
+    currentAnalysisDuplicate.folders.push(
+      _.find(knownFolders, { id: file.folderId })
+    );
   }
   span.end();
   return analysis;
 }
 
-export async function SearchDataListFiles(context: Span, accountId: string, filters: any): Promise<File[]> {
+export async function SearchDataListFiles(
+  context: Span,
+  accountId: string,
+  filters: any
+): Promise<File[]> {
   const span = StandardTracerStartSpan("SearchDataListFiles", context);
-  console.log(filters);
   let queryCondition = "";
   const queryParameters = [accountId];
   if (filters.dateFrom) {
@@ -60,7 +74,6 @@ export async function SearchDataListFiles(context: Span, accountId: string, filt
       }
     }
   }
-  console.log(queryCondition, queryParameters);
   const rawData = await SqlDbutils.querySQL(
     span,
     "SELECT * FROM files WHERE accountId = ? " + queryCondition,
