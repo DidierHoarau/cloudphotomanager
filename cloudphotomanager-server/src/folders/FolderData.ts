@@ -7,6 +7,7 @@ import {
   SqlDbUtilsQuerySQL,
 } from "../utils-std-ts/SqlDbUtils";
 import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
+import debounce from "lodash/debounce";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let cacheAccountsFolders: any[] = [];
@@ -16,7 +17,7 @@ let cacheAccountsFoldersCounts: any[] = [];
 //
 export async function FolderDataInit(context: Span) {
   const span = StandardTracerStartSpan("FolderData_init", context);
-  startAutoCache();
+  FolderDataCacheCounts();
   span.end();
 }
 
@@ -44,7 +45,7 @@ export async function FolderDataAdd(
       JSON.stringify(folder.info),
     ]
   );
-  FolderDataRefreshCacheFolders(span);
+  FolderDataCacheCounts();
   span.end();
 }
 
@@ -105,7 +106,7 @@ export async function FolderDataUpdate(context: Span, folder: Folder) {
       folder.accountId,
     ]
   );
-  FolderDataRefreshCacheFolders(span);
+  FolderDataCacheCounts();
   span.end();
 }
 
@@ -213,6 +214,7 @@ export async function FolderDataDelete(
     "DELETE FROM files WHERE accountId = ? AND id = ?",
     [accountId, id]
   );
+  FolderDataCacheCounts();
   span.end();
 }
 
@@ -314,6 +316,7 @@ export async function FolderDataDeletePathRecursive(
     `DELETE FROM folders WHERE accountId = ? AND folderpath LIKE ? `,
     [accountId, `${folderpath}%`]
   );
+  FolderDataCacheCounts();
   span.end();
 }
 
@@ -374,6 +377,7 @@ export async function FolderDataDeleteFoldersWithDuplicates(context: Span) {
       )
       `
   );
+  FolderDataCacheCounts();
   span.end();
 }
 
@@ -393,14 +397,15 @@ export async function FolderDataGetCount(context: Span): Promise<number> {
 
 // Private Functions
 
-async function startAutoCache() {
-  const span = StandardTracerStartSpan("FolderData_startAutoCache");
-  FolderDataRefreshCacheFolders(span);
-  FolderDataRefreshCacheFoldersCounts(span);
+const FolderDataCacheCountsDebounced = debounce(async () => {
+  const span = StandardTracerStartSpan("FolderDataCacheCounts");
+  await FolderDataRefreshCacheFolders(span);
+  await FolderDataRefreshCacheFoldersCounts(span);
   span.end();
-  setTimeout(() => {
-    startAutoCache();
-  }, 60 * 1000);
+}, 500);
+
+function FolderDataCacheCounts() {
+  FolderDataCacheCountsDebounced();
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
