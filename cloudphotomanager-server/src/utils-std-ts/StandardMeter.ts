@@ -30,7 +30,7 @@ export function StandardMeterInitTelemetry(initConfig: Config) {
     };
     if (config.OPENTELEMETRY_COLLECT_AUTHORIZATION_HEADER) {
       collectorOptions.headers["Authorization"] =
-        config.OPENTELEMETRY_COLLECT_AUTHORIZATION_HEADER;
+        `Bearer ${config.OPENTELEMETRY_COLLECT_AUTHORIZATION_HEADER}`;
     }
     const metricExporter = new OTLPMetricExporter(collectorOptions);
     meterProvider = new MeterProvider({

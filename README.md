@@ -55,6 +55,19 @@ spec:
               value: ... # Only needed for S3
             - name: AWS_DEFAULT_REGION
               value: ... # Only needed for S3
+            # OpenTelemetry configuration (optional)
+            - name: OPENTELEMETRY_COLLECTOR_HTTP_TRACES
+              value: "" # Set to your OpenTelemetry traces endpoint
+            - name: OPENTELEMETRY_COLLECTOR_HTTP_METRICS
+              value: "" # Set to your OpenTelemetry metrics endpoint
+            - name: OPENTELEMETRY_COLLECTOR_HTTP_LOGS
+              value: "" # Set to your OpenTelemetry logs endpoint
+            - name: OPENTELEMETRY_COLLECTOR_EXPORT_LOGS_INTERVAL_SECONDS
+              value: "60"
+            - name: OPENTELEMETRY_COLLECTOR_EXPORT_METRICS_INTERVAL_SECONDS
+              value: "60"
+            - name: OPENTELEMETRY_COLLECT_AUTHORIZATION_HEADER
+              value: "" # Optional authorization header for OpenTelemetry collector
           volumeMounts:
             - mountPath: /data
               name: pod-volume
