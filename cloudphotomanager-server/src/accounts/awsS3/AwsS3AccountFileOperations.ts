@@ -1,10 +1,10 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { S3 } from "aws-sdk";
-import * as path from "path";
-import { AwsS3Account } from "./AwsS3Account";
-import { File } from "../../model/File";
-import { StandardTracerStartSpan } from "../../utils-std-ts/StandardTracer";
 import { createWriteStream } from "fs";
+import * as path from "path";
+import { File } from "../../model/File";
+import { OTelTracer } from "../../OTelContext";
+import { AwsS3Account } from "./AwsS3Account";
 
 export async function AwsS3AccountFileOperationsDownloadFile(
   context: Span,
@@ -14,13 +14,18 @@ export async function AwsS3AccountFileOperationsDownloadFile(
   destinationFolderpath: string,
   destinationFilename: string
 ): Promise<void> {
-  const span = StandardTracerStartSpan("AwsS3AccountFileOperationsDownloadFile", context);
+  const span = OTelTracer().startSpan(
+    "AwsS3AccountFileOperationsDownloadFile",
+    context
+  );
   const params = {
     Bucket: awsS3Account.getAccountDefinition().infoPrivate.bucket,
     Key: file.idCloud,
   };
   const fileStream = s3.getObject(params).createReadStream();
-  const writeStream = createWriteStream(path.join(destinationFolderpath, destinationFilename));
+  const writeStream = createWriteStream(
+    path.join(destinationFolderpath, destinationFilename)
+  );
   await new Promise<void>((resolve, reject) => {
     fileStream.on("error", reject);
     writeStream.on("error", reject);
@@ -36,7 +41,10 @@ export async function AwsS3AccountFileOperationsDeleteFile(
   s3: S3,
   file: File
 ): Promise<void> {
-  const span = StandardTracerStartSpan("AwsS3AccountFileOperationsDeleteFile", context);
+  const span = OTelTracer().startSpan(
+    "AwsS3AccountFileOperationsDeleteFile",
+    context
+  );
   const params = {
     Bucket: awsS3Account.getAccountDefinition().infoPrivate.bucket,
     Key: file.idCloud,
@@ -52,10 +60,19 @@ export async function AwsS3AccountFileOperationsMoveFile(
   file: File,
   filename: string
 ): Promise<void> {
-  const span = StandardTracerStartSpan("AwsS3AccountFileOperationsMoveFile", context);
+  const span = OTelTracer().startSpan(
+    "AwsS3AccountFileOperationsMoveFile",
+    context
+  );
   const paramsCopy = {
     Bucket: awsS3Account.getAccountDefinition().infoPrivate.bucket,
-    CopySource: encodeURI(path.join("/", awsS3Account.getAccountDefinition().infoPrivate.bucket, file.idCloud)),
+    CopySource: encodeURI(
+      path.join(
+        "/",
+        awsS3Account.getAccountDefinition().infoPrivate.bucket,
+        file.idCloud
+      )
+    ),
     Key: toAwsFilePath(path.join(path.dirname(file.idCloud), filename)),
   };
   await s3.copyObject(paramsCopy).promise();
@@ -74,11 +91,26 @@ export async function AwsS3AccountFileOperationsRename(
   file: File,
   folderpathDestination: string
 ): Promise<void> {
-  const span = StandardTracerStartSpan("AwsS3AccountFileOperationsMoveFile", context);
+  const span = OTelTracer().startSpan(
+    "AwsS3AccountFileOperationsMoveFile",
+    context
+  );
   const paramsCopy = {
     Bucket: awsS3Account.getAccountDefinition().infoPrivate.bucket,
-    CopySource: encodeURI(path.join("/", awsS3Account.getAccountDefinition().infoPrivate.bucket, file.idCloud)),
-    Key: toAwsFilePath(path.join(awsS3Account.getAccountDefinition().rootpath, folderpathDestination, file.filename)),
+    CopySource: encodeURI(
+      path.join(
+        "/",
+        awsS3Account.getAccountDefinition().infoPrivate.bucket,
+        file.idCloud
+      )
+    ),
+    Key: toAwsFilePath(
+      path.join(
+        awsS3Account.getAccountDefinition().rootpath,
+        folderpathDestination,
+        file.filename
+      )
+    ),
   };
   await s3.copyObject(paramsCopy).promise();
   const paramsDelete = {

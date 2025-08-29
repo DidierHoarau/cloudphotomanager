@@ -1,17 +1,16 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
 import * as _ from "lodash";
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { File } from "../model/File";
 import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
 import { FolderDataListForAccount } from "../folders/FolderData";
 import { SqlDbUtilsQuerySQL } from "../utils-std-ts/SqlDbUtils";
+import { OTelTracer } from "../OTelContext";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function AnalysisDataListAccountDuplicates(
   context: Span,
   accountId: string
 ): Promise<AnalysisDuplicate[]> {
-  const span = StandardTracerStartSpan(
+  const span = OTelTracer().startSpan(
     "AnalysisData_listAccountDuplicates",
     context
   );

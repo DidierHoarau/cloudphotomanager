@@ -1,14 +1,17 @@
+import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
-import { SyncInventorySyncFolder } from "../sync/SyncInventory";
 import { FolderDataGet } from "../folders/FolderData";
-import { Logger } from "../utils-std-ts/Logger";
-import { SyncQueueSetBlockingOperationEnd, SyncQueueSetBlockingOperationStart } from "../sync/SyncQueue";
-import { FileDataGet } from "./FileData";
+import { OTelLogger } from "../OTelContext";
+import { SyncInventorySyncFolder } from "../sync/SyncInventory";
+import {
+  SyncQueueSetBlockingOperationEnd,
+  SyncQueueSetBlockingOperationStart,
+} from "../sync/SyncQueue";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
+import { FileDataGet } from "./FileData";
 
-const logger = new Logger("FileOperationsRenameRoutes");
+const logger = OTelLogger().createModuleLogger("FileOperationsRenameRoutes");
 
 export class RoutesFileOperationsRename {
   //
@@ -19,25 +22,30 @@ export class RoutesFileOperationsRename {
         accountId: string;
       };
       Body: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         fileIdNames: any[];
       };
     }
     fastify.post<PostFilesRequest>("/", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
 
       if (!req.body.fileIdNames || req.body.fileIdNames.length === 0) {
-        return res.status(400).send({ error: "Missing parameter: fileIdNames" });
+        return res
+          .status(400)
+          .send({ error: "Missing parameter: fileIdNames" });
       }
 
       setTimeout(async () => {
         SyncQueueSetBlockingOperationStart();
         try {
           let folderId = "";
-          const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
+          const account = await AccountFactoryGetAccountImplementation(
+            req.params.accountId
+          );
           for (const fileIdName of req.body.fileIdNames) {
             const file = await FileDataGet(span, fileIdName.id);
             if (!file) {

@@ -1,7 +1,6 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
 import * as fs from "fs-extra";
 import { find } from "lodash";
-import * as probe from "node-ffprobe";
 import * as path from "path";
 import sharp from "sharp";
 import { Config } from "../Config";
@@ -16,16 +15,15 @@ import { File } from "../model/File";
 import { FileMediaType } from "../model/FileMediaType";
 import { Folder } from "../model/Folder";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
+import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SystemCommand } from "../SystemCommand";
-import { Logger } from "../utils-std-ts/Logger";
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { SyncQueueQueueItem } from "./SyncQueue";
 
-const logger = new Logger("SyncFileCache");
+const logger = OTelLogger().createModuleLogger("SyncFileCache");
 let config: Config;
 
 export async function SyncFileCacheInit(context: Span, configIn: Config) {
-  const span = StandardTracerStartSpan("Scheduler_init", context);
+  const span = OTelTracer().startSpan("Scheduler_init", context);
   config = configIn;
   await fs.rm(config.TMP_DIR, { recursive: true, force: true });
   span.end();
@@ -36,7 +34,7 @@ export async function SyncFileCacheCheckFolder(
   account: Account,
   folder: Folder
 ) {
-  const span = StandardTracerStartSpan("SyncFileCacheCheckFolder", context);
+  const span = OTelTracer().startSpan("SyncFileCacheCheckFolder", context);
   const files = await FileDataListByFolder(
     span,
     account.getAccountDefinition().id,
@@ -53,7 +51,7 @@ export async function SyncFileCacheRemoveFile(
   account: Account,
   file: File
 ) {
-  const span = StandardTracerStartSpan("SyncFileCacheRemoveFile", context);
+  const span = OTelTracer().startSpan("SyncFileCacheRemoveFile", context);
   const cacheDir = await FileDataGetFileCacheDir(
     span,
     account.getAccountDefinition().id,
@@ -68,7 +66,7 @@ export async function SyncFileCacheCheckFile(
   account: Account,
   file: File
 ) {
-  const span = StandardTracerStartSpan("SyncFileCacheCheckFile", context);
+  const span = OTelTracer().startSpan("SyncFileCacheCheckFile", context);
   const cacheDir = await FileDataGetFileCacheDir(
     span,
     account.getAccountDefinition().id,
@@ -130,7 +128,7 @@ export async function SyncFileCacheCheckFile(
 }
 
 export async function SyncFileCacheCleanUp(context: Span, account: Account) {
-  const span = StandardTracerStartSpan("SyncFileCacheCleanUp", context);
+  const span = OTelTracer().startSpan("SyncFileCacheCleanUp", context);
   const accountFiles = await FileDataListForAccount(
     span,
     account.getAccountDefinition().id
@@ -158,8 +156,29 @@ export async function SyncFileCacheCleanUp(context: Span, account: Account) {
 
 // Private Functions
 
+async function getVideoWidthWithFfprobe(
+  context: Span,
+  filePath: string
+): Promise<number | null> {
+  const span = OTelTracer().startSpan("getVideoWidthWithFfprobe", context);
+  try {
+    const ffprobeCmd = `ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 "${filePath}"`;
+    const ffprobeOutput = await SystemCommand.execute(ffprobeCmd);
+    const width = parseInt(ffprobeOutput.trim(), 10);
+    span.end();
+    if (!isNaN(width)) {
+      return width;
+    }
+    return null;
+  } catch (err) {
+    logger.error(err);
+    span.end();
+    return null;
+  }
+}
+
 async function syncVideoFromFull(account: Account, file: File) {
-  const span = StandardTracerStartSpan("syncVideoFromFull");
+  const span = OTelTracer().startSpan("syncVideoFromFull");
   try {
     const cacheDir = await FileDataGetFileCacheDir(
       span,
@@ -182,26 +201,17 @@ async function syncVideoFromFull(account: Account, file: File) {
       .downloadFile(span, file, tmpDir, tmpFileName)
       .then(async () => {
         let targetWidth = config.VIDEO_PREVIEW_WIDTH;
-        await probe(`${tmpDir}/${tmpFileName}`)
-          .then((probeData) => {
-            if (
-              !probeData ||
-              !probeData.streams ||
-              probeData.streams.length == 0 ||
-              !probeData.streams[0].width
-            ) {
-              return;
-            }
-            if (probeData.streams[0].width > config.VIDEO_PREVIEW_WIDTH) {
-              targetWidth = config.VIDEO_PREVIEW_WIDTH;
-            } else {
-              targetWidth = probeData.streams[0].width;
-            }
-          })
-          .catch((err) => {
-            logger.error(err);
+        const width = await getVideoWidthWithFfprobe(
+          span,
+          `${tmpDir}/${tmpFileName}`
+        );
+        if (width !== null) {
+          if (width > config.VIDEO_PREVIEW_WIDTH) {
             targetWidth = config.VIDEO_PREVIEW_WIDTH;
-          });
+          } else {
+            targetWidth = width;
+          }
+        }
         logger.info(
           await SystemCommand.execute(
             `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}.mp4 ${targetWidth}`
@@ -229,7 +239,7 @@ async function syncVideoFromFull(account: Account, file: File) {
 }
 
 async function syncPhotoFromFull(account: Account, file: File) {
-  const span = StandardTracerStartSpan("syncPhotoFromFull");
+  const span = OTelTracer().startSpan("syncPhotoFromFull");
   try {
     const cacheDir = await FileDataGetFileCacheDir(
       span,
@@ -281,7 +291,7 @@ async function syncPhotoFromFull(account: Account, file: File) {
 }
 
 async function syncThumbnail(account: Account, file: File) {
-  const span = StandardTracerStartSpan("syncThumbnail");
+  const span = OTelTracer().startSpan("syncThumbnail");
   try {
     const cacheDir = await FileDataGetFileCacheDir(
       span,
@@ -321,7 +331,7 @@ async function syncThumbnail(account: Account, file: File) {
 }
 
 async function syncThumbnailFromVideoPreview(account: Account, file: File) {
-  const span = StandardTracerStartSpan("syncThumbnailFromVideoPreview");
+  const span = OTelTracer().startSpan("syncThumbnailFromVideoPreview");
   try {
     const cacheDir = await FileDataGetFileCacheDir(
       span,

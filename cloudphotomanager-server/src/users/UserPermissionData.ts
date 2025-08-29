@@ -1,7 +1,6 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import * as _ from "lodash";
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { UserPermission } from "../model/UserPermission";
+import { OTelTracer } from "../OTelContext";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
@@ -11,7 +10,7 @@ export async function UserPermissionDataGetForUser(
   context: Span,
   userId: string
 ): Promise<UserPermission> {
-  const span = StandardTracerStartSpan("UserPermissionData_get", context);
+  const span = OTelTracer().startSpan("UserPermissionData_get", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM users_permissions WHERE userId=?",
@@ -32,7 +31,7 @@ export async function UserPermissionDataUpdateForUser(
   userId: string,
   userPermission: UserPermission
 ): Promise<void> {
-  const span = StandardTracerStartSpan(
+  const span = OTelTracer().startSpan(
     "UserPermissionData_updateForUser",
     context
   );
@@ -51,7 +50,7 @@ export async function UserPermissionDataDeleteForUser(
   context: Span,
   userId: string
 ): Promise<void> {
-  const span = StandardTracerStartSpan(
+  const span = OTelTracer().startSpan(
     "UserPermissionData_deleteForUser",
     context
   );

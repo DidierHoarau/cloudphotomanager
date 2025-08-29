@@ -1,7 +1,7 @@
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { Span } from "@opentelemetry/sdk-trace-base";
-import { Folder } from "../model/Folder";
 import { FolderDataGet } from "../folders/FolderData";
+import { Folder } from "../model/Folder";
+import { OTelTracer } from "../OTelContext";
 import { UserPermissionDataGetForUser } from "./UserPermissionData";
 
 export async function UserPermissionCheckFilterFoldersForUser(
@@ -9,7 +9,7 @@ export async function UserPermissionCheckFilterFoldersForUser(
   folders: Folder[],
   userId: string
 ): Promise<Folder[]> {
-  const span = StandardTracerStartSpan(
+  const span = OTelTracer().startSpan(
     "UserPermissionData_filterFoldersForUser",
     context
   );

@@ -1,7 +1,7 @@
+import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { User } from "../model/User";
 import { UserPermission } from "../model/UserPermission";
-import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import {
   AuthGenerateJWT,
   AuthGetUserSession,
@@ -31,7 +31,7 @@ export class UserRoutes {
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     //
     fastify.get("/status/initialization", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       if ((await UserDataList(span)).length === 0) {
         res.status(201).send({ initialized: false });
       } else {
@@ -46,7 +46,7 @@ export class UserRoutes {
       };
     }
     fastify.post<PostSession>("/session", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       let user: User;
       // From token
       const userSession = await AuthGetUserSession(req);
@@ -87,7 +87,7 @@ export class UserRoutes {
     });
 
     fastify.get("/", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -102,7 +102,7 @@ export class UserRoutes {
       };
     }
     fastify.post<PostUser>("/", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       let isInitialized = true;
       if ((await UserDataList(span)).length === 0) {
         isInitialized = false;
@@ -141,7 +141,7 @@ export class UserRoutes {
       };
     }
     fastify.delete<DeletetUser>("/:userId", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -161,7 +161,7 @@ export class UserRoutes {
       };
     }
     fastify.put<PutNewPassword>("/password", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -188,7 +188,7 @@ export class UserRoutes {
     fastify.get<GetUserIdPermissions>(
       "/:userId/permissions",
       async (req, res) => {
-        const span = StandardTracerGetSpanFromRequest(req);
+        const span = OTelRequestSpan(req);
         const userSession = await AuthGetUserSession(req);
         if (!AuthIsAdmin(userSession)) {
           return res.status(403).send({ error: "Access Denied" });
@@ -214,7 +214,7 @@ export class UserRoutes {
     fastify.put<PutUserIdPermissions>(
       "/:userId/permissions",
       async (req, res) => {
-        const span = StandardTracerGetSpanFromRequest(req);
+        const span = OTelRequestSpan(req);
         const userSession = await AuthGetUserSession(req);
         if (!AuthIsAdmin(userSession)) {
           return res.status(403).send({ error: "Access Denied" });

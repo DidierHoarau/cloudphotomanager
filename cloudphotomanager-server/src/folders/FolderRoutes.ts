@@ -1,7 +1,12 @@
+import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
+import { FileDataListByFolder } from "../files/FileData";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
+import { SyncInventorySyncFolder } from "../sync/SyncInventory";
+import { SyncQueueQueueItem } from "../sync/SyncQueue";
+import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
+import { UserPermissionCheckFilterFoldersForUser } from "../users/UserPermissionCheck";
 import {
   FolderDataDelete,
   FolderDataGet,
@@ -9,11 +14,6 @@ import {
   FolderDataListCountsForAccount,
   FolderDataListForAccount,
 } from "./FolderData";
-import { SyncQueueQueueItem } from "../sync/SyncQueue";
-import { SyncInventorySyncFolder } from "../sync/SyncInventory";
-import { FileDataListByFolder } from "../files/FileData";
-import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
-import { UserPermissionCheckFilterFoldersForUser } from "../users/UserPermissionCheck";
 
 export class FolderRoutes {
   //
@@ -25,7 +25,7 @@ export class FolderRoutes {
       };
     }
     fastify.get<GetFoldersAccountIdRequest>("/", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -46,7 +46,7 @@ export class FolderRoutes {
     fastify.get<GetFoldersCountAccountIdRequest>(
       "/counts",
       async (req, res) => {
-        const span = StandardTracerGetSpanFromRequest(req);
+        const span = OTelRequestSpan(req);
         const userSession = await AuthGetUserSession(req);
         if (!userSession.isAuthenticated) {
           return res.status(403).send({ error: "Access Denied" });
@@ -69,7 +69,7 @@ export class FolderRoutes {
     fastify.get<GetAccountIdFolderIdFilesRequest>(
       "/:folderId/files",
       async (req, res) => {
-        const span = StandardTracerGetSpanFromRequest(req);
+        const span = OTelRequestSpan(req);
         const userSession = await AuthGetUserSession(req);
         if (!userSession.isAuthenticated) {
           return res.status(403).send({ error: "Access Denied" });
@@ -96,7 +96,7 @@ export class FolderRoutes {
     fastify.put<PutAccountIdFolderIdSyncRequest>(
       "/:folderId/sync",
       async (req, res) => {
-        const span = StandardTracerGetSpanFromRequest(req);
+        const span = OTelRequestSpan(req);
         const userSession = await AuthGetUserSession(req);
         if (!userSession.isAuthenticated) {
           return res.status(403).send({ error: "Access Denied" });
@@ -128,7 +128,7 @@ export class FolderRoutes {
     fastify.delete<DeleteAccountIdFolderIdRequest>(
       "/:folderId/operations/delete",
       async (req, res) => {
-        const span = StandardTracerGetSpanFromRequest(req);
+        const span = OTelRequestSpan(req);
         const userSession = await AuthGetUserSession(req);
         if (!AuthIsAdmin(userSession)) {
           return res.status(403).send({ error: "Access Denied" });

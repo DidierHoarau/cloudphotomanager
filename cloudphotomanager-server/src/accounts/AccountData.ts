@@ -1,18 +1,17 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import * as _ from "lodash";
 import { AccountDefinition } from "../model/AccountDefinition";
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { FolderDataRefreshCacheFolders } from "../folders/FolderData";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
 } from "../utils-std-ts/SqlDbUtils";
+import { OTelTracer } from "../OTelContext";
 
 export async function AccountDataGet(
   context: Span,
   accountId: string
 ): Promise<AccountDefinition> {
-  const span = StandardTracerStartSpan("AccountDataGet", context);
+  const span = OTelTracer().startSpan("AccountDataGet", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM accounts WHERE id = ? ",
@@ -29,7 +28,7 @@ export async function AccountDataGet(
 export async function AccountDataList(
   context: Span
 ): Promise<AccountDefinition[]> {
-  const span = StandardTracerStartSpan("AccountDataList", context);
+  const span = OTelTracer().startSpan("AccountDataList", context);
   const rawData = await SqlDbUtilsQuerySQL(span, "SELECT * FROM accounts");
   const accounts: AccountDefinition[] = [];
   for (const account of rawData) {
@@ -43,7 +42,7 @@ export async function AccountDataAdd(
   context: Span,
   accountDefinition: AccountDefinition
 ): Promise<void> {
-  const span = StandardTracerStartSpan("AccountDataAdd", context);
+  const span = OTelTracer().startSpan("AccountDataAdd", context);
   await SqlDbUtilsExecSQL(
     span,
     "INSERT INTO accounts (id, name, rootpath, info, infoPrivate) VALUES (?, ?, ?, ?, ?)",
@@ -63,7 +62,7 @@ export async function AccountDataUpdate(
   context: Span,
   accountDefinition: AccountDefinition
 ): Promise<void> {
-  const span = StandardTracerStartSpan("AccountDataUpdate", context);
+  const span = OTelTracer().startSpan("AccountDataUpdate", context);
   await SqlDbUtilsExecSQL(
     span,
     "UPDATE accounts SET name=?, rootpath=?, info=?, infoPrivate=? WHERE id=?",
@@ -83,7 +82,7 @@ export async function AccountDataDelete(
   context: Span,
   accountId: string
 ): Promise<void> {
-  const span = StandardTracerStartSpan("AccountDataDelete", context);
+  const span = OTelTracer().startSpan("AccountDataDelete", context);
   await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [
     accountId,
   ]);
@@ -97,7 +96,7 @@ export async function AccountDataDeleteAllFilesAndFolders(
   context: Span,
   accountId: string
 ): Promise<void> {
-  const span = StandardTracerStartSpan("AccountDataDeleteAllFiles", context);
+  const span = OTelTracer().startSpan("AccountDataDeleteAllFiles", context);
   await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [
     accountId,
   ]);

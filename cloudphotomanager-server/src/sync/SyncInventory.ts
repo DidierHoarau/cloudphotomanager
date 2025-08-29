@@ -16,16 +16,15 @@ import { Folder } from "../model/Folder";
 import { SyncEventActions } from "../model/SyncEventActions";
 import { SyncEventObjectTypes } from "../model/SyncEventObjectTypes";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { Logger } from "../utils-std-ts/Logger";
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
+import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SyncEventHistoryAdd } from "./SyncEventHistory";
 import { SyncFileCacheCheckFolder } from "./SyncFileCache";
 import { SyncQueueQueueItem } from "./SyncQueue";
 
-const logger = new Logger("SyncInventory");
+const logger = OTelLogger().createModuleLogger("SyncInventory");
 
 export async function SyncInventoryInit(context: Span): Promise<void> {
-  const span = StandardTracerStartSpan("SyncInventory_init", context);
+  const span = OTelTracer().startSpan("SyncInventory_init", context);
   span.end();
 }
 
@@ -33,7 +32,7 @@ export async function SyncInventorySyncFolder(
   account: Account,
   knownFolder: Folder
 ): Promise<void> {
-  const span = StandardTracerStartSpan("SyncInventorySyncFolder");
+  const span = OTelTracer().startSpan("SyncInventorySyncFolder");
   try {
     logger.info(
       `Sync folder: ${account.getAccountDefinition().id}: ${knownFolder.folderpath}`

@@ -6,8 +6,8 @@ import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
 } from "../utils-std-ts/SqlDbUtils";
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import debounce from "lodash/debounce";
+import { OTelTracer } from "../OTelContext";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let cacheAccountsFolders: any[] = [];
@@ -16,7 +16,7 @@ let cacheAccountsFoldersCounts: any[] = [];
 
 //
 export async function FolderDataInit(context: Span) {
-  const span = StandardTracerStartSpan("FolderData_init", context);
+  const span = OTelTracer().startSpan("FolderData_init", context);
   FolderDataCacheCounts();
   span.end();
 }
@@ -25,7 +25,7 @@ export async function FolderDataAdd(
   context: Span,
   folder: Folder
 ): Promise<void> {
-  const span = StandardTracerStartSpan("FolderData_add", context);
+  const span = OTelTracer().startSpan("FolderData_add", context);
   await SqlDbUtilsExecSQL(
     span,
     "DELETE FROM folders WHERE id = ? AND accountId = ?",
@@ -53,7 +53,7 @@ export async function FolderDataGet(
   context: Span,
   id: string
 ): Promise<Folder> {
-  const span = StandardTracerStartSpan("FolderDataGet", context);
+  const span = OTelTracer().startSpan("FolderDataGet", context);
   const folderRaw = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM folders WHERE id = ?",
@@ -69,7 +69,7 @@ export async function FolderDataGetParent(
   context: Span,
   id: string
 ): Promise<Folder> {
-  const span = StandardTracerStartSpan("FolderDataGetParent", context);
+  const span = OTelTracer().startSpan("FolderDataGetParent", context);
   const folderChildRaw = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM folders WHERE id = ?",
@@ -94,7 +94,7 @@ export async function FolderDataGetParent(
 }
 
 export async function FolderDataUpdate(context: Span, folder: Folder) {
-  const span = StandardTracerStartSpan("FolderDataUpdate", context);
+  const span = OTelTracer().startSpan("FolderDataUpdate", context);
   await SqlDbUtilsExecSQL(
     span,
     "UPDATE folders SET dateUpdated=?, dateSync=?, info=? WHERE id=? AND accountId=? ",
@@ -115,7 +115,7 @@ export async function FolderDataGetByCloudId(
   accountId: string,
   idCloud: string
 ): Promise<Folder> {
-  const span = StandardTracerStartSpan("FolderDataGetByCloudId", context);
+  const span = OTelTracer().startSpan("FolderDataGetByCloudId", context);
   const folderRaw = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM folders WHERE accountId = ? AND idCloud = ?",
@@ -131,7 +131,7 @@ export async function FolderDataListSubFolders(
   context: Span,
   parentFolder: Folder
 ): Promise<Folder[]> {
-  const span = StandardTracerStartSpan("FolderDataListSubFolders", context);
+  const span = OTelTracer().startSpan("FolderDataListSubFolders", context);
   const accountfolders = await FolderDataListForAccount(
     span,
     parentFolder.accountId
@@ -157,7 +157,7 @@ export async function FolderDataListForAccount(
   accountId: string,
   getCache = false
 ): Promise<Folder[]> {
-  const span = StandardTracerStartSpan("FolderDataListForAccount", context);
+  const span = OTelTracer().startSpan("FolderDataListForAccount", context);
   if (getCache) {
     span.addEvent("Cached");
     span.end();
@@ -181,7 +181,7 @@ export async function FolderDataListCountsForAccount(
   accountId: string,
   getCache = false
 ): Promise<{ folderId: string; count: number }[]> {
-  const span = StandardTracerStartSpan(
+  const span = OTelTracer().startSpan(
     "FolderDataListCountsForAccount",
     context
   );
@@ -208,7 +208,7 @@ export async function FolderDataDelete(
   accountId: string,
   id: string
 ): Promise<void> {
-  const span = StandardTracerStartSpan("FolderDataDelete", context);
+  const span = OTelTracer().startSpan("FolderDataDelete", context);
   await SqlDbUtilsExecSQL(
     span,
     "DELETE FROM files WHERE accountId = ? AND id = ?",
@@ -223,7 +223,7 @@ export async function FolderDataGetOlderThan(
   accountId: string,
   ageLimit: Date
 ): Promise<Folder[]> {
-  const span = StandardTracerStartSpan("FolderDataGetOlderThan", context);
+  const span = OTelTracer().startSpan("FolderDataGetOlderThan", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM folders WHERE accountId = ? AND dateSync < ? ",
@@ -242,7 +242,7 @@ export async function FolderDataGetOldestSync(
   accountId: string,
   limit: number
 ): Promise<Folder[]> {
-  const span = StandardTracerStartSpan("FolderDataGetOldestSync", context);
+  const span = OTelTracer().startSpan("FolderDataGetOldestSync", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM folders WHERE accountId = ? ORDER BY dateSync ASC LIMIT ? ",
@@ -261,7 +261,7 @@ export async function FolderDataGetNewestSync(
   accountId: string,
   limit: number
 ): Promise<Folder[]> {
-  const span = StandardTracerStartSpan("FolderDataGetNewestSync", context);
+  const span = OTelTracer().startSpan("FolderDataGetNewestSync", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM folders WHERE accountId = ? ORDER BY dateSync DESC LIMIT ? ",
@@ -280,7 +280,7 @@ export async function FolderDataGetNewstUpdate(
   accountId: string,
   limit: number
 ): Promise<Folder[]> {
-  const span = StandardTracerStartSpan("FolderDataGetNewstUpdate", context);
+  const span = OTelTracer().startSpan("FolderDataGetNewstUpdate", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM folders WHERE accountId = ? " +
@@ -300,10 +300,7 @@ export async function FolderDataDeletePathRecursive(
   accountId: string,
   folderpath: string
 ) {
-  const span = StandardTracerStartSpan(
-    "FolderDataDeletePathRecursive",
-    context
-  );
+  const span = OTelTracer().startSpan("FolderDataDeletePathRecursive", context);
   await SqlDbUtilsExecSQL(
     span,
     "DELETE FROM files " +
@@ -323,10 +320,7 @@ export async function FolderDataDeletePathRecursive(
 export async function FolderDataRefreshCacheFolders(
   context: Span
 ): Promise<void> {
-  const span = StandardTracerStartSpan(
-    "FolderDataRefreshCacheFolders",
-    context
-  );
+  const span = OTelTracer().startSpan("FolderDataRefreshCacheFolders", context);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const newCache: any = {};
   const accounts = await AccountDataList(span);
@@ -341,7 +335,7 @@ export async function FolderDataRefreshCacheFolders(
 export async function FolderDataRefreshCacheFoldersCounts(
   context: Span
 ): Promise<void> {
-  const span = StandardTracerStartSpan(
+  const span = OTelTracer().startSpan(
     "FolderDataRefreshCacheFoldersCounts",
     context
   );
@@ -356,7 +350,7 @@ export async function FolderDataRefreshCacheFoldersCounts(
 }
 
 export async function FolderDataDeleteFoldersWithDuplicates(context: Span) {
-  const span = StandardTracerStartSpan(
+  const span = OTelTracer().startSpan(
     "FolderDataDeleteFoldersWithDuplicates",
     context
   );
@@ -382,7 +376,7 @@ export async function FolderDataDeleteFoldersWithDuplicates(context: Span) {
 }
 
 export async function FolderDataGetCount(context: Span): Promise<number> {
-  const span = StandardTracerStartSpan("FolderDataGetCount", context);
+  const span = OTelTracer().startSpan("FolderDataGetCount", context);
   const countRaw = await SqlDbUtilsQuerySQL(
     span,
     "SELECT COUNT(*) as count FROM folders"
@@ -398,7 +392,7 @@ export async function FolderDataGetCount(context: Span): Promise<number> {
 // Private Functions
 
 const FolderDataCacheCountsDebounced = debounce(async () => {
-  const span = StandardTracerStartSpan("FolderDataCacheCounts");
+  const span = OTelTracer().startSpan("FolderDataCacheCounts");
   await FolderDataRefreshCacheFolders(span);
   await FolderDataRefreshCacheFoldersCounts(span);
   span.end();

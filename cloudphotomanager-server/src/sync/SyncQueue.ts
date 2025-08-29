@@ -3,12 +3,12 @@ import { Account } from "../model/Account";
 import { SyncQueueItem } from "../model/SyncQueueItem";
 import { SyncQueueItemStatus } from "../model/SyncQueueItemStatus";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { Logger } from "../utils-std-ts/Logger";
 import { PromisePool } from "../utils-std-ts/PromisePool";
+import { OTelLogger } from "../OTelContext";
 
 const MAX_PARALLEL_SYNC = 3;
 
-const logger = new Logger("SyncQueue");
+const logger = OTelLogger().createModuleLogger("SyncQueue");
 const queue: SyncQueueItem[] = [];
 
 const promisePoolInteractive = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
@@ -19,8 +19,14 @@ let blockingOperations = 0;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function SyncQueueGetCounts(): any[] {
   return [
-    { type: SyncQueueItemStatus.ACTIVE, count: _.filter(queue, { status: SyncQueueItemStatus.ACTIVE }).length },
-    { type: SyncQueueItemStatus.WAITING, count: _.filter(queue, { status: SyncQueueItemStatus.WAITING }).length },
+    {
+      type: SyncQueueItemStatus.ACTIVE,
+      count: _.filter(queue, { status: SyncQueueItemStatus.ACTIVE }).length,
+    },
+    {
+      type: SyncQueueItemStatus.WAITING,
+      count: _.filter(queue, { status: SyncQueueItemStatus.WAITING }).length,
+    },
     { type: "blocking", count: blockingOperations },
   ];
 }

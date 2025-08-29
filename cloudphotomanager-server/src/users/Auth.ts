@@ -5,20 +5,19 @@ import { v4 as uuidv4 } from "uuid";
 import { Config } from "../Config";
 import { User } from "../model/User";
 import { UserSession } from "../model/UserSession";
-import { Logger } from "../utils-std-ts/Logger";
+import { OTelLogger, OTelTracer } from "../OTelContext";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
 } from "../utils-std-ts/SqlDbUtils";
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { UserPermissionDataGetForUser } from "./UserPermissionData";
 
-const logger = new Logger(path.basename(__filename));
+const logger = OTelLogger().createModuleLogger(path.basename(__filename));
 let config: Config;
 
 export async function AuthInit(context: Span, configIn: Config) {
   config = configIn;
-  const span = StandardTracerStartSpan("Auth_init", context);
+  const span = OTelTracer().startSpan("Auth_init", context);
   const authKeyRaw = await SqlDbUtilsQuerySQL(
     span,
     'SELECT * FROM metadata WHERE type="auth_token"'
@@ -40,7 +39,7 @@ export async function AuthGenerateJWT(
   context: Span,
   user: User
 ): Promise<string> {
-  const span = StandardTracerStartSpan("Auth_generateJWT", context);
+  const span = OTelTracer().startSpan("Auth_generateJWT", context);
   const userPermission = await UserPermissionDataGetForUser(span, user.id);
   return jwt.sign(
     {

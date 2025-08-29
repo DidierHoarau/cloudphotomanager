@@ -15,17 +15,14 @@ import {
 } from "../folders/FolderData";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { Logger } from "../utils-std-ts/Logger";
-import { StandardMeterCreateObservableGauge } from "../utils-std-ts/StandardMeter";
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
 import { TimeoutWait } from "../utils-std-ts/Timeout";
 import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
 import { SyncFileCacheCleanUp } from "./SyncFileCache";
 import { SyncInventoryInit, SyncInventorySyncFolder } from "./SyncInventory";
 import { SyncQueueQueueItem } from "./SyncQueue";
-import { SqlDbUtilsExecSQL } from "../utils-std-ts/SqlDbUtils";
+import { OTelLogger, OTelMeter, OTelTracer } from "../OTelContext";
 
-const logger = new Logger("Scheduler");
+const logger = OTelLogger().createModuleLogger("Scheduler");
 
 let config: Config;
 
@@ -33,11 +30,11 @@ const OUTDATED_AGE = 7 * 24 * 3600 * 1000;
 let SOURCE_FETCH_FREQUENCY_DYNAMIC = 30 * 60 * 1000;
 
 export async function SchedulerInit(context: Span, configIn: Config) {
-  const span = StandardTracerStartSpan("Scheduler_init", context);
+  const span = OTelTracer().startSpan("Scheduler_init", context);
   config = configIn;
   SyncInventoryInit(span);
   SchedulerStartSchedule();
-  StandardMeterCreateObservableGauge(
+  OTelMeter().createObservableGauge(
     "photos.files.counts",
     (observableResult) => {
       observableResult.observe(stats.nbFiles, { type: "files" });
@@ -52,7 +49,7 @@ export async function SchedulerStartAccountSync(
   context: Span,
   accountDefinition: AccountDefinition
 ) {
-  const span = StandardTracerStartSpan("Scheduler_startAccountSync", context);
+  const span = OTelTracer().startSpan("Scheduler_startAccountSync", context);
   const account = await AccountFactoryGetAccountImplementation(
     accountDefinition.id
   );
@@ -143,7 +140,7 @@ async function SchedulerStartSchedule() {
   SOURCE_FETCH_FREQUENCY_DYNAMIC = config.SOURCE_FETCH_FREQUENCY;
 
   while (true) {
-    const span = StandardTracerStartSpan("SchedulerStartSchedule");
+    const span = OTelTracer().startSpan("SchedulerStartSchedule");
 
     await FolderDataDeleteFoldersWithDuplicates(span);
 
@@ -178,7 +175,7 @@ async function SchedulerStartSchedule() {
 }
 
 async function SchedulerUpdateStats(context: Span) {
-  const span = StandardTracerStartSpan("SchedulerUpdateStats", context);
+  const span = OTelTracer().startSpan("SchedulerUpdateStats", context);
   stats.nbFolders = await FolderDataGetCount(span);
   stats.nbFiles = await FileDataGetCount(span);
   span.end();

@@ -1,14 +1,13 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import * as _ from "lodash";
 import { User } from "../model/User";
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
+import { OTelTracer } from "../OTelContext";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
 } from "../utils-std-ts/SqlDbUtils";
 
 export async function UserDataGet(context: Span, id: string): Promise<User> {
-  const span = StandardTracerStartSpan("UserData_get", context);
+  const span = OTelTracer().startSpan("UserData_get", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM users WHERE id=?",
@@ -26,7 +25,7 @@ export async function UserDataGetByName(
   context: Span,
   name: string
 ): Promise<User> {
-  const span = StandardTracerStartSpan("UserData_getByName", context);
+  const span = OTelTracer().startSpan("UserData_getByName", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM users WHERE name=?",
@@ -41,7 +40,7 @@ export async function UserDataGetByName(
 }
 
 export async function UserDataList(context: Span): Promise<User[]> {
-  const span = StandardTracerStartSpan("UserData_list", context);
+  const span = OTelTracer().startSpan("UserData_list", context);
   const rawData = await SqlDbUtilsQuerySQL(span, "SELECT * FROM users");
   const users = [];
   for (const userRaw of rawData) {
@@ -52,7 +51,7 @@ export async function UserDataList(context: Span): Promise<User[]> {
 }
 
 export async function UserDataAdd(context: Span, user: User): Promise<void> {
-  const span = StandardTracerStartSpan("UserData_add", context);
+  const span = OTelTracer().startSpan("UserData_add", context);
   await SqlDbUtilsExecSQL(
     span,
     "INSERT INTO users (id, name, passwordEncrypted) VALUES (?, ?, ?)",
@@ -62,7 +61,7 @@ export async function UserDataAdd(context: Span, user: User): Promise<void> {
 }
 
 export async function UserDataUpdate(context: Span, user: User): Promise<void> {
-  const span = StandardTracerStartSpan("UserData_update", context);
+  const span = OTelTracer().startSpan("UserData_update", context);
   await SqlDbUtilsExecSQL(
     span,
     "UPDATE users SET passwordEncrypted = ? WHERE id = ? ",
@@ -72,7 +71,7 @@ export async function UserDataUpdate(context: Span, user: User): Promise<void> {
 }
 
 export async function UserDataDelete(context: Span, id: string): Promise<void> {
-  const span = StandardTracerStartSpan("UserData_delete", context);
+  const span = OTelTracer().startSpan("UserData_delete", context);
   await SqlDbUtilsExecSQL(span, "DELETE FROM users WHERE id = ? ", [id]);
   span.end();
 }
