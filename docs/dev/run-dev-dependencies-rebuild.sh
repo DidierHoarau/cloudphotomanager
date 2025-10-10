@@ -11,6 +11,7 @@ cd "${REPO_DIR}/cloudphotomanager-server"
 rm -fr node_modules
 rm -f package-lock.json
 npm install
+SHARP_FORCE_GLOBAL_LIBVIPS=1 npm install --build-from-source sharp
 
 # Agent
 cd "${REPO_DIR}/cloudphotomanager-web"
