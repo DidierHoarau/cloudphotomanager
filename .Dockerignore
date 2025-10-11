@@ -1,0 +1,8 @@
+.git
+**/node_modules
+**/bin
+**/.nuxt
+**/.output
+**/dist
+/docs/dev/data
+**/*.db
