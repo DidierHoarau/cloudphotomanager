@@ -35,7 +35,8 @@ export async function SyncInventorySyncFolder(
   const span = OTelTracer().startSpan("SyncInventorySyncFolder");
   try {
     logger.info(
-      `Sync folder: ${account.getAccountDefinition().id}: ${knownFolder.folderpath}`
+      `Sync folder: ${account.getAccountDefinition().id}: ${knownFolder.folderpath}`,
+      span
     );
 
     const cloudFolder = await account.getFolder(span, knownFolder);

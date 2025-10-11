@@ -180,6 +180,10 @@ export async function OneDriveFileOperationsCreateFolder(
   parentFolder: Folder,
   foldername: string
 ): Promise<Folder> {
+  const span = OTelTracer().startSpan(
+    "OneDriveFileOperationsCreateFolder",
+    context
+  );
   const absoluteFolderPath =
     `${oneDriveAccount.getAccountDefinition().rootpath}/${
       parentFolder.folderpath
@@ -193,7 +197,7 @@ export async function OneDriveFileOperationsCreateFolder(
       { name: foldername, folder: {} },
       {
         headers: {
-          Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+          Authorization: `Bearer ${await oneDriveAccount.getToken(span)}`,
         },
       }
     )
@@ -203,6 +207,7 @@ export async function OneDriveFileOperationsCreateFolder(
     `${parentFolder.folderpath}/${foldername}`.replace(/\/+/g, "/")
   );
   folder.idCloud = folderRaw.id;
+  span.end();
   return folder;
 }
 

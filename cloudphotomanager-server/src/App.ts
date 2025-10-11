@@ -136,6 +136,6 @@ Promise.resolve().then(async () => {
     if (err) {
       process.exit(1);
     }
-    logger.info("API Listerning");
+    logger.info("API Listening");
   });
 });

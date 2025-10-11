@@ -146,7 +146,8 @@ export async function SyncFileCacheCleanUp(context: Span, account: Account) {
       !find(accountFiles, { id: targetFileId })
     ) {
       logger.info(
-        `Cleaning Cache: ${account.getAccountDefinition().id} ${targetFileId}`
+        `Cleaning Cache: ${account.getAccountDefinition().id} ${targetFileId}`,
+        span
       );
       await fs.remove(cacheFolder);
     }
@@ -195,7 +196,8 @@ async function syncVideoFromFull(account: Account, file: File) {
     await fs.ensureDir(tmpDir);
     const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
     logger.info(
-      `Caching video ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`
+      `Caching video ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
+      span
     );
     await account
       .downloadFile(span, file, tmpDir, tmpFileName)
@@ -215,7 +217,8 @@ async function syncVideoFromFull(account: Account, file: File) {
         logger.info(
           await SystemCommand.execute(
             `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}.mp4 ${targetWidth}`
-          )
+          ),
+          span
         );
         if ((await fs.stat(`${tmpDir}/${tmpFileName}.mp4`)).size === 0) {
           throw new Error("Generated file empty");
@@ -255,7 +258,8 @@ async function syncPhotoFromFull(account: Account, file: File) {
     await fs.ensureDir(tmpDir);
     let tmpFileName = `tmp.${file.filename.split(".").pop()}`;
     logger.info(
-      `Caching photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`
+      `Caching photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
+      span
     );
     await account
       .downloadFile(span, file, tmpDir, tmpFileName)
@@ -264,7 +268,8 @@ async function syncPhotoFromFull(account: Account, file: File) {
           logger.info(
             await SystemCommand.execute(
               `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`
-            )
+            ),
+            span
           );
           tmpFileName += "_raw.jpg";
         }
@@ -307,7 +312,8 @@ async function syncThumbnail(account: Account, file: File) {
     await fs.ensureDir(`${tmpDir}/tmp_tumbnail`);
     const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
     logger.info(
-      `Caching thumbnail ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`
+      `Caching thumbnail ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
+      span
     );
     await account
       .downloadThumbnail(span, file, `${tmpDir}/tmp_tumbnail`, tmpFileName)
@@ -347,13 +353,14 @@ async function syncThumbnailFromVideoPreview(account: Account, file: File) {
     await fs.remove(tmpDir);
     await fs.ensureDir(tmpDir);
     logger.info(
-      `Generating video thumbnail ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`
+      `Generating video thumbnail ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
+      span
     );
     await SystemCommand.execute(
       `${config.TOOLS_DIR}/tools-video-generate-thumbnail.sh ${cacheDir}/preview.mp4 ${tmpDir}/thumbnail.jpg`
     )
       .then(async (output: string) => {
-        logger.info(output);
+        logger.info(output, span);
         await sharp(`${tmpDir}/thumbnail.jpg`)
           .withMetadata()
           .resize({ width: 300 })

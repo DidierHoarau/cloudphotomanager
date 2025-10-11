@@ -146,7 +146,7 @@ async function SchedulerStartSchedule() {
 
     const accountDefinitions = await AccountDataList(span);
     accountDefinitions.forEach(async (accountDefinition) => {
-      logger.info(`Start Sync of Account ${accountDefinition.name}`);
+      logger.info(`Start Sync of Account ${accountDefinition.name}`, span);
       await SchedulerStartAccountSync(span, accountDefinition).catch((err) => {
         logger.error("Error Synchronizing Account", err, span);
       });
@@ -166,7 +166,8 @@ async function SchedulerStartSchedule() {
       SOURCE_FETCH_FREQUENCY_DYNAMIC = config.SOURCE_FETCH_FREQUENCY;
     }
     logger.info(
-      `Next Sync in ${SOURCE_FETCH_FREQUENCY_DYNAMIC / 60000} minutes`
+      `Next Sync in ${SOURCE_FETCH_FREQUENCY_DYNAMIC / 60000} minutes`,
+      span
     );
     await SchedulerUpdateStats(span);
     span.end();
