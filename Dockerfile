@@ -34,18 +34,31 @@ COPY docker-config/entrypoint.sh /entrypoint.sh
 
 RUN apt-get update && apt-get install -y \
         build-essential \
-        libfftw3-dev \
+        darktable \
+        dcraw \
+        ffmpeg \
         g++ \
         gcc \
         imagemagick \
+        libavif-dev \
+        libexpat1-dev \
+        libfftw3-dev \
+        libgif-dev \
+        libheif-dev \
+        libjpeg-dev \
+        libpng-dev \
         libraw-bin \
+        libraw-dev \
+        libtiff-dev \
+        libvips-dev \
+        libwebp-dev \
+        libxml2-dev \
         make \
         nginx \
+        pkg-config \
         python3 \
-        libvips-dev \
-        libheif-dev \
+        swig \
         wget \
-        ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g pm2
 

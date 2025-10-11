@@ -24,7 +24,6 @@ cd "${REPO_DIR}/cloudphotomanager-server"
 if [ ! -f package-lock.json ]; then
     rm -fr node_modules
     npm install
-    SHARP_FORCE_GLOBAL_LIBVIPS=1 npm install --build-from-source sharp
 fi
 if [ ! -d node_modules ]; then
     npm ci
