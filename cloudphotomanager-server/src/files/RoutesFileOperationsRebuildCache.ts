@@ -1,7 +1,7 @@
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
-import { OTelLogger } from "../OTelContext";
+import { OTelLogger, OTelTracer } from "../OTelContext";
 import {
   SyncFileCacheCheckFile,
   SyncFileCacheRemoveFile,
@@ -35,21 +35,25 @@ export class RoutesFileOperationsRebuildCache {
       }
 
       setTimeout(async () => {
+        const spanSubProcess = OTelTracer().startSpan(
+          "RoutesFileOperationsRebuildCache_post_process"
+        );
         try {
           const account = await AccountFactoryGetAccountImplementation(
             req.params.accountId
           );
           for (const fileId of req.body.fileIdList) {
-            const file = await FileDataGet(span, fileId);
+            const file = await FileDataGet(spanSubProcess, fileId);
             if (!file) {
               continue;
             }
-            await SyncFileCacheRemoveFile(span, account, file);
-            SyncFileCacheCheckFile(span, account, file);
+            await SyncFileCacheRemoveFile(spanSubProcess, account, file);
+            SyncFileCacheCheckFile(spanSubProcess, account, file);
           }
         } catch (err) {
-          logger.error(err);
+          logger.error("Error Rebuilding Cache", err, spanSubProcess);
         }
+        spanSubProcess.end();
       }, 50);
 
       return res.status(202).send({});

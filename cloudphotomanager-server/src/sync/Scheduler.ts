@@ -148,7 +148,7 @@ async function SchedulerStartSchedule() {
     accountDefinitions.forEach(async (accountDefinition) => {
       logger.info(`Start Sync of Account ${accountDefinition.name}`);
       await SchedulerStartAccountSync(span, accountDefinition).catch((err) => {
-        logger.error(err);
+        logger.error("Error Synchronizing Account", err, span);
       });
     });
     const lastUpdates = await SyncEventHistoryGetRecent();

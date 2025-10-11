@@ -1,19 +1,19 @@
 # BUILD
-FROM node:24 as builder
+FROM node:22-alpine as builder
 
 WORKDIR /opt/src
 
-RUN apt-get update && apt-get install -y \
-        build-essential \
-        libvips-dev \
-        libheif-dev \
-        libfftw3-dev \
+RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories && \
+    apk add --no-cache --update \
+        build-base \
+        vips-dev \
+        vips-heif \
+        fftw-dev \
         gcc \
         g++ \
         make \
         python3 \
-        wget \
-    && rm -rf /var/lib/apt/lists/*
+        wget
 
 COPY cloudphotomanager-server cloudphotomanager-server
 
@@ -28,27 +28,27 @@ RUN cd cloudphotomanager-web && \
     npm run generate
 
 # RUN
-FROM node:24
+FROM node:22-alpine
 
 COPY docker-config/entrypoint.sh /entrypoint.sh
 
-RUN apt-get update && apt-get install -y \
-        build-essential \
-        libfftw3-dev \
+RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories && \
+    apk add --no-cache --update \
+        build-base \
+        fftw-dev \
         g++ \
         gcc \
         imagemagick \
-        libraw-bin \
+        libraw \
         make \
         nginx \
         python3 \
-        libvips-dev \
-        libheif-dev \
+        vips-dev \
+        vips-heif \
         wget \
-        ffmpeg \
-    && rm -rf /var/lib/apt/lists/* \
-    && npm install -g pm2
-
+        ffmpeg && \
+    npm install -g pm2
+    
 COPY docker-config/default.conf /etc/nginx/http.d/default.conf
 COPY docker-config/ecosystem.config.js /opt/app/cloudphotomanager/ecosystem.config.js
 

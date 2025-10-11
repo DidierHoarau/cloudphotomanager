@@ -99,8 +99,7 @@ export class OneDriveAccount implements Account {
         }
       })
       .catch((err) => {
-        logger.error(err);
-        span.recordException(err);
+        logger.error("Error Validating OneDrive Account", err, span);
       });
     span.end();
     return valid;

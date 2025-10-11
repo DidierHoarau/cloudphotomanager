@@ -171,7 +171,7 @@ async function getVideoWidthWithFfprobe(
     }
     return null;
   } catch (err) {
-    logger.error(err);
+    logger.error("Error getting Video Width", err, span);
     span.end();
     return null;
   }
@@ -226,7 +226,7 @@ async function syncVideoFromFull(account: Account, file: File) {
         );
       })
       .catch((err) => {
-        logger.error(err);
+        logger.error("Error Synchronizing Video", err, span);
       });
     await fs.remove(tmpDir);
     span.end();
@@ -278,7 +278,7 @@ async function syncPhotoFromFull(account: Account, file: File) {
           .toFile(`${cacheDir}/preview.webp`);
       })
       .catch((err) => {
-        logger.error(err);
+        logger.error("Error Synchronizing Photo", err, span);
       });
     await fs.remove(tmpDir);
     span.end();
@@ -318,7 +318,7 @@ async function syncThumbnail(account: Account, file: File) {
           .toFile(`${cacheDir}/thumbnail.webp`);
       })
       .catch((err) => {
-        logger.error(err);
+        logger.error("Error Synchronizing Thumbnail", err, span);
       });
     await fs.remove(`${tmpDir}/tmp_tumbnail`);
     span.end();
@@ -360,7 +360,7 @@ async function syncThumbnailFromVideoPreview(account: Account, file: File) {
           .toFile(`${cacheDir}/thumbnail.webp`);
       })
       .catch((err) => {
-        logger.error(err);
+        logger.error("Error Generating Video Thumbnail", err, span);
       });
     await fs.remove(tmpDir);
     span.end();

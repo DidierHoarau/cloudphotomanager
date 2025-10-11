@@ -2,7 +2,7 @@ import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { FolderDataGet } from "../folders/FolderData";
-import { OTelLogger } from "../OTelContext";
+import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SyncInventorySyncFolder } from "../sync/SyncInventory";
 import {
   SyncQueueSetBlockingOperationEnd,
@@ -37,6 +37,9 @@ export class RoutesFileOperationsDelete {
       }
 
       setTimeout(async () => {
+        const spanSubProcess = OTelTracer().startSpan(
+          "RoutesFileOperationsDelete_postFiles_process"
+        );
         SyncQueueSetBlockingOperationStart();
         try {
           let folderId = "";
@@ -44,21 +47,22 @@ export class RoutesFileOperationsDelete {
             req.params.accountId
           );
           for (const fileId of req.body.fileIdList) {
-            const file = await FileDataGet(span, fileId);
+            const file = await FileDataGet(spanSubProcess, fileId);
             if (!file) {
               continue;
             }
             folderId = file.folderId;
-            await account.deleteFile(span, file);
+            await account.deleteFile(spanSubProcess, file);
           }
           if (folderId) {
-            const folder = await FolderDataGet(span, folderId);
+            const folder = await FolderDataGet(spanSubProcess, folderId);
             await SyncInventorySyncFolder(account, folder);
           }
         } catch (err) {
-          logger.error(err);
+          logger.error("Error Removing File from Account", err, spanSubProcess);
         }
         SyncQueueSetBlockingOperationEnd();
+        spanSubProcess.end();
       }, 50);
 
       return res.status(202).send({});

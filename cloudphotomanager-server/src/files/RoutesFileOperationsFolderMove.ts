@@ -2,7 +2,7 @@ import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { FolderDataGet } from "../folders/FolderData";
-import { OTelLogger } from "../OTelContext";
+import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SyncInventorySyncFolder } from "../sync/SyncInventory";
 import {
   SyncQueueSetBlockingOperationEnd,
@@ -42,6 +42,9 @@ export class RoutesFileOperationsFolderMove {
       }
 
       setTimeout(async () => {
+        const spanSubProcess = OTelTracer().startSpan(
+          "RoutesFileOperationsFolderMove_postFiles_process"
+        );
         SyncQueueSetBlockingOperationStart();
         try {
           let initialFolderId = "";
@@ -49,24 +52,28 @@ export class RoutesFileOperationsFolderMove {
             req.params.accountId
           );
           for (const fileId of req.body.fileIdList) {
-            const file = await FileDataGet(span, fileId);
+            const file = await FileDataGet(spanSubProcess, fileId);
             if (!file) {
               continue;
             }
             initialFolderId = file.folderId;
-            await account.moveFile(span, file, req.body.folderpath);
+            await account.moveFile(spanSubProcess, file, req.body.folderpath);
           }
-          const initialFolder = await FolderDataGet(span, initialFolderId);
+          const initialFolder = await FolderDataGet(
+            spanSubProcess,
+            initialFolderId
+          );
           await SyncInventorySyncFolder(account, initialFolder);
           const targetFolder = await account.getFolderByPath(
-            span,
+            spanSubProcess,
             req.body.folderpath
           );
           await SyncInventorySyncFolder(account, targetFolder);
         } catch (err) {
-          logger.error(err);
+          logger.error("Error Moving File", err, spanSubProcess);
         }
         SyncQueueSetBlockingOperationEnd();
+        spanSubProcess.end();
       }, 50);
 
       return res.status(201).send({});

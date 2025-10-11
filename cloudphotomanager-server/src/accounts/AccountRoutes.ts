@@ -103,7 +103,7 @@ export class AccountRoutes {
       await AccountDataAdd(span, account.getAccountDefinition());
       SchedulerStartAccountSync(span, account.getAccountDefinition()).catch(
         (err) => {
-          logger.error(err);
+          logger.error("Error Synchronizing Account", err, span);
         }
       );
       return res.status(201).send(account);
@@ -138,7 +138,7 @@ export class AccountRoutes {
       account.infoPrivate = req.body.infoPrivate;
       await AccountDataUpdate(span, account);
       SchedulerStartAccountSync(span, account).catch((err) => {
-        logger.error(err);
+        logger.error("Error Synchronizing Account", err, span);
       });
       return res.status(201).send(account);
     });

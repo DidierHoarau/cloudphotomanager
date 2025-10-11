@@ -72,7 +72,7 @@ export function SyncQueueQueueItem(
     newQueueItem.status = SyncQueueItemStatus.ACTIVE;
     await callbackExecution(account, data)
       .catch((err) => {
-        logger.error(err);
+        logger.error("Error Processing Queue Item", err);
       })
       .finally(() => {
         const index = _.findIndex(queue, { id });

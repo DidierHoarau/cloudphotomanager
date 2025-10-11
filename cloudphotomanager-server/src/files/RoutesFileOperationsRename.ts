@@ -2,7 +2,7 @@ import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { FolderDataGet } from "../folders/FolderData";
-import { OTelLogger } from "../OTelContext";
+import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SyncInventorySyncFolder } from "../sync/SyncInventory";
 import {
   SyncQueueSetBlockingOperationEnd,
@@ -41,27 +41,31 @@ export class RoutesFileOperationsRename {
 
       setTimeout(async () => {
         SyncQueueSetBlockingOperationStart();
+        const spanSubProcess = OTelTracer().startSpan(
+          "RoutesFileOperationsRenameFile_post_process"
+        );
         try {
           let folderId = "";
           const account = await AccountFactoryGetAccountImplementation(
             req.params.accountId
           );
           for (const fileIdName of req.body.fileIdNames) {
-            const file = await FileDataGet(span, fileIdName.id);
+            const file = await FileDataGet(spanSubProcess, fileIdName.id);
             if (!file) {
               continue;
             }
             folderId = file.folderId;
-            await account.renameFile(span, file, fileIdName.filename);
+            await account.renameFile(spanSubProcess, file, fileIdName.filename);
           }
           if (folderId) {
-            const folder = await FolderDataGet(span, folderId);
+            const folder = await FolderDataGet(spanSubProcess, folderId);
             await SyncInventorySyncFolder(account, folder);
           }
         } catch (err) {
-          logger.error(err);
+          logger.error("Error Renaming File", err, spanSubProcess);
         }
         SyncQueueSetBlockingOperationEnd();
+        spanSubProcess.end();
       }, 50);
 
       return res.status(201).send({});
