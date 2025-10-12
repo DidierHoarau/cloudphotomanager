@@ -1,5 +1,5 @@
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
-import { FastifyInstance, RequestGenericInterface } from "fastify";
+import { FastifyInstance } from "fastify";
 import { User } from "../model/User";
 import { UserPermission } from "../model/UserPermission";
 import {
@@ -39,13 +39,12 @@ export class UserRoutes {
       }
     });
 
-    interface PostSession extends RequestGenericInterface {
+    fastify.post<{
       Body: {
         name: string;
         password: string;
       };
-    }
-    fastify.post<PostSession>("/session", async (req, res) => {
+    }>("/session", async (req, res) => {
       const span = OTelRequestSpan(req);
       let user: User;
       // From token
@@ -95,13 +94,12 @@ export class UserRoutes {
       res.status(201).send({ users: await UserDataList(span) });
     });
 
-    interface PostUser extends RequestGenericInterface {
+    fastify.post<{
       Body: {
         name: string;
         password: string;
       };
-    }
-    fastify.post<PostUser>("/", async (req, res) => {
+    }>("/", async (req, res) => {
       const span = OTelRequestSpan(req);
       let isInitialized = true;
       if ((await UserDataList(span)).length === 0) {
@@ -135,12 +133,11 @@ export class UserRoutes {
       res.status(201).send({});
     });
 
-    interface DeletetUser extends RequestGenericInterface {
+    fastify.delete<{
       Params: {
         userId: string;
       };
-    }
-    fastify.delete<DeletetUser>("/:userId", async (req, res) => {
+    }>("/:userId", async (req, res) => {
       const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
@@ -154,13 +151,12 @@ export class UserRoutes {
       res.status(202).send({});
     });
 
-    interface PutNewPassword extends RequestGenericInterface {
+    fastify.put<{
       Body: {
         password: string;
         passwordOld: string;
       };
-    }
-    fastify.put<PutNewPassword>("/password", async (req, res) => {
+    }>("/password", async (req, res) => {
       const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
@@ -180,29 +176,25 @@ export class UserRoutes {
       res.status(201).send({});
     });
 
-    interface GetUserIdPermissions extends RequestGenericInterface {
+    fastify.get<{
       Params: {
         userId: string;
       };
-    }
-    fastify.get<GetUserIdPermissions>(
-      "/:userId/permissions",
-      async (req, res) => {
-        const span = OTelRequestSpan(req);
-        const userSession = await AuthGetUserSession(req);
-        if (!AuthIsAdmin(userSession)) {
-          return res.status(403).send({ error: "Access Denied" });
-        }
-        if (!(await UserDataGetByName(span, req.params.userId))) {
-          return res.status(404).send({ error: "Not Found" });
-        }
-        res
-          .status(200)
-          .send(await UserPermissionDataGetForUser(span, req.params.userId));
+    }>("/:userId/permissions", async (req, res) => {
+      const span = OTelRequestSpan(req);
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
+        return res.status(403).send({ error: "Access Denied" });
       }
-    );
+      if (!(await UserDataGetByName(span, req.params.userId))) {
+        return res.status(404).send({ error: "Not Found" });
+      }
+      res
+        .status(200)
+        .send(await UserPermissionDataGetForUser(span, req.params.userId));
+    });
 
-    interface PutUserIdPermissions extends RequestGenericInterface {
+    fastify.put<{
       Params: {
         userId: string;
       };
@@ -210,31 +202,27 @@ export class UserRoutes {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         info: any;
       };
-    }
-    fastify.put<PutUserIdPermissions>(
-      "/:userId/permissions",
-      async (req, res) => {
-        const span = OTelRequestSpan(req);
-        const userSession = await AuthGetUserSession(req);
-        if (!AuthIsAdmin(userSession)) {
-          return res.status(403).send({ error: "Access Denied" });
-        }
-        if (!(await UserDataGetByName(span, req.params.userId))) {
-          return res.status(404).send({ error: "Not Found" });
-        }
-        const permissions = await UserPermissionDataGetForUser(
-          span,
-          req.params.userId
-        );
-        permissions.info = req.body.info;
-        await UserPermissionDataUpdateForUser(
-          span,
-          req.params.userId,
-          permissions
-        );
-        res.status(201).send({});
+    }>("/:userId/permissions", async (req, res) => {
+      const span = OTelRequestSpan(req);
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
+        return res.status(403).send({ error: "Access Denied" });
       }
-    );
+      if (!(await UserDataGetByName(span, req.params.userId))) {
+        return res.status(404).send({ error: "Not Found" });
+      }
+      const permissions = await UserPermissionDataGetForUser(
+        span,
+        req.params.userId
+      );
+      permissions.info = req.body.info;
+      await UserPermissionDataUpdateForUser(
+        span,
+        req.params.userId,
+        permissions
+      );
+      res.status(201).send({});
+    });
 
     fastify.get("/access/validate", async (req, res) => {
       let tokenCokkie = null;

@@ -7,8 +7,9 @@ import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { watchFile } from "fs-extra";
 import * as path from "path";
-import { AccountRoutes } from "./accounts/AccountRoutes";
+import { AnalysisImagesInit } from "./analysis/AnalysisImages";
 import { AnalysisRoutes } from "./analysis/AnalysisRoutes";
+import { SearchRoutes } from "./analysis/SearchRoutes";
 import { Config } from "./Config";
 import { FileDataInit } from "./files/FileData";
 import { FileRoutes } from "./files/FileRoutes";
@@ -17,21 +18,22 @@ import { RoutesFileOperationsFolderMove } from "./files/RoutesFileOperationsFold
 import { RoutesFileOperationsRebuildCache } from "./files/RoutesFileOperationsRebuildCache";
 import { RoutesFileOperationsRename } from "./files/RoutesFileOperationsRename";
 import { FolderDataInit } from "./folders/FolderData";
-import { FolderRoutes } from "./folders/FolderRoutes";
-import {
-  OTelLogger,
-  OTelSetMeter,
-  OTelSetTracer,
-  OTelTracer,
-} from "./OTelContext";
 import { SchedulerInit } from "./sync/Scheduler";
 import { SyncFileCacheInit } from "./sync/SyncFileCache";
 import { SyncRoutes } from "./sync/SyncRoutes";
 import { AuthInit } from "./users/Auth";
 import { UserRoutes } from "./users/UserRoutes";
 import { SqlDbUtilsInit } from "./utils-std-ts/SqlDbUtils";
+import {
+  OTelLogger,
+  OTelSetMeter,
+  OTelSetTracer,
+  OTelTracer,
+} from "./OTelContext";
+import { AccountRoutes } from "./accounts/AccountRoutes";
+import { FolderRoutes } from "./folders/FolderRoutes";
 
-const logger = OTelLogger().createModuleLogger("app");
+const logger = OTelLogger().createModuleLogger("App");
 
 logger.info("====== Starting CloudPhotoManager Server ======");
 
@@ -56,6 +58,7 @@ Promise.resolve().then(async () => {
   await FileDataInit(span, config);
   await FolderDataInit(span);
   await SchedulerInit(span, config);
+  await AnalysisImagesInit(span);
 
   span.end();
 
@@ -111,6 +114,10 @@ Promise.resolve().then(async () => {
 
   fastify.register(new RoutesFileOperationsRebuildCache().getRoutes, {
     prefix: "/api/accounts/:accountId/files/batch/operations/fileCacheDelete",
+  });
+
+  fastify.register(new SearchRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/search",
   });
 
   fastify.register(new AnalysisRoutes().getRoutes, {
