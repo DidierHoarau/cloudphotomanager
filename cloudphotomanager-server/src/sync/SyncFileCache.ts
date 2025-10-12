@@ -1,5 +1,5 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import * as exifReader from "exif-reader";
+import exifReader from "exif-reader";
 import * as fs from "fs-extra";
 import { find } from "lodash";
 import * as probe from "node-ffprobe";
@@ -347,6 +347,7 @@ async function syncPhotoKeyWords(account: Account, file: File) {
 
             file.info.exif = exif;
           }
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (err) {
           logger.info(
             `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`
