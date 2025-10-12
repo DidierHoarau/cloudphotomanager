@@ -1,14 +1,19 @@
+import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
-import { SyncInventorySyncFolder } from "../sync/SyncInventory";
 import { FolderDataGet } from "../folders/FolderData";
-import { Logger } from "../utils-std-ts/Logger";
-import { SyncQueueSetBlockingOperationEnd, SyncQueueSetBlockingOperationStart } from "../sync/SyncQueue";
-import { FileDataGet } from "./FileData";
+import { OTelLogger, OTelTracer } from "../OTelContext";
+import { SyncInventorySyncFolder } from "../sync/SyncInventory";
+import {
+  SyncQueueSetBlockingOperationEnd,
+  SyncQueueSetBlockingOperationStart,
+} from "../sync/SyncQueue";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
+import { FileDataGet } from "./FileData";
 
-const logger = new Logger("FileOperationsFolderMoveRoutes");
+const logger = OTelLogger().createModuleLogger(
+  "FileOperationsFolderMoveRoutes"
+);
 
 export class RoutesFileOperationsFolderMove {
   //
@@ -24,7 +29,7 @@ export class RoutesFileOperationsFolderMove {
       };
     }
     fastify.post<PostFilesRequest>("/", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -37,26 +42,38 @@ export class RoutesFileOperationsFolderMove {
       }
 
       setTimeout(async () => {
+        const spanSubProcess = OTelTracer().startSpan(
+          "RoutesFileOperationsFolderMove_postFiles_process"
+        );
         SyncQueueSetBlockingOperationStart();
         try {
           let initialFolderId = "";
-          const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
+          const account = await AccountFactoryGetAccountImplementation(
+            req.params.accountId
+          );
           for (const fileId of req.body.fileIdList) {
-            const file = await FileDataGet(span, fileId);
+            const file = await FileDataGet(spanSubProcess, fileId);
             if (!file) {
               continue;
             }
             initialFolderId = file.folderId;
-            await account.moveFile(span, file, req.body.folderpath);
+            await account.moveFile(spanSubProcess, file, req.body.folderpath);
           }
-          const initialFolder = await FolderDataGet(span, initialFolderId);
+          const initialFolder = await FolderDataGet(
+            spanSubProcess,
+            initialFolderId
+          );
           await SyncInventorySyncFolder(account, initialFolder);
-          const targetFolder = await account.getFolderByPath(span, req.body.folderpath);
+          const targetFolder = await account.getFolderByPath(
+            spanSubProcess,
+            req.body.folderpath
+          );
           await SyncInventorySyncFolder(account, targetFolder);
         } catch (err) {
-          logger.error(err);
+          logger.error("Error Moving File", err, spanSubProcess);
         }
         SyncQueueSetBlockingOperationEnd();
+        spanSubProcess.end();
       }, 50);
 
       return res.status(201).send({});

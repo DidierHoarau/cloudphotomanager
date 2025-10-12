@@ -1,16 +1,15 @@
 // https://learn.microsoft.com/en-us/onedrive/developer/?view=odsp-graph-online
 
 import { Span } from "@opentelemetry/sdk-trace-base";
-import { StandardTracerStartSpan } from "../../utils-std-ts/StandardTracer";
-import { File } from "../../model/File";
 import axios from "axios";
 import * as fs from "fs-extra";
-import { OneDriveAccount } from "./OneDriveAccount";
-import { Logger } from "../../utils-std-ts/Logger";
+import { File } from "../../model/File";
 import { Folder } from "../../model/Folder";
+import { OTelLogger, OTelTracer } from "../../OTelContext";
+import { OneDriveAccount } from "./OneDriveAccount";
 import { OneDriveInventoryGetFolderByPath } from "./OneDriveInventory";
 
-const logger = new Logger("OneDriveFileOperations");
+const logger = OTelLogger().createModuleLogger("OneDriveFileOperations");
 
 export async function OneDriveFileOperationsDownloadFile(
   context: Span,
@@ -20,7 +19,10 @@ export async function OneDriveFileOperationsDownloadFile(
   filename: string
 ): Promise<void> {
   return new Promise(async (resolve, reject) => {
-    const span = StandardTracerStartSpan("OneDriveFileOperations_downloadFile", context);
+    const span = OTelTracer().startSpan(
+      "OneDriveFileOperations_downloadFile",
+      context
+    );
     axios({
       url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/content`,
       method: "GET",
@@ -56,7 +58,10 @@ export async function OneDriveFileOperationsDownloadThumbnail(
   filename: string
 ): Promise<void> {
   return new Promise(async (resolve, reject) => {
-    const span = StandardTracerStartSpan("OneDriveFileOperations_downloadFile", context);
+    const span = OTelTracer().startSpan(
+      "OneDriveFileOperations_downloadFile",
+      context
+    );
     axios({
       url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/thumbnails`,
       method: "GET",
@@ -99,7 +104,11 @@ export async function OneDriveFileOperationsMoveFile(
   file: File,
   folderpathDestination: string
 ): Promise<void> {
-  const parentFolder = await OneDriveFileOperationsEnsureFolder(context, oneDriveAccount, folderpathDestination);
+  const parentFolder = await OneDriveFileOperationsEnsureFolder(
+    context,
+    oneDriveAccount,
+    folderpathDestination
+  );
   await axios.patch(
     `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`,
     {
@@ -140,11 +149,14 @@ export async function OneDriveFileOperationsDeleteFile(
   oneDriveAccount: OneDriveAccount,
   file: File
 ): Promise<void> {
-  await axios.delete(`https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`, {
-    headers: {
-      Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-    },
-  });
+  await axios.delete(
+    `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`,
+    {
+      headers: {
+        Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+      },
+    }
+  );
 }
 
 export async function OneDriveFileOperationsDeleteFolder(
@@ -152,11 +164,14 @@ export async function OneDriveFileOperationsDeleteFolder(
   oneDriveAccount: OneDriveAccount,
   folder: Folder
 ): Promise<void> {
-  await axios.delete(`https://graph.microsoft.com/v1.0/me/drive/items/${folder.idCloud}`, {
-    headers: {
-      Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-    },
-  });
+  await axios.delete(
+    `https://graph.microsoft.com/v1.0/me/drive/items/${folder.idCloud}`,
+    {
+      headers: {
+        Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+      },
+    }
+  );
 }
 
 export async function OneDriveFileOperationsCreateFolder(
@@ -165,17 +180,24 @@ export async function OneDriveFileOperationsCreateFolder(
   parentFolder: Folder,
   foldername: string
 ): Promise<Folder> {
-  const absoluteFolderPath = `${oneDriveAccount.getAccountDefinition().rootpath}/${
-    parentFolder.folderpath
-  }/${foldername}`.replace(/\/+/g, "/");
-  logger.info(`Creating folder: ${foldername} in ${parentFolder.folderpath} / ${absoluteFolderPath}`);
+  const span = OTelTracer().startSpan(
+    "OneDriveFileOperationsCreateFolder",
+    context
+  );
+  const absoluteFolderPath =
+    `${oneDriveAccount.getAccountDefinition().rootpath}/${
+      parentFolder.folderpath
+    }/${foldername}`.replace(/\/+/g, "/");
+  logger.info(
+    `Creating folder: ${foldername} in ${parentFolder.folderpath} / ${absoluteFolderPath}`
+  );
   const folderRaw = (
     await axios.post(
       `https://graph.microsoft.com/v1.0/me/drive/items/${parentFolder.idCloud}/children`,
       { name: foldername, folder: {} },
       {
         headers: {
-          Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+          Authorization: `Bearer ${await oneDriveAccount.getToken(span)}`,
         },
       }
     )
@@ -185,6 +207,7 @@ export async function OneDriveFileOperationsCreateFolder(
     `${parentFolder.folderpath}/${foldername}`.replace(/\/+/g, "/")
   );
   folder.idCloud = folderRaw.id;
+  span.end();
   return folder;
 }
 
@@ -194,14 +217,27 @@ export async function OneDriveFileOperationsEnsureFolder(
   folderpath: string
 ): Promise<Folder> {
   let subfolderPath = "";
-  let parentFolder = await OneDriveInventoryGetFolderByPath(context, oneDriveAccount, subfolderPath);
+  let parentFolder = await OneDriveInventoryGetFolderByPath(
+    context,
+    oneDriveAccount,
+    subfolderPath
+  );
   for (const subFolderName of folderpath.split("/")) {
     if (subFolderName) {
       subfolderPath += `/${subFolderName}`;
       subfolderPath = subfolderPath.replace(/\/\//g, "/");
-      let subFolder = await OneDriveInventoryGetFolderByPath(context, oneDriveAccount, subfolderPath);
+      let subFolder = await OneDriveInventoryGetFolderByPath(
+        context,
+        oneDriveAccount,
+        subfolderPath
+      );
       if (!subFolder) {
-        subFolder = await OneDriveFileOperationsCreateFolder(context, oneDriveAccount, parentFolder, subFolderName);
+        subFolder = await OneDriveFileOperationsCreateFolder(
+          context,
+          oneDriveAccount,
+          parentFolder,
+          subFolderName
+        );
       }
       parentFolder = subFolder;
     }

@@ -1,3 +1,9 @@
+const fs = require("fs");
+let devEnv = {};
+if (fs.existsSync("./env-dev.js")) {
+  devEnv = require("./env-dev");
+}
+
 module.exports = {
   apps: [
     {
@@ -20,8 +26,7 @@ module.exports = {
         CONFIG_FILE: "../config.json",
         TOOLS_DIR: "../cloudphotomanager-tools",
         DATA_DIR: "../docs/dev/data",
-        TMP_OPENTELEMETRY_COLLECTOR_HTTP: "http://localhost:4318/v1/traces",
-        TMP_OPENTELEMETRY_COLLECTOR_AWS: true,
+        ...devEnv,
         AUTO_SYNC: "Y",
       },
     },

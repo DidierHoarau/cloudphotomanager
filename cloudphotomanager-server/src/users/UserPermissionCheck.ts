@@ -1,45 +1,51 @@
-import { StandardTracerStartSpan } from "../utils-std-ts/StandardTracer";
-import { UserPermissionData } from "./UserPermissionData";
 import { Span } from "@opentelemetry/sdk-trace-base";
-import { Folder } from "../model/Folder";
-import * as _ from "lodash";
 import { FolderDataGet } from "../folders/FolderData";
+import { Folder } from "../model/Folder";
+import { OTelTracer } from "../OTelContext";
+import { UserPermissionDataGetForUser } from "./UserPermissionData";
 
-export class UserPermissionCheck {
-  //
-  public static async filterFoldersForUser(context: Span, folders: Folder[], userId: string): Promise<Folder[]> {
-    const span = StandardTracerStartSpan("UserPermissionData_filterFoldersForUser", context);
-    const filteredFolders = [];
-    const userPermissions = await UserPermissionData.getForUser(span, userId);
-    if (userPermissions.info.isAdmin) {
-      return folders;
-    }
-    const folderPermittedList: Folder[] = [];
-
-    for (const folderPermittedIteration of userPermissions.info.folders) {
-      const folderPermittedDefinition = await FolderDataGet(span, folderPermittedIteration.folderId);
-      if (folderPermittedDefinition) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (folderPermittedDefinition as any).scope = folderPermittedIteration.scope;
-        folderPermittedList.push(folderPermittedDefinition);
-      }
-    }
-
-    for (const folder of folders) {
-      for (const folderPermitted of folderPermittedList) {
-        if (folderPermitted.id === folder.id) {
-          filteredFolders.push(folder);
-        } else if (
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (folderPermitted as any).scope === "ro_recursive" &&
-          folderPermitted.accountId === folder.accountId &&
-          folder.folderpath.lastIndexOf(`${folderPermitted.folderpath}/`) === 0
-        ) {
-          filteredFolders.push(folder);
-        }
-      }
-    }
-    span.end();
-    return filteredFolders;
+export async function UserPermissionCheckFilterFoldersForUser(
+  context: Span,
+  folders: Folder[],
+  userId: string
+): Promise<Folder[]> {
+  const span = OTelTracer().startSpan(
+    "UserPermissionData_filterFoldersForUser",
+    context
+  );
+  const filteredFolders = [];
+  const userPermissions = await UserPermissionDataGetForUser(span, userId);
+  if (userPermissions.info.isAdmin) {
+    return folders;
   }
+  const folderPermittedList: Folder[] = [];
+
+  for (const folderPermittedIteration of userPermissions.info.folders) {
+    const folderPermittedDefinition = await FolderDataGet(
+      span,
+      folderPermittedIteration.folderId
+    );
+    if (folderPermittedDefinition) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (folderPermittedDefinition as any).scope = folderPermittedIteration.scope;
+      folderPermittedList.push(folderPermittedDefinition);
+    }
+  }
+
+  for (const folder of folders) {
+    for (const folderPermitted of folderPermittedList) {
+      if (folderPermitted.id === folder.id) {
+        filteredFolders.push(folder);
+      } else if (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (folderPermitted as any).scope === "ro_recursive" &&
+        folderPermitted.accountId === folder.accountId &&
+        folder.folderpath.lastIndexOf(`${folderPermitted.folderpath}/`) === 0
+      ) {
+        filteredFolders.push(folder);
+      }
+    }
+  }
+  span.end();
+  return filteredFolders;
 }

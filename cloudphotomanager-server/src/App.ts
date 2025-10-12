@@ -1,5 +1,9 @@
+import { StandardMeter, StandardTracer } from "@devopsplaybook.io/otel-utils";
+import { StandardTracerFastifyRegisterHooks } from "@devopsplaybook.io/otel-utils-fastify";
 import type { FastifyCookieOptions } from "@fastify/cookie";
 import cookie from "@fastify/cookie";
+import cors from "@fastify/cors";
+import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { watchFile } from "fs-extra";
 import * as path from "path";
@@ -14,17 +18,20 @@ import { RoutesFileOperationsRebuildCache } from "./files/RoutesFileOperationsRe
 import { RoutesFileOperationsRename } from "./files/RoutesFileOperationsRename";
 import { FolderDataInit } from "./folders/FolderData";
 import { FolderRoutes } from "./folders/FolderRoutes";
-import { StandardTracerApi } from "./StandardTracerApi";
+import {
+  OTelLogger,
+  OTelSetMeter,
+  OTelSetTracer,
+  OTelTracer,
+} from "./OTelContext";
 import { SchedulerInit } from "./sync/Scheduler";
 import { SyncFileCacheInit } from "./sync/SyncFileCache";
 import { SyncRoutes } from "./sync/SyncRoutes";
 import { AuthInit } from "./users/Auth";
 import { UserRoutes } from "./users/UserRoutes";
-import { Logger } from "./utils-std-ts/Logger";
-import { SqlDbutils } from "./utils-std-ts/SqlDbUtils";
-import { StandardTracerInitTelemetry, StandardTracerStartSpan } from "./utils-std-ts/StandardTracer";
+import { SqlDbUtilsInit } from "./utils-std-ts/SqlDbUtils";
 
-const logger = new Logger("app");
+const logger = OTelLogger().createModuleLogger("app");
 
 logger.info("====== Starting CloudPhotoManager Server ======");
 
@@ -37,12 +44,14 @@ Promise.resolve().then(async () => {
     config.reload();
   });
 
-  StandardTracerInitTelemetry(config);
+  OTelSetTracer(new StandardTracer(config));
+  OTelSetMeter(new StandardMeter(config));
+  OTelLogger().initOTel(config);
 
-  const span = StandardTracerStartSpan("init");
+  const span = OTelTracer().startSpan("init");
 
   await SyncFileCacheInit(span, config);
-  await SqlDbutils.init(span, config);
+  await SqlDbUtilsInit(span, config);
   await AuthInit(span, config);
   await FileDataInit(span, config);
   await FolderDataInit(span);
@@ -52,14 +61,10 @@ Promise.resolve().then(async () => {
 
   // API
 
-  const fastify = Fastify({
-    logger: config.LOG_LEVEL === "debug_tmp",
-    ignoreTrailingSlash: true,
-  });
+  const fastify = Fastify({});
 
   if (config.CORS_POLICY_ORIGIN) {
-    /* eslint-disable-next-line */
-    fastify.register(require("@fastify/cors"), {
+    fastify.register(cors, {
       origin: config.CORS_POLICY_ORIGIN,
       methods: "GET,PUT,POST,DELETE",
     });
@@ -72,7 +77,9 @@ Promise.resolve().then(async () => {
     parseOptions: {},
   } as FastifyCookieOptions);
 
-  StandardTracerApi.registerHooks(fastify, config);
+  StandardTracerFastifyRegisterHooks(fastify, OTelTracer(), OTelLogger(), {
+    ignoreList: ["GET-/api/status"],
+  });
 
   fastify.register(new UserRoutes().getRoutes, {
     prefix: "/api/users",
@@ -114,9 +121,12 @@ Promise.resolve().then(async () => {
     prefix: "/api/sync",
   });
 
+  fastify.get("/api/status", async () => {
+    return { started: true };
+  });
+
   if (process.env.DEV_MODE) {
-    /* eslint-disable-next-line */
-    fastify.register(require("@fastify/static"), {
+    fastify.register(fastifyStatic, {
       root: path.resolve(path.join(config.DATA_DIR, "/cache/")),
       prefix: "/static",
     });
@@ -124,10 +134,8 @@ Promise.resolve().then(async () => {
 
   fastify.listen({ port: config.API_PORT, host: "0.0.0.0" }, (err) => {
     if (err) {
-      logger.error(err);
-      fastify.log.error(err);
       process.exit(1);
     }
-    logger.info("API Listerning");
+    logger.info("API Listening");
   });
 });

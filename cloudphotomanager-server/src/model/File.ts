@@ -1,5 +1,5 @@
+import { UtilsMd5 } from "../Utils";
 import { FileMediaType } from "./FileMediaType";
-import * as md5 from "md5";
 
 export class File {
   //
@@ -19,7 +19,7 @@ export class File {
   public metadata: any;
 
   constructor(accountId: string, folderId: string, filename: string) {
-    this.id = md5(encodeURI(`${accountId}/${folderId}/${filename}`));
+    this.id = UtilsMd5(encodeURI(`${accountId}/${folderId}/${filename}`));
     this.accountId = accountId;
     this.folderId = folderId;
     this.filename = filename;
@@ -28,8 +28,8 @@ export class File {
   }
 
   public static getMediaType(name: string): FileMediaType {
-    const imageExtensionsRaw = ["dng", "raw", "arw"];
-    const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "tiff", "heic"];
+    const imageExtensionsRaw = ["dng", "raw", "arw", "heic"];
+    const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "tiff"];
     const videoExtensions = ["mp4", "mov", "wmv", "avi", "mkv"];
     const extension = name.split(".").pop().toLowerCase();
     if (imageExtensions.includes(extension)) {

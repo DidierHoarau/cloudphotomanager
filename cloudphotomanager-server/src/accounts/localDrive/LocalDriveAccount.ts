@@ -1,7 +1,6 @@
 import { Account } from "../../model/Account";
 import { AccountDefinition } from "../../model/AccountDefinition";
 import { Span } from "@opentelemetry/sdk-trace-base";
-import { StandardTracerStartSpan } from "../../utils-std-ts/StandardTracer";
 import { File } from "../../model/File";
 import { Folder } from "../../model/Folder";
 import { AccountCapabilities } from "../../model/AccountCapabilities";
@@ -14,6 +13,7 @@ import {
 import { pathExistsSync, stat } from "fs-extra";
 import * as fs from "fs-extra";
 import * as path from "path";
+import { OTelTracer } from "../../OTelContext";
 
 export class LocalAccount implements Account {
   //
@@ -50,8 +50,19 @@ export class LocalAccount implements Account {
     return LocalAccountInventoryGetFolderByPath(context, this, folderpath);
   }
 
-  async moveFile(context: Span, file: File, folderpathDestination: string): Promise<void> {
-    await fs.move(file.idCloud, path.join(this.accountDefinition.rootpath, folderpathDestination, file.filename));
+  async moveFile(
+    context: Span,
+    file: File,
+    folderpathDestination: string
+  ): Promise<void> {
+    await fs.move(
+      file.idCloud,
+      path.join(
+        this.accountDefinition.rootpath,
+        folderpathDestination,
+        file.filename
+      )
+    );
   }
 
   async listFilesInFolder(context: Span, folder: Folder): Promise<File[]> {
@@ -63,7 +74,10 @@ export class LocalAccount implements Account {
   }
 
   async renameFile(context: Span, file: File, filename: string): Promise<void> {
-    await fs.move(file.idCloud, path.join(path.dirname(file.idCloud), filename));
+    await fs.move(
+      file.idCloud,
+      path.join(path.dirname(file.idCloud), filename)
+    );
   }
 
   public async downloadFile(
@@ -72,7 +86,10 @@ export class LocalAccount implements Account {
     destinationFolderpath: string,
     destinationFilename: string
   ): Promise<void> {
-    await fs.copyFile(file.idCloud, path.join(destinationFolderpath, destinationFilename));
+    await fs.copyFile(
+      file.idCloud,
+      path.join(destinationFolderpath, destinationFilename)
+    );
   }
 
   public async deleteFolder(context: Span, folder: Folder): Promise<void> {
@@ -80,7 +97,7 @@ export class LocalAccount implements Account {
   }
 
   public async validate(context: Span): Promise<boolean> {
-    const span = StandardTracerStartSpan("LocalAccount_validate", context);
+    const span = OTelTracer().startSpan("LocalAccount_validate", context);
     let valid = false;
     try {
       if (!pathExistsSync(this.accountDefinition.rootpath)) {
@@ -103,11 +120,21 @@ export class LocalAccount implements Account {
     throw new Error("Method not implemented.");
   }
 
-  downloadPreview(context: Span, file: File, folder: string, filename: string): Promise<void> {
+  downloadPreview(
+    context: Span,
+    file: File,
+    folder: string,
+    filename: string
+  ): Promise<void> {
     throw new Error("Method not implemented.");
   }
 
-  downloadThumbnail(context: Span, file: File, folder: string, filename: string): Promise<void> {
+  downloadThumbnail(
+    context: Span,
+    file: File,
+    folder: string,
+    filename: string
+  ): Promise<void> {
     throw new Error("Method not implemented.");
   }
 

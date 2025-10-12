@@ -1,12 +1,15 @@
+import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
-import { Logger } from "../utils-std-ts/Logger";
-import { FileDataGet } from "./FileData";
+import { OTelLogger, OTelTracer } from "../OTelContext";
+import {
+  SyncFileCacheCheckFile,
+  SyncFileCacheRemoveFile,
+} from "../sync/SyncFileCache";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
-import { SyncFileCacheCheckFile, SyncFileCacheRemoveFile } from "../sync/SyncFileCache";
+import { FileDataGet } from "./FileData";
 
-const logger = new Logger("FileOperationsDeleteRoutes");
+const logger = OTelLogger().createModuleLogger("FileOperationsDeleteRoutes");
 
 export class RoutesFileOperationsRebuildCache {
   //
@@ -21,7 +24,7 @@ export class RoutesFileOperationsRebuildCache {
       };
     }
     fastify.post<PostFilesRequest>("/", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -32,19 +35,25 @@ export class RoutesFileOperationsRebuildCache {
       }
 
       setTimeout(async () => {
+        const spanSubProcess = OTelTracer().startSpan(
+          "RoutesFileOperationsRebuildCache_post_process"
+        );
         try {
-          const account = await AccountFactoryGetAccountImplementation(req.params.accountId);
+          const account = await AccountFactoryGetAccountImplementation(
+            req.params.accountId
+          );
           for (const fileId of req.body.fileIdList) {
-            const file = await FileDataGet(span, fileId);
+            const file = await FileDataGet(spanSubProcess, fileId);
             if (!file) {
               continue;
             }
-            await SyncFileCacheRemoveFile(span, account, file);
-            SyncFileCacheCheckFile(span, account, file);
+            await SyncFileCacheRemoveFile(spanSubProcess, account, file);
+            SyncFileCacheCheckFile(spanSubProcess, account, file);
           }
         } catch (err) {
-          logger.error(err);
+          logger.error("Error Rebuilding Cache", err, spanSubProcess);
         }
+        spanSubProcess.end();
       }, 50);
 
       return res.status(202).send({});

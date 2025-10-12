@@ -1,20 +1,26 @@
+import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AccountDefinition } from "../model/AccountDefinition";
-import { StandardTracerGetSpanFromRequest } from "../utils-std-ts/StandardTracer";
-import { AccountDataAdd, AccountDataDelete, AccountDataGet, AccountDataList, AccountDataUpdate } from "./AccountData";
-import { AccountFactoryGetAccountFromDefinition } from "./AccountFactory";
-import { Logger } from "../utils-std-ts/Logger";
+import { OTelLogger } from "../OTelContext";
 import { SchedulerStartAccountSync } from "../sync/Scheduler";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
+import {
+  AccountDataAdd,
+  AccountDataDelete,
+  AccountDataGet,
+  AccountDataList,
+  AccountDataUpdate,
+} from "./AccountData";
+import { AccountFactoryGetAccountFromDefinition } from "./AccountFactory";
 
-const logger = new Logger("AccountRoutes");
+const logger = OTelLogger().createModuleLogger("AccountRoutes");
 
 export class AccountRoutes {
   //
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     //
     fastify.get("/", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -32,7 +38,7 @@ export class AccountRoutes {
       };
     }
     fastify.get<GetAccount>("/:accountId", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -50,7 +56,7 @@ export class AccountRoutes {
       };
     }
     fastify.post<PostAccountValidation>("/validation", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
@@ -58,7 +64,8 @@ export class AccountRoutes {
       const accountDefinition = new AccountDefinition();
       accountDefinition.info = req.body.info;
       accountDefinition.infoPrivate = req.body.infoPrivate;
-      const account = await AccountFactoryGetAccountFromDefinition(accountDefinition);
+      const account =
+        await AccountFactoryGetAccountFromDefinition(accountDefinition);
       if (await account.validate(span)) {
         return res.status(200).send({});
       }
@@ -75,7 +82,7 @@ export class AccountRoutes {
       };
     }
     fastify.post<PostAccount>("/", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -88,14 +95,17 @@ export class AccountRoutes {
       accountDefinition.rootpath = req.body.rootpath;
       accountDefinition.info = req.body.info;
       accountDefinition.infoPrivate = req.body.infoPrivate;
-      const account = await AccountFactoryGetAccountFromDefinition(accountDefinition);
+      const account =
+        await AccountFactoryGetAccountFromDefinition(accountDefinition);
       if (!(await account.validate(span))) {
         return res.status(400).send({ error: "Account Validation Failed" });
       }
       await AccountDataAdd(span, account.getAccountDefinition());
-      SchedulerStartAccountSync(span, account.getAccountDefinition()).catch((err) => {
-        logger.error(err);
-      });
+      SchedulerStartAccountSync(span, account.getAccountDefinition()).catch(
+        (err) => {
+          logger.error("Error Synchronizing Account", err, span);
+        }
+      );
       return res.status(201).send(account);
     });
 
@@ -112,7 +122,7 @@ export class AccountRoutes {
       };
     }
     fastify.put<PutAccount>("/:accountId", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -128,7 +138,7 @@ export class AccountRoutes {
       account.infoPrivate = req.body.infoPrivate;
       await AccountDataUpdate(span, account);
       SchedulerStartAccountSync(span, account).catch((err) => {
-        logger.error(err);
+        logger.error("Error Synchronizing Account", err, span);
       });
       return res.status(201).send(account);
     });
@@ -139,7 +149,7 @@ export class AccountRoutes {
       };
     }
     fastify.delete<DeleteAccount>("/:accountId", async (req, res) => {
-      const span = StandardTracerGetSpanFromRequest(req);
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -162,7 +172,9 @@ export class AccountRoutes {
         !process.env.ONEDRIVE_CLIENT_SECRET ||
         !process.env.ONEDRIVE_CALLBACK_SIGNIN
       ) {
-        return res.status(500).send({ error: "OneDrive Client Not Configured" });
+        return res
+          .status(500)
+          .send({ error: "OneDrive Client Not Configured" });
       }
       return res.status(200).send({
         ONEDRIVE_CLIENT_ID: process.env.ONEDRIVE_CLIENT_ID,
