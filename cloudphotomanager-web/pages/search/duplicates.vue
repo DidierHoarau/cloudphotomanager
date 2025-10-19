@@ -19,44 +19,13 @@
     <div class="analysis-items-actions actions"></div>
     <div class="analysis-item-list">
       <Loading v-if="loading" />
-      <article
-        class="card analysis-item"
-        v-for="item in analysisFiltered"
-        v-bind:key="item.hash"
-      >
-        <div class="analysis-item-image">
-          <img
-            :src="
-              serverUrl +
-              '/accounts/' +
-              item.files[0].accountId +
-              '/files/' +
-              item.files[0].id +
-              '/thumbnail'
-            "
-            onerror="this.onerror=null; this.src='/images/file-sync-in-progress.webp'"
-          />
-        </div>
-        <div class="analysis-file-list">
-          <div
-            class="analysis-file-list-file"
-            v-for="file in item.files"
-            v-bind:key="file.id"
-          >
-            <div class="analysis-file-list-file-name">
-              {{ displayFolderPath(item.folders, file.folderId) }}/{{
-                file.filename
-              }}
-            </div>
-            <div class="analysis-file-list-file-actions">
-              <i
-                v-on:click="deleteDuplicate(file, item.folders)"
-                class="bi bi-trash-fill"
-              ></i>
-            </div>
-          </div>
-        </div>
-      </article>
+      <Gallery
+        v-else
+        :files="files"
+        @focusGalleryItem="focusGalleryItem"
+        @onFileSelected="onFileSelected"
+        :selectedFiles="selectedFiles"
+      />
     </div>
     <GalleryItemFocus
       v-if="selectedFile"
@@ -82,6 +51,7 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 export default {
   data() {
     return {
+      files: [],
       analysisFiltered: [],
       analysis: [],
       menuOpened: true,
@@ -93,6 +63,7 @@ export default {
       currentFolderId: "",
       analysisFilter: "",
       searchKeyword: "",
+      selectedFiles: [],
     };
   },
   async created() {
@@ -115,9 +86,16 @@ export default {
           await AuthService.getAuthHeader()
         )
         .then((res) => {
+          const newFiles = [];
           if (this.requestEtag === requestEtag) {
             this.analysis = res.data.duplicates;
-            this.onSearchFilterChanged();
+            for (const duplicate of this.analysis) {
+              const fileReference = duplicate.files[0];
+              fileReference.duplicates = duplicate;
+              fileReference.filename = `(x${duplicate.files.length} duplicates) ${fileReference.filename}`;
+              newFiles.push(fileReference);
+            }
+            this.files = newFiles;
           }
         })
         .finally(() => {
@@ -125,6 +103,17 @@ export default {
           this.loading = false;
         })
         .catch(handleError);
+    },
+    async onAccountSelected(account) {
+      this.currentAccountId = account.id;
+      await this.loadAccountDuplicate(account.id);
+    },
+    async onFileSelected(file) {
+      // TODO
+    },
+    async focusGalleryItem(file) {
+      console.log(file)
+      // TODO
     },
     async deleteDuplicate(file, folders) {
       if (
@@ -205,6 +194,7 @@ export default {
   display: grid;
   grid-template-rows: auto 2.5em 1fr;
   grid-template-columns: 1fr;
+  gap: 1em;
 }
 
 .analysis-item-list {
@@ -281,11 +271,5 @@ export default {
 }
 .analysis-item {
   margin-top: 1em;
-}
-
-.analysis-item-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(20em, 1fr));
-  gap: 1em;
 }
 </style>
