@@ -42,22 +42,22 @@
     <div class="analysis-items-actions actions"></div>
     <div class="analysis-item-list">
       <Loading v-if="loading" />
-      <Gallery v-else :files="files" />
+      <Gallery
+        v-else
+        :files="files"
+        @focusGalleryItem="focusGalleryItem"
+        @onFileSelected="onFileSelected"
+        :selectedFiles="selectedFiles"
+      />
     </div>
     <GalleryItemFocus
-      v-if="selectedFile"
-      :file="selectedFile"
+      v-if="displayFullScreen"
+      :inputFiles="{ files, position: positionFocus }"
       class="gallery-item-focus"
-      @onFileClosed="unselectGalleryFile"
+      @onFileClosed="unFocusGalleryItem"
     />
   </div>
 </template>
-
-<script setup>
-const syncStore = SyncStore();
-const accountsStore = AccountsStore();
-import Datepicker from "@vuepic/vue-datepicker";
-</script>
 
 <script>
 import axios from "axios";
@@ -83,6 +83,8 @@ export default {
       searchKeyword: "",
       dateFrom: null,
       dateTo: null,
+      selectedFiles: [],
+      displayFullScreen: false,
     };
   },
   async created() {
@@ -131,6 +133,26 @@ export default {
       this.dateTo = new Date(event);
       this.onSearchFilterChanged();
     },
+    onFileSelected(file) {
+      const selectedIndex = findIndex(this.selectedFiles, { id: file.id });
+      if (selectedIndex < 0) {
+        this.selectedFiles.push(file);
+      } else {
+        this.selectedFiles.splice(selectedIndex, 1);
+      }
+    },
+    focusGalleryItem(file) {
+      console.log(file);
+      if (!file) {
+        this.displayFullScreen = false;
+        return;
+      }
+      this.displayFullScreen = true;
+      this.positionFocus = findIndex(this.files, { id: file.id });
+    },
+    unFocusGalleryItem(result) {
+      this.displayFullScreen = false;
+    },
   },
 };
 </script>
@@ -138,7 +160,6 @@ export default {
 <style scoped>
 .search-gallery-layout {
   display: grid;
-  width: 100%;
   grid-template-rows: auto auto 2.5em 1fr;
   grid-template-columns: 1fr;
   gap: 1em;

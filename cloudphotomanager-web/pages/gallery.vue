@@ -1,6 +1,9 @@
 <template>
   <div class="gallery-layout page">
-    <div class="gallery-folders" :class="{ 'gallery-folders-closed': !menuOpened }">
+    <div
+      class="gallery-folders"
+      :class="{ 'gallery-folders-closed': !menuOpened }"
+    >
       <FolderList monitorRoute="true" @onFolderSelected="onFolderSelected" />
     </div>
     <div class="gallery-files-actions">
@@ -14,7 +17,9 @@
       >
         <i class="bi bi-check2-square"></i> Select...
       </button>
-      <kbd v-if="selectedFiles.length > 0">Selected: {{ selectedFiles.length }}</kbd>
+      <kbd v-if="selectedFiles.length > 0"
+        >Selected: {{ selectedFiles.length }}</kbd
+      >
       <button
         v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
         class="secondary outline"
@@ -23,7 +28,12 @@
         <i class="bi bi-trash-fill"></i> Delete
       </button>
       <button
-        v-if="files.length == 0 && folder.children == 0 && folder.parentIndex >= 0 && authenticationStore.isAdmin"
+        v-if="
+          files.length == 0 &&
+          folder.children == 0 &&
+          folder.parentIndex >= 0 &&
+          authenticationStore.isAdmin
+        "
         class="secondary outline"
         v-on:click="clickedDeleteFolder()"
       >
@@ -44,32 +54,22 @@
         <i class="bi bi-three-dots"></i> More...
       </button>
       <span class="option-outtakes" v-if="outtakesCount > 0">
-        <label> <input v-model="showOutakes" type="checkbox" /> OutTakes ({{ outtakesCount }}) </label></span
+        <label>
+          <input v-model="showOutakes" type="checkbox" /> OutTakes ({{
+            outtakesCount
+          }})
+        </label></span
       >
     </div>
     <div class="gallery-file-list">
       <Loading v-if="loading" />
-      <div v-else class="card gallery-file" v-for="file in filterOuttakes(files)" v-bind:key="file.id">
-        <div class="gallery-file-image" v-on:click="focusGalleryItem(file)">
-          <i v-if="getType(file) == 'video'" class="bi bi-play-circle gallery-file-video-type-overlay"></i>
-          <img
-            :src="
-              staticUrl + '/' + file.accountId + '/' + file.id[0] + '/' + file.id[1] + '/' + file.id + '/thumbnail.webp'
-            "
-            onerror="this.onerror=null; this.src='/images/file-sync-in-progress.webp'"
-          />
-        </div>
-        <div class="gallery-file-selected">
-          <input v-on:input="onFileSelected(file)" type="checkbox" :checked="isFileSelected(file)" />
-        </div>
-        <div class="gallery-file-name">
-          {{ file.filename }}
-        </div>
-        <div class="gallery-file-date">{{ displayDate(file.dateMedia) }}</div>
-        <div class="gallery-file-size">
-          {{ displaySize(file.info.size) }}
-        </div>
-      </div>
+      <Gallery
+        v-else
+        :files="files"
+        @focusGalleryItem="focusGalleryItem"
+        @onFileSelected="onFileSelected"
+        :selectedFiles="selectedFiles"
+      />
     </div>
     <GalleryItemFocus
       v-if="displayFullScreen"
@@ -77,7 +77,11 @@
       class="gallery-item-focus"
       @onFileClosed="unFocusGalleryItem"
     />
-    <DialogMove v-if="activeOperation == 'move'" :files="selectedFiles" @onDone="onOperationDone" />
+    <DialogMove
+      v-if="activeOperation == 'move'"
+      :files="selectedFiles"
+      @onDone="onOperationDone"
+    />
     <DialogSelect
       v-if="activeOperation == 'select'"
       :selectedFiles="selectedFiles"
@@ -134,7 +138,10 @@ export default {
       FoldersStore().fetch();
     }
     EventBus.on(EventTypes.FOLDER_UPDATED, (message) => {
-      if (message.accountId === this.currentAccountId && message.folderId === this.currentFolderId) {
+      if (
+        message.accountId === this.currentAccountId &&
+        message.folderId === this.currentFolderId
+      ) {
         this.fetchFiles(message.accountId, message.folderId, true);
         FoldersStore().fetch();
       }
@@ -145,8 +152,15 @@ export default {
     EventBus.on(EventTypes.FOLDER_SELECTED, (message) => {
       this.fetchFiles(message.accountId, message.folderId, true);
     });
-    if (useRoute().query.accountId && useRoute().query.folderId && useRoute().query.fileId) {
-      await this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
+    if (
+      useRoute().query.accountId &&
+      useRoute().query.folderId &&
+      useRoute().query.fileId
+    ) {
+      await this.fetchFiles(
+        useRoute().query.accountId,
+        useRoute().query.folderId
+      );
       this.focusGalleryItem(find(this.files, { id: useRoute().query.fileId }));
     } else if (useRoute().query.accountId && useRoute().query.folderId) {
       this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
@@ -155,7 +169,10 @@ export default {
       () => useRoute().query.folderId,
       () => {
         if (this.currentFolderId !== useRoute().query.folderId) {
-          this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
+          this.fetchFiles(
+            useRoute().query.accountId,
+            useRoute().query.folderId
+          );
         }
       }
     );
@@ -164,8 +181,13 @@ export default {
       () => {
         setTimeout(async () => {
           if (useRoute().query.fileId) {
-            await this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
-            this.focusGalleryItem(find(this.files, { id: useRoute().query.fileId }));
+            await this.fetchFiles(
+              useRoute().query.accountId,
+              useRoute().query.folderId
+            );
+            this.focusGalleryItem(
+              find(this.files, { id: useRoute().query.fileId })
+            );
           } else {
             this.displayFullScreen = false;
           }
@@ -182,7 +204,11 @@ export default {
     },
     async fetchFiles(accountId, folderId, forceLoading = false) {
       const requestEtag = new Date().toISOString();
-      if (forceLoading || this.currentAccountId !== accountId || this.currentFolderId !== folderId) {
+      if (
+        forceLoading ||
+        this.currentAccountId !== accountId ||
+        this.currentFolderId !== folderId
+      ) {
         this.currentAccountId = accountId;
         this.currentFolderId = folderId;
         this.files = [];
@@ -191,7 +217,11 @@ export default {
       this.requestEtag = requestEtag;
       await axios
         .get(
-          `${(await Config.get()).SERVER_URL}/accounts/${accountId}/folders/${folderId}/files`,
+          `${
+            (
+              await Config.get()
+            ).SERVER_URL
+          }/accounts/${accountId}/folders/${folderId}/files`,
           await AuthService.getAuthHeader()
         )
         .then((res) => {
@@ -217,7 +247,9 @@ export default {
     async clickedRefresh() {
       await axios
         .put(
-          `${(await Config.get()).SERVER_URL}/accounts/${this.currentAccountId}/folders/${this.currentFolderId}/sync`,
+          `${(await Config.get()).SERVER_URL}/accounts/${
+            this.currentAccountId
+          }/folders/${this.currentFolderId}/sync`,
           {},
           await AuthService.getAuthHeader()
         )
@@ -238,7 +270,9 @@ export default {
       return findIndex(this.selectedFiles, { id: file.id }) >= 0;
     },
     onFolderSelected(event) {
-      useRouter().push({ query: { accountId: event.folder.accountId, folderId: event.folder.id } });
+      useRouter().push({
+        query: { accountId: event.folder.accountId, folderId: event.folder.id },
+      });
       this.fetchFiles(event.folder.accountId, event.folder.id);
     },
     focusGalleryItem(file) {
@@ -250,7 +284,12 @@ export default {
       this.positionFocus = findIndex(this.files, { id: file.id });
     },
     unFocusGalleryItem(result) {
-      useRouter().push({ query: { accountId: this.currentAccountId, folderId: this.currentFolderId } });
+      useRouter().push({
+        query: {
+          accountId: this.currentAccountId,
+          folderId: this.currentFolderId,
+        },
+      });
       this.displayFullScreen = false;
       if (result.status === "invalidated") {
         this.fetchFiles(this.currentAccountId, this.currentFolderId);
@@ -320,7 +359,9 @@ export default {
         }
         await axios
           .post(
-            `${(await Config.get()).SERVER_URL}/accounts/${this.currentAccountId}/files/batch/operations/fileDelete`,
+            `${(await Config.get()).SERVER_URL}/accounts/${
+              this.currentAccountId
+            }/files/batch/operations/fileDelete`,
             {
               fileIdList,
             },
@@ -345,9 +386,9 @@ export default {
         SyncStore().markOperationInProgress();
         axios
           .delete(
-            `${(await Config.get()).SERVER_URL}/accounts/${this.folder.accountId}/folders/${
-              this.folder.id
-            }/operations/delete`,
+            `${(await Config.get()).SERVER_URL}/accounts/${
+              this.folder.accountId
+            }/folders/${this.folder.id}/operations/delete`,
             await AuthService.getAuthHeader()
           )
           .then((res) => {
@@ -358,7 +399,10 @@ export default {
             FoldersStore().fetch();
             useRouter().push({
               path: "/gallery",
-              query: { accountId: this.folder.accountId, folderId: parentFolderId },
+              query: {
+                accountId: this.folder.accountId,
+                folderId: parentFolderId,
+              },
             });
           })
           .catch(handleError);
@@ -373,11 +417,6 @@ export default {
 </script>
 
 <style scoped>
-.gallery-file-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(10em, 1fr));
-  gap: 1em;
-}
 .gallery-file {
   display: grid;
   grid-template-columns: auto 1fr auto;

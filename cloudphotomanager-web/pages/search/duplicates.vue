@@ -1,10 +1,10 @@
 <template>
-  <div class="search-gallery-layout page">
+  <div class="duplicate-gallery-layout page">
     <NavigationSearch
-      class="search-gallery-layout-navigation"
+      class="duplicate-gallery-layout-navigation"
       @onAccountSelected="onAccountSelected"
     />
-    <div class="search-gallery-criteria">
+    <div class="duplicate-gallery-criteria">
       <input
         v-model="searchKeyword"
         type="search"
@@ -14,25 +14,6 @@
         class="folder-component-layout-filter"
         v-on:input="onSearchFilterChanged"
       />
-      <div class="search-gallery-layout-actions actions">
-        <p>Select the account to analyze</p>
-        <span v-for="account in accountsStore.accounts" v-bind:key="account.id">
-          <button v-on:click="loadAccountDuplicate(account.id)">
-            {{ account.name }}
-          </button>
-        </span>
-        <br />
-        <br />
-        <input
-          v-if="analysis.length > 0"
-          v-model="analysisFilter"
-          type="text"
-          v-on:input="onSearchFilterChanged"
-        />
-        <kbd v-if="analysis.length > 0"
-          >Duplicates Found: {{ analysisFiltered.length }}</kbd
-        >
-      </div>
     </div>
 
     <div class="analysis-items-actions actions"></div>
@@ -220,6 +201,12 @@ export default {
 </script>
 
 <style scoped>
+.duplicate-gallery-layout {
+  display: grid;
+  grid-template-rows: auto 2.5em 1fr;
+  grid-template-columns: 1fr;
+}
+
 .analysis-item-list {
   display: grid;
   grid-template-columns: 1fr;
@@ -250,69 +237,6 @@ export default {
   font-size: 0.6em;
   word-break: break-all;
   opacity: 0.4;
-}
-
-@media (min-width: 701px) {
-  .search-gallery-layout {
-    display: grid;
-    grid-template-rows: auto 2.5em 1fr;
-    grid-template-columns: auto 1fr;
-    column-gap: 1em;
-  }
-  .search-gallery-criteria {
-    grid-column: 1 / 3;
-    grid-row-start: 1;
-  }
-  .analysis-items-actions {
-    grid-row: 2;
-    grid-column-start: 2;
-    grid-column-end: span 2;
-  }
-  .analysis-item-list {
-    overflow: auto;
-    grid-row: 3;
-    grid-column-start: 1;
-    grid-column-end: span 2;
-  }
-  .gallery-header {
-    grid-row: 1;
-    grid-column-start: 1;
-    grid-column-end: span 2;
-  }
-  .search-gallery-layout-actions-menu-toggle {
-    visibility: hidden;
-    font-size: 0px;
-    padding: 0px;
-    margin: 0px;
-  }
-}
-
-@media (max-width: 700px) {
-  .search-gallery-layout {
-    display: grid;
-    grid-template-rows: auto 2.5em 1fr;
-    grid-template-columns: 1fr;
-    column-gap: 1em;
-  }
-
-  .search-gallery-criteria {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .analysis-items-actions {
-    grid-row: 3;
-    grid-column-start: 1;
-    grid-column-end: span 2;
-  }
-  .analysis-item-list {
-    overflow: auto;
-    grid-row: 3;
-    grid-column-start: 1;
-    grid-column-end: span 2;
-  }
-  .gallery-folders-closed {
-    height: 0px !important;
-  }
 }
 
 @media (prefers-color-scheme: dark) {
