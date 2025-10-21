@@ -27,19 +27,26 @@
         :selectedFiles="selectedFiles"
       />
     </div>
-    <GalleryItemFocus
-      v-if="selectedFile"
-      :file="selectedFile"
-      class="gallery-item-focus"
-      @onFileClosed="unselectGalleryFile"
-    />
+    <dialog v-if="selectedFile" open>
+      <article>
+        <header>
+          <a
+            href="#close"
+            aria-label="Close"
+            class="close"
+            v-on:click="clickedClose()"
+          ></a>
+          Duplicate
+        </header>
+        <MediaDisplay :file="selectedFile" />
+        <div v-for="file in selectedFile.duplicates" :key="file.id">
+          {{ file }}
+        </div>
+        <button>Add</button>
+      </article>
+    </dialog>
   </div>
 </template>
-
-<script setup>
-const syncStore = SyncStore();
-const accountsStore = AccountsStore();
-</script>
 
 <script>
 import axios from "axios";
@@ -90,7 +97,9 @@ export default {
           if (this.requestEtag === requestEtag) {
             this.analysis = res.data.duplicates;
             for (const duplicate of this.analysis) {
-              const fileReference = duplicate.files[0];
+              const fileReference = JSON.parse(
+                JSON.stringify(duplicate.files[0])
+              );
               fileReference.duplicates = duplicate;
               fileReference.filename = `(x${duplicate.files.length} duplicates) ${fileReference.filename}`;
               newFiles.push(fileReference);
@@ -112,7 +121,8 @@ export default {
       // TODO
     },
     async focusGalleryItem(file) {
-      console.log(file)
+      console.log("focusGalleryItem", file);
+      this.selectedFile = file;
       // TODO
     },
     async deleteDuplicate(file, folders) {
@@ -151,6 +161,9 @@ export default {
     },
     displayFolderPath(folders, folderId) {
       return find(folders, { id: folderId }).folderpath;
+    },
+    clickedClose() {
+      this.selectedFile = null;
     },
     onSearchFilterChanged: debounce(async function (e) {
       if (!this.analysisFilter) {
