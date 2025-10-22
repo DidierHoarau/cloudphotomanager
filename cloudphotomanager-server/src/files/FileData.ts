@@ -190,6 +190,24 @@ export async function FileDataGetCount(context: Span): Promise<number> {
   return count;
 }
 
+export async function FileDataDeleteNoFolder(
+  context: Span,
+  accountId: string
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataDeleteNoFolder", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    `DELETE FROM files
+     WHERE accountId = ?
+       AND folderId NOT IN (
+         SELECT id FROM folders WHERE accountId = ?
+       )`,
+    [accountId, accountId]
+  );
+  FolderDataRefreshCacheFoldersCounts(span);
+  span.end();
+}
+
 // Private Funciton
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

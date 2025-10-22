@@ -39,8 +39,8 @@
           Duplicate
         </header>
         <MediaDisplay :file="selectedFile" />
-        <div v-for="file in selectedFile.duplicates" :key="file.id">
-          {{ file.filename }}
+        <div v-for="file in selectedFile.duplicates.files" :key="file.id">
+          {{ getFolderPath(file.folderId) }} {{ file.filename }}
         </div>
         <button>Add</button>
       </article>
@@ -117,11 +117,17 @@ export default {
       this.currentAccountId = account.id;
       await this.loadAccountDuplicate(account.id);
     },
+    getFolderPath(id) {
+      const folder = find(FoldersStore().folders, { id });
+      if (!folder) {
+        return "";
+      }
+      return folder.folderpath;
+    },
     async onFileSelected(file) {
       // TODO
     },
     async focusGalleryItem(file) {
-      console.log("focusGalleryItem", file);
       this.selectedFile = file;
       // TODO
     },
