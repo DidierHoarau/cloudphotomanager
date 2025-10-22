@@ -40,7 +40,7 @@
         </header>
         <MediaDisplay :file="selectedFile" />
         <div v-for="file in selectedFile.duplicates" :key="file.id">
-          {{ file }}
+          {{ file.filename }}
         </div>
         <button>Add</button>
       </article>
