@@ -39,9 +39,29 @@
           Duplicate
         </header>
         <MediaDisplay :file="selectedFile" />
-        <div v-for="file in selectedFile.duplicates.files" :key="file.id">
-          {{ getFolderPath(file.folderId) }} {{ file.filename }}
-        </div>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Folder</th>
+              <th scope="col">File</th>
+              <th scope="col"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="file in selectedFile.duplicates.files" :key="file.id">
+              <th scope="row">{{ getFolderPath(file.folderId) }}</th>
+              <td>{{ file.filename }}</td>
+              <td class="duplicate-files-actions">
+                <button
+                  class="secondary outline"
+                  v-on:click="deleteDuplicate(file)"
+                >
+                  <i class="bi bi-trash-fill"></i> Delete
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
         <button>Add</button>
       </article>
     </dialog>
@@ -67,7 +87,6 @@ export default {
       loading: false,
       requestEtag: "",
       currentAccountId: "",
-      currentFolderId: "",
       analysisFilter: "",
       searchKeyword: "",
       selectedFiles: [],
@@ -129,14 +148,13 @@ export default {
     },
     async focusGalleryItem(file) {
       this.selectedFile = file;
-      // TODO
     },
-    async deleteDuplicate(file, folders) {
+    async deleteDuplicate(file) {
       if (
         confirm(
           `Delete the file? (Can't be undone!)\nFile: ${
             file.filename
-          } \nFolder: ${this.displayFolderPath(folders, file.folderId)}`
+          } \nFolder: ${this.getFolderPath(file.folderId)}`
         ) == true
       ) {
         await axios
@@ -159,14 +177,14 @@ export default {
             if (this.analysis[hashIndex].files.length === 0) {
               this.analysis.splice(hashIndex, 1);
             }
+            this.analysis[
+              hashIndex
+            ].filename = `(x${this.analysis[hashIndex].files.length} duplicates) ${this.analysis[hashIndex].files[0].filename}`;
             EventBus.emit(EventTypes.FOLDER_UPDATED, {});
             EventBus.emit(EventTypes.FILE_UPDATED, {});
           })
           .catch(handleError);
       }
-    },
-    displayFolderPath(folders, folderId) {
-      return find(folders, { id: folderId }).folderpath;
     },
     clickedClose() {
       this.selectedFile = null;
@@ -290,5 +308,17 @@ export default {
 }
 .analysis-item {
   margin-top: 1em;
+}
+.duplicate-files-actions {
+  padding-bottom: 0.3em;
+}
+.duplicate-files-actions button,
+.duplicate-files-actions kbd {
+  padding: 0.3em 0.7em;
+  font-size: 0.8em;
+}
+
+.duplicate-files-actions kbd {
+  height: 2.2em;
 }
 </style>

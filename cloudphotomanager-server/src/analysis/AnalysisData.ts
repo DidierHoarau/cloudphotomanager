@@ -25,7 +25,6 @@ export async function AnalysisDataListAccountDuplicates(
   );
   const analysis: AnalysisDuplicate[] = [];
   let currentAnalysisDuplicate: AnalysisDuplicate = null;
-  const knownFolders = await FolderDataListForAccount(span, accountId);
   for (const fileRaw of rawData) {
     const file = fromRaw(fileRaw);
     if (
@@ -41,9 +40,6 @@ export async function AnalysisDataListAccountDuplicates(
       analysis.push(currentAnalysisDuplicate);
     }
     currentAnalysisDuplicate.files.push(file);
-    currentAnalysisDuplicate.folders.push(
-      _.find(knownFolders, { id: file.folderId })
-    );
   }
   span.end();
   return analysis;
