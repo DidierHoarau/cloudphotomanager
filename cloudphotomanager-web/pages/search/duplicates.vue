@@ -4,19 +4,6 @@
       class="duplicate-gallery-layout-navigation"
       @onAccountSelected="onAccountSelected"
     />
-    <div class="duplicate-gallery-criteria">
-      <input
-        v-model="searchKeyword"
-        type="search"
-        name="search"
-        placeholder="Search File"
-        aria-label="Search"
-        class="folder-component-layout-filter"
-        v-on:input="onSearchFilterChanged"
-      />
-    </div>
-
-    <div class="analysis-items-actions actions"></div>
     <div class="analysis-item-list">
       <Loading v-if="loading" />
       <Gallery
@@ -39,30 +26,31 @@
           Duplicate
         </header>
         <MediaDisplay :file="selectedFile" />
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Folder</th>
-              <th scope="col">File</th>
-              <th scope="col"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="file in selectedFile.duplicates.files" :key="file.id">
-              <th scope="row">{{ getFolderPath(file.folderId) }}</th>
-              <td>{{ file.filename }}</td>
-              <td class="duplicate-files-actions">
-                <button
-                  class="secondary outline"
-                  v-on:click="deleteDuplicate(file)"
-                >
-                  <i class="bi bi-trash-fill"></i> Delete
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <button>Add</button>
+        <div class="duplicate-files-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Folder</th>
+                <th scope="col">File</th>
+                <th scope="col"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="file in selectedFile.duplicates.files" :key="file.id">
+                <th scope="row">{{ getFolderPath(file.folderId) }}</th>
+                <td>{{ file.filename }}</td>
+                <td class="duplicate-files-actions">
+                  <button
+                    class="secondary outline"
+                    v-on:click="deleteDuplicate(file)"
+                  >
+                    <i class="bi bi-trash-fill"></i> Delete
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </article>
     </dialog>
   </div>
@@ -95,6 +83,7 @@ export default {
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
     await AccountsStore().fetch();
+    await FoldersStore().fetch();
   },
   methods: {
     async loadAccountDuplicate(accountId) {
@@ -112,18 +101,9 @@ export default {
           await AuthService.getAuthHeader()
         )
         .then((res) => {
-          const newFiles = [];
           if (this.requestEtag === requestEtag) {
             this.analysis = res.data.duplicates;
-            for (const duplicate of this.analysis) {
-              const fileReference = JSON.parse(
-                JSON.stringify(duplicate.files[0])
-              );
-              fileReference.duplicates = duplicate;
-              fileReference.filename = `(x${duplicate.files.length} duplicates) ${fileReference.filename}`;
-              newFiles.push(fileReference);
-            }
-            this.files = newFiles;
+            return this.loadAccountDuplicateProcess();
           }
         })
         .finally(() => {
@@ -131,6 +111,19 @@ export default {
           this.loading = false;
         })
         .catch(handleError);
+    },
+    async loadAccountDuplicateProcess() {
+      const newFiles = [];
+      for (const duplicate of this.analysis) {
+        const fileReference = JSON.parse(JSON.stringify(duplicate.files[0]));
+        fileReference.duplicates = duplicate;
+        if (duplicate.files.length < 2) {
+          continue;
+        }
+        fileReference.filename = `(x${duplicate.files.length} duplicates) ${fileReference.filename}`;
+        newFiles.push(fileReference);
+      }
+      this.files = newFiles;
     },
     async onAccountSelected(account) {
       this.currentAccountId = account.id;
@@ -174,12 +167,7 @@ export default {
               findIndex(this.analysis[hashIndex].files),
               1
             );
-            if (this.analysis[hashIndex].files.length === 0) {
-              this.analysis.splice(hashIndex, 1);
-            }
-            this.analysis[
-              hashIndex
-            ].filename = `(x${this.analysis[hashIndex].files.length} duplicates) ${this.analysis[hashIndex].files[0].filename}`;
+            this.loadAccountDuplicateProcess();
             EventBus.emit(EventTypes.FOLDER_UPDATED, {});
             EventBus.emit(EventTypes.FILE_UPDATED, {});
           })
@@ -229,7 +217,7 @@ export default {
 <style scoped>
 .duplicate-gallery-layout {
   display: grid;
-  grid-template-rows: auto 2.5em 1fr;
+  grid-template-rows: auto 1fr;
   grid-template-columns: 1fr;
   gap: 1em;
 }
@@ -320,5 +308,10 @@ export default {
 
 .duplicate-files-actions kbd {
   height: 2.2em;
+}
+
+.duplicate-files-table {
+  max-width: 100%;
+  overflow-x: auto;
 }
 </style>
