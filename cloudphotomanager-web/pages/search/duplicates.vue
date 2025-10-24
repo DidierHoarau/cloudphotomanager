@@ -126,6 +126,7 @@ export default {
       console.log(this.files);
     },
     async onAccountSelected(account) {
+      console.log("Loading duplicates for account", account);
       await this.loadAccountDuplicate(account.id);
     },
     getFolderPath(id) {

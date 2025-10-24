@@ -52,10 +52,9 @@ export default {
   },
   async created() {
     this.checkActiveFolder(this.$route.fullPath);
+    await AccountsStore().fetch();
     if (AccountsStore().accounts.length > 0) {
-      setTimeout(() => {
-        this.selectAccount(AccountsStore().accounts[0].id);
-      }, 100);
+      this.selectAccount(AccountsStore().accounts[0].id);
     }
   },
   methods: {
