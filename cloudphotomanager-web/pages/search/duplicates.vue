@@ -9,6 +9,7 @@
       <Gallery
         v-else
         :files="files"
+        :enableSelection="false"
         @focusGalleryItem="focusGalleryItem"
         @onFileSelected="onFileSelected"
         :selectedFiles="selectedFiles"
@@ -25,7 +26,7 @@
           ></a>
           Duplicate
         </header>
-        <MediaDisplay :file="selectedFile" />
+        <LazyMediaDisplay :file="selectedFile" />
         <div class="duplicate-files-table">
           <table>
             <thead>
@@ -74,7 +75,6 @@ export default {
       selectedFile: null,
       loading: false,
       requestEtag: "",
-      currentAccountId: "",
       analysisFilter: "",
       searchKeyword: "",
       selectedFiles: [],
@@ -84,6 +84,9 @@ export default {
     this.serverUrl = (await Config.get()).SERVER_URL;
     await AccountsStore().fetch();
     await FoldersStore().fetch();
+    if (AccountsStore().accounts.length === 1) {
+      this.loadAccountDuplicate(AccountsStore().accounts[0].id);
+    }
   },
   methods: {
     async loadAccountDuplicate(accountId) {
@@ -126,7 +129,6 @@ export default {
       this.files = newFiles;
     },
     async onAccountSelected(account) {
-      this.currentAccountId = account.id;
       await this.loadAccountDuplicate(account.id);
     },
     getFolderPath(id) {
@@ -164,7 +166,7 @@ export default {
             });
             const hashIndex = findIndex(this.analysis, { hash: file.hash });
             this.analysis[hashIndex].files.splice(
-              findIndex(this.analysis[hashIndex].files),
+              findIndex(this.analysis[hashIndex].files, { id: file.id }),
               1
             );
             this.loadAccountDuplicateProcess();

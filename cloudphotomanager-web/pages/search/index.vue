@@ -42,7 +42,7 @@
     <div class="analysis-items-actions actions"></div>
     <div class="analysis-item-list">
       <Loading v-if="loading" />
-      <Gallery
+      <LazyGallery
         v-else
         :files="files"
         @focusGalleryItem="focusGalleryItem"

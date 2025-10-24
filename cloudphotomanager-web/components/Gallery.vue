@@ -26,7 +26,7 @@
           onerror="this.onerror=null; this.src='/images/file-sync-in-progress.webp'"
         />
       </div>
-      <div class="gallery-file-selected">
+      <div v-if="enableSelection" class="gallery-file-selected">
         <input
           v-on:input="onFileSelected(file)"
           type="checkbox"
@@ -60,6 +60,11 @@ export default {
       type: Array,
       required: false,
       default: () => [],
+    },
+    enableSelection: {
+      type: Boolean,
+      required: false,
+      default: () => true,
     },
   },
   data() {
