@@ -63,7 +63,7 @@
     </div>
     <div class="gallery-file-list">
       <Loading v-if="loading" />
-      <Gallery
+      <LazyGallery
         v-else
         :files="files"
         @focusGalleryItem="focusGalleryItem"
