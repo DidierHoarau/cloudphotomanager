@@ -45,6 +45,7 @@
       <LazyGallery
         v-else
         :files="files"
+        :enableSelection="false"
         @focusGalleryItem="focusGalleryItem"
         @onFileSelected="onFileSelected"
         :selectedFiles="selectedFiles"

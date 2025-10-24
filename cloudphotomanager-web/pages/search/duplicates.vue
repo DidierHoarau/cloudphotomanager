@@ -6,7 +6,7 @@
     />
     <div class="analysis-item-list">
       <Loading v-if="loading" />
-      <Gallery
+      <LazyGallery
         v-else
         :files="files"
         :enableSelection="false"
@@ -26,7 +26,7 @@
           ></a>
           Duplicate
         </header>
-        <LazyMediaDisplay :file="selectedFile" />
+        <MediaDisplay :file="selectedFile" />
         <div class="duplicate-files-table">
           <table>
             <thead>
@@ -127,6 +127,7 @@ export default {
         newFiles.push(fileReference);
       }
       this.files = newFiles;
+      console.log(this.files);
     },
     async onAccountSelected(account) {
       await this.loadAccountDuplicate(account.id);
