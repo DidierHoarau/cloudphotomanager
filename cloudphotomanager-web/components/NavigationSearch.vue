@@ -2,10 +2,14 @@
   <div>
     <div class="menu-subcategory">
       <span v-if="authenticationStore.isAuthenticated">
-        <NuxtLink to="/search" :class="isSearch ? 'active' : 'inactive'">Search Photos</NuxtLink>
+        <NuxtLink to="/search" :class="isSearch ? 'active' : 'inactive'"
+          >Search Photos</NuxtLink
+        >
       </span>
       <span v-if="authenticationStore.isAuthenticated">
-        <NuxtLink to="/search/duplicates" :class="isSearchDuplicates ? 'active' : 'inactive'"
+        <NuxtLink
+          to="/search/duplicates"
+          :class="isSearchDuplicates ? 'active' : 'inactive'"
           >Search Duplicates</NuxtLink
         >
       </span>
@@ -28,16 +32,11 @@
 </template>
 
 <script setup>
-import { AuthService } from "~~/services/AuthService";
 const authenticationStore = AuthenticationStore();
 const accountsStore = AccountsStore();
-const syncStore = SyncStore();
 </script>
 
 <script>
-import axios from "axios";
-import Config from "~~/services/Config.ts";
-
 export default {
   watch: {
     $route(to, from) {
@@ -54,7 +53,9 @@ export default {
   async created() {
     this.checkActiveFolder(this.$route.fullPath);
     if (AccountsStore().accounts.length > 0) {
-      this.selectAccount(AccountsStore().accounts[0].id);
+      setTimeout(() => {
+        this.selectAccount(AccountsStore().accounts[0].id);
+      }, 100);
     }
   },
   methods: {

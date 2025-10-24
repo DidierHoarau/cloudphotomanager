@@ -76,7 +76,6 @@ export default {
       loading: false,
       requestEtag: "",
       analysisFilter: "",
-      searchKeyword: "",
       selectedFiles: [],
     };
   },
@@ -84,9 +83,6 @@ export default {
     this.serverUrl = (await Config.get()).SERVER_URL;
     await AccountsStore().fetch();
     await FoldersStore().fetch();
-    if (AccountsStore().accounts.length === 1) {
-      this.loadAccountDuplicate(AccountsStore().accounts[0].id);
-    }
   },
   methods: {
     async loadAccountDuplicate(accountId) {
