@@ -34,7 +34,7 @@ export class Config implements ConfigOTelInterface {
   public DATABASE_ASYNC_WRITE = false;
   public VIDEO_PREVIEW_WIDTH = 900;
   public IMAGE_CLASSIFICATION_ENABLED = true;
-  public IMAGE_CLASSIFICATION_PROCESS_DTYPE = "q8";
+  public IMAGE_CLASSIFICATION_PROCESS_DTYPE = "q4";
   public IMAGE_CLASSIFICATION_PROCESS_DEVICE = "cpu";
 
   constructor() {
