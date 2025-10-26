@@ -21,7 +21,7 @@ export async function AnalysisImagesGetLabels(
   }
   if (!pipe) {
     pipeInitializing = true;
-    pipe = await pipeline("image-classification", null, { dtype: "auto" });
+    pipe = await pipeline("image-classification", null, { dtype: "fp16" });
     pipeInitializing = false;
   }
   const results = await pipe(imagePath);
