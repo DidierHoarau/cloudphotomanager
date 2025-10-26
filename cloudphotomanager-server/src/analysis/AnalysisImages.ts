@@ -28,12 +28,13 @@ export async function AnalysisImagesGetLabels(
   }
   if (!pipe) {
     pipeInitializing = true;
-    pipe = await pipeline("image-classification", null, {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      dtype: config.IMAGE_CLASSIFICATION_PROCESS_DTYPE as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      device: config.IMAGE_CLASSIFICATION_PROCESS_DEVICE as any,
-    });
+    // pipe = await pipeline("image-classification", null, {
+    //   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    //   dtype: config.IMAGE_CLASSIFICATION_PROCESS_DTYPE as any,
+    //   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    //   device: config.IMAGE_CLASSIFICATION_PROCESS_DEVICE as any,
+    // });
+    pipe = await pipeline("image-classification");
     pipeInitializing = false;
   }
   const results = await pipe(imagePath);
