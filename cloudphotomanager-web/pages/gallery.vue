@@ -63,9 +63,9 @@
     </div>
     <div class="gallery-file-list">
       <Loading v-if="loading" />
-      <LazyGallery
+      <Gallery
         v-else
-        :files="files"
+        :files="filterOuttakes(files)"
         @focusGalleryItem="focusGalleryItem"
         @onFileSelected="onFileSelected"
         :selectedFiles="selectedFiles"
@@ -417,55 +417,6 @@ export default {
 </script>
 
 <style scoped>
-.gallery-file {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  grid-template-rows: auto auto auto;
-  height: 11em;
-}
-.gallery-file-name {
-  grid-row: 2;
-  grid-column-start: 2;
-  grid-column-end: span 2;
-  font-size: 0.7em;
-  word-break: break-all;
-  opacity: 0.8;
-}
-.gallery-file-image {
-  grid-row: 1;
-  grid-column-start: 1;
-  grid-column-end: span 3;
-  word-break: break-all;
-  position: relative;
-}
-.gallery-file-image img {
-  width: 100%;
-  height: 8em;
-  object-fit: cover;
-}
-.gallery-file-date {
-  height: 2em;
-  grid-column: 2;
-  grid-row: 3;
-  font-size: 0.6em;
-  word-break: break-all;
-  opacity: 0.4;
-}
-.gallery-file-size {
-  height: 2em;
-  grid-column: 3;
-  grid-row: 3;
-  font-size: 0.6em;
-  word-break: break-all;
-  opacity: 0.4;
-}
-.gallery-file-selected {
-  grid-column: 1;
-  grid-row-start: 2;
-  grid-row-end: span 2;
-  padding-right: 0.3em;
-}
-
 .gallery-files-actions {
   padding-bottom: 0.3em;
 }
@@ -574,13 +525,6 @@ export default {
   right: 0;
   width: 100vw;
   height: 100vh;
-}
-.gallery-file-video-type-overlay {
-  font-size: 3em;
-  position: absolute;
-  right: 0.1em;
-  bottom: 0em;
-  opacity: 0.5;
 }
 
 .gallery-files-actions kbd {

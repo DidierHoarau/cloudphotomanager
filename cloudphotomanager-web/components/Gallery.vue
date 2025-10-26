@@ -1,10 +1,6 @@
 <template>
   <div class="gallery-component">
-    <div
-      class="card gallery-file"
-      v-for="file in filterOuttakes(files)"
-      v-bind:key="file.id"
-    >
+    <div class="card gallery-file" v-for="file in files" v-bind:key="file.id">
       <div class="gallery-file-image" v-on:click="focusGalleryItem(file)">
         <i
           v-if="getType(file) == 'video'"
@@ -70,28 +66,12 @@ export default {
   data() {
     return {
       staticUrl: "",
-      requestEtag: "",
-      currentAccountId: "",
-      currentFolderId: "",
-      loading: false,
-      activeOperation: "",
-      displayFullScreen: false,
-      positionFocus: 0,
-      showOutakes: false,
-      outtakesCount: 0,
     };
   },
   async created() {
     this.staticUrl = (await Config.get()).STATIC_URL;
   },
   methods: {
-    filterOuttakes() {
-      if (!this.showOutakes) {
-        return filter(this.files, (file) => !file.isOuttake);
-      }
-      console.log(this.files);
-      return this.files;
-    },
     onFileSelected(file) {
       this.$emit("onFileSelected", file);
     },
@@ -188,67 +168,11 @@ export default {
   grid-row-end: span 2;
   padding-right: 0.3em;
 }
-.gallery-layout {
-  display: grid;
-  grid-template-rows: 1fr auto 2fr;
-  grid-template-columns: 1fr;
-  column-gap: 1em;
-}
-.gallery {
-  overflow: auto;
-}
-.gallery-folders {
-  overflow: auto;
-  height: 30vh;
-  grid-row: 1;
-  grid-column-start: 1;
-  grid-column-end: span 2;
-}
-.gallery-folders-closed {
-  height: 0px !important;
-}
-
-@media (prefers-color-scheme: dark) {
-  .source-active {
-    background-color: #333;
-  }
-  .gallery-folders {
-    background-color: #33333333;
-  }
-}
-@media (prefers-color-scheme: light) {
-  .source-active {
-    background-color: #bbb;
-  }
-  .gallery-folders {
-    background-color: #aaaaaa33;
-  }
-}
-.gallery-item-focus {
-  background-color: black;
-  position: fixed;
-  top: 0em;
-  right: 0;
-  width: 100vw;
-  height: 100vh;
-}
 .gallery-file-video-type-overlay {
   font-size: 3em;
   position: absolute;
   right: 0.1em;
   bottom: 0em;
   opacity: 0.5;
-}
-
-.option-outtakes {
-  opacity: 30%;
-  font-size: 0.8em;
-}
-.option-outtakes input {
-  height: 1em;
-  width: 1em;
-}
-.option-outtakes label {
-  display: inline;
 }
 </style>

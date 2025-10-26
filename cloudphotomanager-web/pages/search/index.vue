@@ -39,10 +39,10 @@
       </div>
     </div>
 
-    <div class="analysis-items-actions actions"></div>
-    <div class="analysis-item-list">
+    <div class="search-items-actions actions"></div>
+    <div class="search-item-list">
       <Loading v-if="loading" />
-      <LazyGallery
+      <Gallery
         v-else
         :files="files"
         :enableSelection="false"
@@ -196,7 +196,7 @@ export default {
   width: 100vw;
   height: 100vh;
 }
-.analysis-file-list-file {
+.search-file-list-file {
   display: grid;
   width: 100%;
   grid-template-columns: 1fr auto;
@@ -205,20 +205,14 @@ export default {
   padding-bottom: 0.6em;
   border-top: 1px solid #333333aa;
 }
-.analysis-file-list-file-name {
+.search-file-list-file-name {
   word-break: break-all;
 }
-.analysis-file-list-file-actions i {
+.search-file-list-file-actions i {
   padding-left: 0.9em;
   padding-right: 0.5em;
 }
-.analysis-item {
+.search-item {
   margin-top: 1em;
-}
-
-.analysis-item-list {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1em;
 }
 </style>
