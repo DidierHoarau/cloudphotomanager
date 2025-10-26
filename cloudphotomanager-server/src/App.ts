@@ -58,7 +58,7 @@ Promise.resolve().then(async () => {
   await FileDataInit(span, config);
   await FolderDataInit(span);
   await SchedulerInit(span, config);
-  await AnalysisImagesInit(span);
+  await AnalysisImagesInit(span, config);
 
   span.end();
 

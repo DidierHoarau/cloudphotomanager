@@ -2,9 +2,16 @@ import { pipeline } from "@huggingface/transformers";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { OTelTracer } from "../OTelContext";
 import { TimeoutWait } from "../utils-std-ts/Timeout";
+import { Config } from "../Config";
 
-export async function AnalysisImagesInit(context: Span): Promise<void> {
+let config: Config;
+
+export async function AnalysisImagesInit(
+  context: Span,
+  inConfig: Config
+): Promise<void> {
   const span = OTelTracer().startSpan("AnalysisImagesInit", context);
+  config = inConfig;
   releasePipeline();
   span.end();
 }
@@ -21,7 +28,10 @@ export async function AnalysisImagesGetLabels(
   }
   if (!pipe) {
     pipeInitializing = true;
-    pipe = await pipeline("image-classification", null, { dtype: "fp16" });
+    pipe = await pipeline("image-classification", null, {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      dtype: config.IMAGE_CLASSIFICATION_PROCESS_DTYPE as any,
+    });
     pipeInitializing = false;
   }
   const results = await pipe(imagePath);
