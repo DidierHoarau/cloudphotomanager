@@ -2,7 +2,6 @@ import { Span } from "@opentelemetry/sdk-trace-base";
 import * as _ from "lodash";
 import { File } from "../model/File";
 import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
-import { FolderDataListForAccount } from "../folders/FolderData";
 import { SqlDbUtilsQuerySQL } from "../utils-std-ts/SqlDbUtils";
 import { OTelTracer } from "../OTelContext";
 
