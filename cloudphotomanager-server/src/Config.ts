@@ -35,6 +35,7 @@ export class Config implements ConfigOTelInterface {
   public VIDEO_PREVIEW_WIDTH = 900;
   public IMAGE_CLASSIFICATION_ENABLED = true;
   public IMAGE_CLASSIFICATION_PROCESS_DTYPE = "q8";
+  public IMAGE_CLASSIFICATION_PROCESS_DEVICE = "cpu";
 
   constructor() {
     let version = "1";
@@ -91,5 +92,6 @@ export class Config implements ConfigOTelInterface {
     setIfSet("VIDEO_PREVIEW_WIDTH");
     setIfSet("IMAGE_CLASSIFICATION_ENABLED");
     setIfSet("IMAGE_CLASSIFICATION_PROCESS_DTYPE");
+    setIfSet("IMAGE_CLASSIFICATION_PROCESS_DEVICE");
   }
 }

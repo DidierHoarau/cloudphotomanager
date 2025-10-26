@@ -31,6 +31,8 @@ export async function AnalysisImagesGetLabels(
     pipe = await pipeline("image-classification", null, {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       dtype: config.IMAGE_CLASSIFICATION_PROCESS_DTYPE as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      device: config.IMAGE_CLASSIFICATION_PROCESS_DEVICE as any,
     });
     pipeInitializing = false;
   }
