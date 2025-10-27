@@ -52,12 +52,11 @@ export class Config implements ConfigOTelInterface {
   public async reload(): Promise<void> {
     const content = await fse.readJson(this.CONFIG_FILE);
     const setIfSet = (field: string, displayLog = true) => {
-      console.log(content, content[field], field);
       let fromEnv = "defaults";
       if (process.env[field]) {
         this[field] = process.env[field];
         fromEnv = "environment";
-      } else if (content[field]) {
+      } else if (field in content) {
         this[field] = content[field];
         fromEnv = "config";
       }
