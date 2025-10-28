@@ -9,18 +9,33 @@
         <tr>
           <td>Type</td>
           <td>Name</td>
+          <td>Update</td>
           <td>Delete</td>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(account, index) in accountsStore.accounts" v-bind:key="index">
+        <tr
+          v-for="(account, index) in accountsStore.accounts"
+          v-bind:key="index"
+        >
           <td>
             <i v-if="account.info.type == 'oneDrive'" class="bi bi-windows"></i>
-            <i v-else-if="account.info.type == 'awsS3'" class="bi bi-amazon"></i>
-            <i v-else-if="account.info.type == 'localDrive'" class="bi bi-device-hdd-fill"></i>
+            <i
+              v-else-if="account.info.type == 'awsS3'"
+              class="bi bi-amazon"
+            ></i>
+            <i
+              v-else-if="account.info.type == 'localDrive'"
+              class="bi bi-device-hdd-fill"
+            ></i>
           </td>
           <td>
             {{ account.name }}
+          </td>
+          <td>
+            <NuxtLink :to="`/accounts/${account.id}`"
+              ><i class="bi bi-pencil-fill"></i
+            ></NuxtLink>
           </td>
           <td>
             <i class="bi bi-trash-fill" v-on:click="clickedDelete(account)"></i>
@@ -54,9 +69,16 @@ export default {
   },
   methods: {
     async clickedDelete(account) {
-      if (confirm(`Delete the account? (Can't be undone!)\nAccount: ${account.name} \n`) == true) {
+      if (
+        confirm(
+          `Delete the account? (Can't be undone!)\nAccount: ${account.name} \n`
+        ) == true
+      ) {
         await axios
-          .delete(`${(await Config.get()).SERVER_URL}/accounts/${account.id}`, await AuthService.getAuthHeader())
+          .delete(
+            `${(await Config.get()).SERVER_URL}/accounts/${account.id}`,
+            await AuthService.getAuthHeader()
+          )
           .then(async (res) => {
             AccountsStore().fetch();
           })
