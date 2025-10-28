@@ -11,6 +11,7 @@ module.exports = {
     {
       name: "server",
       script: "dist/App.js",
+      node_args: "--max-old-space-size=4096",
       env: {
         NODE_ENV: "production",
       },

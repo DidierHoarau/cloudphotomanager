@@ -1,14 +1,18 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
+import exifReader from "exif-reader";
 import * as fs from "fs-extra";
 import { find } from "lodash";
+import * as probe from "node-ffprobe";
 import * as path from "path";
 import sharp from "sharp";
+import { AnalysisImagesGetLabels } from "../analysis/AnalysisImages";
 import { Config } from "../Config";
 import {
   FileDataGetFileCacheDir,
   FileDataGetFileTmpDir,
   FileDataListByFolder,
   FileDataListForAccount,
+  FileDataUpdateKeywords,
 } from "../files/FileData";
 import { Account } from "../model/Account";
 import { File } from "../model/File";
@@ -23,7 +27,7 @@ const logger = OTelLogger().createModuleLogger("SyncFileCache");
 let config: Config;
 
 export async function SyncFileCacheInit(context: Span, configIn: Config) {
-  const span = OTelTracer().startSpan("Scheduler_init", context);
+  const span = OTelTracer().startSpan("SyncFileCacheInit", context);
   config = configIn;
   await fs.rm(config.TMP_DIR, { recursive: true, force: true });
   span.end();
@@ -101,6 +105,16 @@ export async function SyncFileCacheCheckFile(
       file,
       syncPhotoFromFull,
       SyncQueueItemPriority.NORMAL
+    );
+  }
+
+  if (isImage && !file.keywords) {
+    await SyncQueueQueueItem(
+      account,
+      file.id,
+      file,
+      syncPhotoKeyWords,
+      SyncQueueItemPriority.BATCH
     );
   }
 
@@ -293,6 +307,70 @@ async function syncPhotoFromFull(account: Account, file: File) {
     span.end();
     throw new Error("syncPhotoFromFull Failed");
   }
+}
+
+async function syncPhotoKeyWords(account: Account, file: File) {
+  const span = OTelTracer().startSpan("syncPhotoKeyWords");
+  const cacheDir = await FileDataGetFileCacheDir(
+    span,
+    account.getAccountDefinition().id,
+    file.id
+  );
+  const tmpDir =
+    (await FileDataGetFileTmpDir(
+      span,
+      account.getAccountDefinition().id,
+      file.id
+    )) + "_image_classification";
+  const hasImagePreview = fs.existsSync(`${cacheDir}/preview.webp`);
+  file.keywords = file.filename;
+
+  if (config.IMAGE_CLASSIFICATION_ENABLED) {
+    if (!hasImagePreview) {
+      await syncPhotoFromFull(account, file);
+    }
+    await fs.ensureDir(tmpDir);
+    const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
+    logger.info(
+      `Generating Keywords for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`
+    );
+    await sharp(`${cacheDir}/preview.webp`)
+      .withMetadata()
+      .toFile(`${tmpDir}/${tmpFileName}.jpeg`)
+      .then(async () => {
+        try {
+          const metadata = await sharp(`${cacheDir}/preview.webp`).metadata();
+          if (metadata && metadata.exif) {
+            const exif = exifReader(
+              (await sharp(`${cacheDir}/preview.webp`).metadata()).exif
+            );
+
+            file.info.exif = exif;
+          }
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        } catch (err) {
+          logger.info(
+            `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`
+          );
+        }
+        const classificationResults = await AnalysisImagesGetLabels(
+          span,
+          `${tmpDir}/${tmpFileName}.jpeg`
+        );
+        classificationResults.forEach((result) => {
+          if (result.score > 0.5) {
+            file.keywords += " " + result.label;
+          }
+        });
+        file.keywords = file.keywords.toLowerCase();
+      })
+      .catch((err) => {
+        logger.error(err);
+      });
+    await fs.remove(tmpDir);
+  }
+  await FileDataUpdateKeywords(span, file);
+  span.end();
 }
 
 async function syncThumbnail(account: Account, file: File) {

@@ -11,7 +11,7 @@ import {
 let config: Config;
 
 export async function FileDataInit(context: Span, configIn: Config) {
-  const span = OTelTracer().startSpan("FileData_init", context);
+  const span = OTelTracer().startSpan("FileDataInit", context);
   config = configIn;
   span.end();
 }
@@ -33,7 +33,7 @@ export async function FileDataGetFileTmpDir(
 }
 
 export async function FileDataGet(context: Span, id: string): Promise<File> {
-  const span = OTelTracer().startSpan("FileData_getByPath", context);
+  const span = OTelTracer().startSpan("FileDataGet", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM files WHERE id = ? ",
@@ -53,7 +53,7 @@ export async function FileDataGetByFolderId(
   folderId: string,
   filename: string
 ): Promise<File> {
-  const span = OTelTracer().startSpan("FileData_folderId", context);
+  const span = OTelTracer().startSpan("FileDataGetByFolderId", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM files WHERE accountId = ? AND folderpath = folderId AND filename = ? ",
@@ -71,7 +71,7 @@ export async function FileDataListForAccount(
   context: Span,
   accountId: string
 ): Promise<File[]> {
-  const span = OTelTracer().startSpan("FileData_listForAccount", context);
+  const span = OTelTracer().startSpan("FileDataListForAccount", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM files WHERE accountId = ?",
@@ -90,7 +90,7 @@ export async function FileDataListByFolder(
   accountId: string,
   folderId: string
 ): Promise<File[]> {
-  const span = OTelTracer().startSpan("FileData_listForAccount", context);
+  const span = OTelTracer().startSpan("FileDataListByFolder", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM files WHERE accountId = ? AND folderId = ?",
@@ -105,7 +105,7 @@ export async function FileDataListByFolder(
 }
 
 export async function FileDataAdd(context: Span, file: File): Promise<void> {
-  const span = OTelTracer().startSpan("FileData_add", context);
+  const span = OTelTracer().startSpan("FileDataAdd", context);
   await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE id = ?", [file.id]);
   await SqlDbUtilsExecSQL(
     span,
@@ -130,7 +130,7 @@ export async function FileDataAdd(context: Span, file: File): Promise<void> {
 }
 
 export async function FileDataUpdate(context: Span, file: File): Promise<void> {
-  const span = OTelTracer().startSpan("FileData_add", context);
+  const span = OTelTracer().startSpan("FileDataUpdate", context);
   await SqlDbUtilsExecSQL(
     span,
     "UPDATE files " +
@@ -155,8 +155,22 @@ export async function FileDataUpdate(context: Span, file: File): Promise<void> {
   span.end();
 }
 
+export async function FileDataUpdateKeywords(
+  context: Span,
+  file: File
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataUpdateKeywords", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET keywords = ?, info = ? WHERE id = ? ",
+    [file.keywords, JSON.stringify(file.info), file.id]
+  );
+  FolderDataRefreshCacheFoldersCounts(span);
+  span.end();
+}
+
 export async function FileDataDelete(context: Span, id: string): Promise<void> {
-  const span = OTelTracer().startSpan("FileData_delete", context);
+  const span = OTelTracer().startSpan("FileDataDelete", context);
   await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE id = ?", [id]);
   FolderDataRefreshCacheFoldersCounts(span);
   span.end();
@@ -176,6 +190,24 @@ export async function FileDataGetCount(context: Span): Promise<number> {
   return count;
 }
 
+export async function FileDataDeleteNoFolder(
+  context: Span,
+  accountId: string
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataDeleteNoFolder", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    `DELETE FROM files
+     WHERE accountId = ?
+       AND folderId NOT IN (
+         SELECT id FROM folders WHERE accountId = ?
+       )`,
+    [accountId, accountId]
+  );
+  FolderDataRefreshCacheFoldersCounts(span);
+  span.end();
+}
+
 // Private Funciton
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -184,6 +216,7 @@ function fromRaw(fileRaw: any): File {
   file.id = fileRaw.id;
   file.idCloud = fileRaw.idCloud;
   file.hash = fileRaw.hash;
+  file.keywords = fileRaw.keywords;
   file.dateSync = new Date(fileRaw.dateSync);
   file.dateUpdated = new Date(fileRaw.dateUpdated);
   file.dateMedia = new Date(fileRaw.dateMedia);

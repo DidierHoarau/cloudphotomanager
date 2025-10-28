@@ -1,16 +1,18 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
 import * as _ from "lodash";
+import { SqlDbUtilsQuerySQL } from "../utils-std-ts/SqlDbUtils";
 import { File } from "../model/File";
 import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
-import { SqlDbUtilsQuerySQL } from "../utils-std-ts/SqlDbUtils";
+import { FolderDataListForAccount } from "../folders/FolderData";
 import { OTelTracer } from "../OTelContext";
 
-export async function AnalysisDataListAccountDuplicates(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function SearchDataListAccountDuplicates(
   context: Span,
   accountId: string
 ): Promise<AnalysisDuplicate[]> {
   const span = OTelTracer().startSpan(
-    "AnalysisData_listAccountDuplicates",
+    "SearchDataListAccountDuplicates",
     context
   );
   const rawData = await SqlDbUtilsQuerySQL(
@@ -24,6 +26,7 @@ export async function AnalysisDataListAccountDuplicates(
   );
   const analysis: AnalysisDuplicate[] = [];
   let currentAnalysisDuplicate: AnalysisDuplicate = null;
+  const knownFolders = await FolderDataListForAccount(span, accountId);
   for (const fileRaw of rawData) {
     const file = fromRaw(fileRaw);
     if (
@@ -39,9 +42,50 @@ export async function AnalysisDataListAccountDuplicates(
       analysis.push(currentAnalysisDuplicate);
     }
     currentAnalysisDuplicate.files.push(file);
+    currentAnalysisDuplicate.folders.push(
+      _.find(knownFolders, { id: file.folderId })
+    );
   }
   span.end();
   return analysis;
+}
+
+export async function SearchDataListFiles(
+  context: Span,
+  accountId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  filters: any
+): Promise<File[]> {
+  const span = OTelTracer().startSpan("SearchDataListFiles", context);
+  let queryCondition = "";
+  const queryParameters = [accountId];
+  if (filters.dateFrom) {
+    queryCondition += " AND dateMedia > ? ";
+    queryParameters.push(new Date(filters.dateFrom).toISOString());
+  }
+  if (filters.dateTo) {
+    queryCondition += " AND dateMedia < ? ";
+    queryParameters.push(new Date(filters.dateTo).toISOString());
+  }
+  if (filters.keywords) {
+    for (const keyword of filters.keywords.split(" ")) {
+      if (keyword.trim()) {
+        queryCondition += " AND keywords like ? ";
+        queryParameters.push(`%${keyword.trim()}%`);
+      }
+    }
+  }
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT * FROM files WHERE accountId = ? " + queryCondition,
+    queryParameters
+  );
+  const files: File[] = [];
+  for (const fileRaw of rawData) {
+    files.push(fromRaw(fileRaw));
+  }
+  span.end();
+  return files;
 }
 
 // Private Function

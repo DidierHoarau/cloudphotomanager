@@ -131,16 +131,24 @@ export class AccountRoutes {
         return res.status(400).send({ error: "Missing Paramter: Name" });
       }
 
-      const account = await AccountDataGet(span, req.params.accountId);
-      account.name = req.body.name;
-      account.rootpath = req.body.rootpath;
-      account.info = req.body.info;
-      account.infoPrivate = req.body.infoPrivate;
-      await AccountDataUpdate(span, account);
-      SchedulerStartAccountSync(span, account).catch((err) => {
+      const accountDefinition = await AccountDataGet(
+        span,
+        req.params.accountId
+      );
+      accountDefinition.name = req.body.name;
+      accountDefinition.rootpath = req.body.rootpath;
+      accountDefinition.info = req.body.info;
+      accountDefinition.infoPrivate = req.body.infoPrivate;
+      const account =
+        await AccountFactoryGetAccountFromDefinition(accountDefinition);
+      if (!(await account.validate(span))) {
+        return res.status(400).send({ error: "Account Validation Failed" });
+      }
+      await AccountDataUpdate(span, accountDefinition);
+      SchedulerStartAccountSync(span, accountDefinition).catch((err) => {
         logger.error("Error Synchronizing Account", err, span);
       });
-      return res.status(201).send(account);
+      return res.status(201).send(accountDefinition);
     });
 
     interface DeleteAccount extends RequestGenericInterface {

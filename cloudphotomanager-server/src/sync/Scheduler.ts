@@ -2,7 +2,7 @@ import { Span } from "@opentelemetry/sdk-trace-base";
 import { AccountDataList } from "../accounts/AccountData";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { Config } from "../Config";
-import { FileDataGetCount } from "../files/FileData";
+import { FileDataDeleteNoFolder, FileDataGetCount } from "../files/FileData";
 import {
   FolderDataAdd,
   FolderDataDeleteFoldersWithDuplicates,
@@ -53,6 +53,9 @@ export async function SchedulerStartAccountSync(
   const account = await AccountFactoryGetAccountImplementation(
     accountDefinition.id
   );
+
+  // Clean File without folders
+  await FileDataDeleteNoFolder(span, account.getAccountDefinition().id);
 
   // Ensure root folder
   const rootFolderCloud = await account.getFolderByPath(span, "/");

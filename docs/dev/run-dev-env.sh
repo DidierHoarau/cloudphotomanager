@@ -6,13 +6,6 @@ REPO_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )"
 
 pm2 delete all || true
 
-
-# Environment Variables
-if [ -f "${REPO_DIR}/docs/dev/env.sh" ]; then
-    . ${REPO_DIR}/docs/dev/env.sh
-fi
-
-
 # Monitoring
 cd "${REPO_DIR}/docs/dev/monitoring"
 # docker compose down || true

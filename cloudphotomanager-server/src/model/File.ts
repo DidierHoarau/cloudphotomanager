@@ -12,6 +12,7 @@ export class File {
   public dateUpdated: Date;
   public dateMedia: Date;
   public hash: string;
+  public keywords: string;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public info: any;

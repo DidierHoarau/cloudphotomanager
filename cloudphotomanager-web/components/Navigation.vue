@@ -7,28 +7,41 @@
     </ul>
     <ul class="menu-links">
       <li v-if="authenticationStore.isAuthenticated">
-        <NuxtLink to="/gallery" :class="baseFolder === 'gallery' ? 'active' : 'inactive'"
+        <NuxtLink
+          to="/gallery"
+          :class="baseFolder === 'gallery' ? 'active' : 'inactive'"
           ><i class="bi bi-images"></i
         ></NuxtLink>
       </li>
-      <li v-if="authenticationStore.isAdmin">
-        <NuxtLink to="/analysis" :class="baseFolder === 'analysis' ? 'active' : 'inactive'"
-          ><i class="bi bi-clipboard-data-fill"></i
+      <li v-if="authenticationStore.isAuthenticated">
+        <NuxtLink
+          to="/search"
+          :class="baseFolder === 'search' ? 'active' : 'inactive'"
+          ><i class="bi bi-search"></i
         ></NuxtLink>
       </li>
       <li v-if="authenticationStore.isAdmin">
-        <NuxtLink to="/accounts" :class="baseFolder === 'accounts' ? 'active' : 'inactive'"
+        <NuxtLink
+          to="/accounts"
+          :class="baseFolder === 'accounts' ? 'active' : 'inactive'"
           ><i class="bi bi-clouds-fill"></i
         ></NuxtLink>
       </li>
       <li>
-        <NuxtLink to="/users" :class="baseFolder === 'users' ? 'active' : 'inactive'"
+        <NuxtLink
+          to="/users"
+          :class="baseFolder === 'users' ? 'active' : 'inactive'"
           ><i class="bi bi-people-fill"></i
         ></NuxtLink>
       </li>
     </ul>
-    <dialog v-if="syncStore.countBlocking > 0" open>
-      <i class="bi bi-hourglass-split"></i>&nbsp;&nbsp; Operations in progress, please wait
+    <dialog
+      v-if="syncStore.countBlocking > 0"
+      open
+      class="dialog-operation-in-progress"
+    >
+      <i class="bi bi-hourglass-split"></i>&nbsp;&nbsp; Operations in progress,
+      please wait
     </dialog>
   </nav>
 </template>
@@ -60,7 +73,11 @@ export default {
       setTimeout(async () => {
         // Renew session tocken
         axios
-          .post(`${(await Config.get()).SERVER_URL}/users/session`, {}, await AuthService.getAuthHeader())
+          .post(
+            `${(await Config.get()).SERVER_URL}/users/session`,
+            {},
+            await AuthService.getAuthHeader()
+          )
           .then((res) => {
             AuthService.saveToken(res.data.token);
           });
@@ -84,5 +101,9 @@ export default {
   text-align: center;
   padding: 0.3em 0.6em;
   opacity: 0.3;
+}
+/* Add styles to bring the dialog to the foreground */
+.dialog-operation-in-progress {
+  z-index: 9999;
 }
 </style>

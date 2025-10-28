@@ -4,7 +4,9 @@
     "module": "commonjs",
     "outDir": "dist",
     "allowJs": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "coverage", "test", "dist"]
