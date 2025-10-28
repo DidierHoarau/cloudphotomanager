@@ -16,10 +16,11 @@
       type="text"
     />
     <label>Type</label>
-    <select id="accountType" v-model="account.info.type" required>
+    <select id="accountType" v-model="account.info.type" required disabled>
       <option value="select" selected>Select Type...</option>
       <option value="awsS3" selected>AWS S3</option>
       <option value="oneDrive" selected>One Drive</option>
+      <option value="localDrive" selected>Local Drive</option>
     </select>
     <AccountAwsS3Edit
       v-if="account.info.type == 'awsS3'"
@@ -39,9 +40,9 @@
     <button
       :disabled="!accountValidParameters"
       v-if="!loading"
-      v-on:click="saveNew()"
+      v-on:click="saveUpdate()"
     >
-      Add
+      Update
     </button>
     <Loading v-if="loading" />
   </div>
