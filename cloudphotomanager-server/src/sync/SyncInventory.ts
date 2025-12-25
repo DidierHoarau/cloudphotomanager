@@ -51,7 +51,12 @@ export async function SyncInventorySyncFolder(
       knownFolder.id
     );
     const knownSubFolders = await FolderDataListSubFolders(span, knownFolder);
-
+    console.log(
+      cloudSubFolders.length,
+      cloudSubFiles.length,
+      knownSubFolders.length,
+      knownSubFiles.length
+    );
     let updated = false;
 
     // New Folder
@@ -59,6 +64,7 @@ export async function SyncInventorySyncFolder(
       const knownSubFolder = _.find(knownSubFolders, { id: cloudSubFolder.id });
       if (!knownSubFolder) {
         updated = true;
+        console.log("FolderDataAdd", cloudSubFolder);
         await FolderDataAdd(span, cloudSubFolder);
         await SyncQueueQueueItem(
           account,
@@ -76,6 +82,7 @@ export async function SyncInventorySyncFolder(
       if (!knownSubFile) {
         updated = true;
         cloudSubFile.folderId = knownFolder.id;
+        console.log("FileDataAdd", cloudSubFile);
         await FileDataAdd(span, cloudSubFile);
       }
     }
@@ -85,6 +92,7 @@ export async function SyncInventorySyncFolder(
       const cloudSubFolder = _.find(cloudSubFolders, { id: knownSubFolder.id });
       if (!cloudSubFolder) {
         updated = true;
+        console.log("FolderDataDeletePathRecursive", knownSubFolder);
         await FolderDataDeletePathRecursive(
           span,
           account.getAccountDefinition().id,
@@ -98,6 +106,7 @@ export async function SyncInventorySyncFolder(
       const cloudSubFile = _.find(cloudSubFiles, { id: knownSubFile.id });
       if (!cloudSubFile) {
         updated = true;
+        console.log("FileDataDelete", knownSubFile);
         await FileDataDelete(span, knownSubFile.id);
       }
     }
@@ -108,6 +117,7 @@ export async function SyncInventorySyncFolder(
     knownFolder.info = cloudFolder.info;
     await FolderDataUpdate(span, knownFolder);
 
+    console.log("Checking file cache for folder changes");
     SyncFileCacheCheckFolder(span, account, knownFolder);
 
     if (updated) {

@@ -14,20 +14,20 @@
     "test": "echo TODO"
   },
   "devDependencies": {
-    "@types/lodash": "^4.17.20",
-    "nuxt": "4.1.3"
+    "@types/lodash": "^4.17.21",
+    "nuxt": "4.2.2"
   },
   "dependencies": {
     "@picocss/pico": "^2.1.1",
-    "@pinia/nuxt": "^0.11.2",
-    "@vuepic/vue-datepicker": "^11.0.3",
-    "@vueuse/core": "^14.0.0",
-    "axios": "^1.12.2",
+    "@pinia/nuxt": "^0.11.3",
+    "@vuepic/vue-datepicker": "^12.1.0",
+    "@vueuse/core": "^14.1.0",
+    "axios": "^1.13.2",
     "bootstrap-icons": "^1.13.1",
     "hammerjs": "^2.0.8",
     "jwt-decode": "^4.0.0",
     "lodash": "^4.17.21",
     "mitt": "^3.0.1",
-    "pinia": "^3.0.3"
+    "pinia": "^3.0.4"
   }
 }
