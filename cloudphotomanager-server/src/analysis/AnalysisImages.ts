@@ -1,4 +1,4 @@
-import { pipeline } from "@huggingface/transformers";
+// import { pipeline } from "@huggingface/transformers";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { OTelTracer } from "../OTelContext";
 import { TimeoutWait } from "../utils-std-ts/Timeout";
@@ -25,12 +25,13 @@ export async function AnalysisImagesGetLabels(
   }
   if (!pipe) {
     pipeInitializing = true;
-    pipe = await pipeline("image-classification");
+    // pipe = await pipeline("image-classification");
     pipeInitializing = false;
   }
-  const results = await pipe(imagePath);
+  // const results = await pipe(imagePath);
   span.end();
-  return results;
+  // return results;
+  return [];
 }
 
 // Private Function
