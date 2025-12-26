@@ -107,7 +107,7 @@ export async function SyncInventorySyncFolder(
     knownFolder.info = cloudFolder.info;
     await FolderDataUpdate(span, knownFolder);
 
-    SyncFileCacheCheckFolder(span, account, knownFolder);
+    await SyncFileCacheCheckFolder(span, account, knownFolder);
 
     if (updated) {
       SyncEventHistoryAdd({
