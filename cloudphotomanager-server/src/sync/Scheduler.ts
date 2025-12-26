@@ -73,9 +73,11 @@ export async function SchedulerStartAccountSync(
   if (!rootFolderKnown) {
     rootFolderCloud.dateSync = new Date(0);
     await FolderDataAdd(span, rootFolderCloud);
-    await SyncInventorySyncFolder(
+    await SyncQueueQueueItem(
       account,
+      rootFolderCloud.id,
       rootFolderCloud,
+      SyncInventorySyncFolder,
       SyncQueueItemPriority.NORMAL
     );
   }
@@ -86,9 +88,11 @@ export async function SchedulerStartAccountSync(
     account.getAccountDefinition().id,
     10
   )) {
-    await SyncInventorySyncFolder(
+    await SyncQueueQueueItem(
       account,
+      folder.id,
       folder,
+      SyncInventorySyncFolder,
       SyncQueueItemPriority.NORMAL
     );
   }
@@ -99,9 +103,11 @@ export async function SchedulerStartAccountSync(
     account.getAccountDefinition().id,
     10
   )) {
-    await SyncInventorySyncFolder(
+    await SyncQueueQueueItem(
       account,
+      folder.id,
       folder,
+      SyncInventorySyncFolder,
       SyncQueueItemPriority.NORMAL
     );
   }
@@ -112,9 +118,11 @@ export async function SchedulerStartAccountSync(
     account.getAccountDefinition().id,
     new Date(new Date().getTime() - OUTDATED_AGE)
   )) {
-    await SyncInventorySyncFolder(
+    await SyncQueueQueueItem(
       account,
+      folder.id,
       folder,
+      SyncInventorySyncFolder,
       SyncQueueItemPriority.NORMAL
     );
   }
@@ -125,9 +133,11 @@ export async function SchedulerStartAccountSync(
     account.getAccountDefinition().id,
     10
   )) {
-    await SyncInventorySyncFolder(
+    await SyncQueueQueueItem(
       account,
+      folder.id,
       folder,
+      SyncInventorySyncFolder,
       SyncQueueItemPriority.NORMAL
     );
   }
