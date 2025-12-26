@@ -30,7 +30,8 @@ export async function SyncInventoryInit(context: Span): Promise<void> {
 
 export async function SyncInventorySyncFolder(
   account: Account,
-  knownFolder: Folder
+  knownFolder: Folder,
+  priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL
 ): Promise<void> {
   const span = OTelTracer().startSpan("SyncInventorySyncFolder");
   try {
@@ -64,7 +65,7 @@ export async function SyncInventorySyncFolder(
           cloudSubFolder.id,
           cloudSubFolder,
           SyncInventorySyncFolder,
-          SyncQueueItemPriority.NORMAL
+          priority
         );
       }
     }

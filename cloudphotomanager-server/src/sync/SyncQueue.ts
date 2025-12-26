@@ -71,7 +71,7 @@ export function SyncQueueQueueItem(
   queue.push(newQueueItem);
   const itemProcess = async () => {
     newQueueItem.status = SyncQueueItemStatus.ACTIVE;
-    await callbackExecution(account, data)
+    await callbackExecution(account, data, priority)
       .catch((err) => {
         logger.error("Error Processing Queue Item", err);
       })

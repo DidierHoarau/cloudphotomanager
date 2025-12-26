@@ -68,7 +68,8 @@ export async function SyncFileCacheRemoveFile(
 export async function SyncFileCacheCheckFile(
   context: Span,
   account: Account,
-  file: File
+  file: File,
+  priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL
 ) {
   const span = OTelTracer().startSpan("SyncFileCacheCheckFile", context);
   const cacheDir = await FileDataGetFileCacheDir(
@@ -89,13 +90,7 @@ export async function SyncFileCacheCheckFile(
     (isImage && !hasThumbnail && accountCapabilities.downloadPhotoThumbnail) ||
     (isVideo && !hasThumbnail && accountCapabilities.downloadVideoThumbnail)
   ) {
-    await SyncQueueQueueItem(
-      account,
-      file.id,
-      file,
-      syncThumbnail,
-      SyncQueueItemPriority.NORMAL
-    );
+    await SyncQueueQueueItem(account, file.id, file, syncThumbnail, priority);
   }
 
   if (isImage && !hasImagePreview) {
@@ -104,7 +99,7 @@ export async function SyncFileCacheCheckFile(
       file.id,
       file,
       syncPhotoFromFull,
-      SyncQueueItemPriority.NORMAL
+      priority
     );
   }
 
@@ -134,7 +129,7 @@ export async function SyncFileCacheCheckFile(
       file.id,
       file,
       syncThumbnailFromVideoPreview,
-      SyncQueueItemPriority.NORMAL
+      priority
     );
   }
 
