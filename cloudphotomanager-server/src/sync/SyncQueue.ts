@@ -56,7 +56,7 @@ export function SyncQueueQueueItem(
   callbackExecution: any,
   priority: SyncQueueItemPriority
 ): void {
-  console.log("SyncQueueQueueItem", id, priority, data);
+  console.log("SyncQueueQueueItem", id, queue.length);
   if (_.find(queue, { id })) {
     return;
   }

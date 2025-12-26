@@ -19,7 +19,7 @@ import { TimeoutWait } from "../utils-std-ts/Timeout";
 import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
 import { SyncFileCacheCleanUp } from "./SyncFileCache";
 import { SyncInventoryInit, SyncInventorySyncFolder } from "./SyncInventory";
-import { SyncQueueQueueItem } from "./SyncQueue";
+import { SyncQueueGetCounts, SyncQueueQueueItem } from "./SyncQueue";
 import { OTelLogger, OTelMeter, OTelTracer } from "../OTelContext";
 
 const logger = OTelLogger().createModuleLogger("Scheduler");
@@ -41,6 +41,16 @@ export async function SchedulerInit(context: Span, configIn: Config) {
       observableResult.observe(stats.nbFolders, { type: "folders" });
     },
     { description: "Number of files" }
+  );
+  OTelMeter().createObservableGauge(
+    "photos.queue.counts",
+    (observableResult) => {
+      const syncCounts = SyncQueueGetCounts();
+      syncCounts.forEach((syncCount) => {
+        observableResult.observe(syncCount.count, { type: syncCount.type });
+      });
+    },
+    { description: "Size of the queue" }
   );
   span.end();
 }
