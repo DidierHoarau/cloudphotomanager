@@ -27,7 +27,6 @@ export class RoutesFileOperationsRename {
       };
     }
     fastify.post<PostFilesRequest>("/", async (req, res) => {
-      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -55,6 +54,10 @@ export class RoutesFileOperationsRename {
               continue;
             }
             folderId = file.folderId;
+            logger.info(
+              `Rename file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${fileIdName.filename}`,
+              spanSubProcess
+            );
             await account.renameFile(spanSubProcess, file, fileIdName.filename);
           }
           if (folderId) {

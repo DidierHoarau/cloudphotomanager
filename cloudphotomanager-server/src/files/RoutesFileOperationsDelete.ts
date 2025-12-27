@@ -26,7 +26,6 @@ export class RoutesFileOperationsDelete {
       };
     }
     fastify.post<PostFilesRequest>("/", async (req, res) => {
-      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -52,6 +51,10 @@ export class RoutesFileOperationsDelete {
               continue;
             }
             folderId = file.folderId;
+            logger.info(
+              `Delete file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename}`,
+              spanSubProcess
+            );
             await account.deleteFile(spanSubProcess, file);
           }
           if (folderId) {
