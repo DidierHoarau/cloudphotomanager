@@ -21,13 +21,24 @@ import { Folder } from "../model/Folder";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SystemCommand } from "../SystemCommand";
-import { SyncQueueQueueItem } from "./SyncQueue";
+import { SyncQueueQueueItem, SyncQueueRegisterFunction } from "./SyncQueue";
 
 const logger = OTelLogger().createModuleLogger("SyncFileCache");
 let config: Config;
 
 export async function SyncFileCacheInit(context: Span, configIn: Config) {
   const span = OTelTracer().startSpan("SyncFileCacheInit", context);
+  config = configIn;
+
+  // Register sync functions
+  SyncQueueRegisterFunction("syncVideoFromFull", syncVideoFromFull);
+  SyncQueueRegisterFunction("syncPhotoFromFull", syncPhotoFromFull);
+  SyncQueueRegisterFunction("syncPhotoKeyWords", syncPhotoKeyWords);
+  SyncQueueRegisterFunction("syncThumbnail", syncThumbnail);
+  SyncQueueRegisterFunction(
+    "syncThumbnailFromVideoPreview",
+    syncThumbnailFromVideoPreview
+  );
   config = configIn;
   await fs.rm(config.TMP_DIR, { recursive: true, force: true });
   span.end();
@@ -90,7 +101,7 @@ export async function SyncFileCacheCheckFile(
     (isImage && !hasThumbnail && accountCapabilities.downloadPhotoThumbnail) ||
     (isVideo && !hasThumbnail && accountCapabilities.downloadVideoThumbnail)
   ) {
-    await SyncQueueQueueItem(account, file.id, file, syncThumbnail, priority);
+    await SyncQueueQueueItem(account, file.id, file, "syncThumbnail", priority);
   }
 
   if (isImage && !hasImagePreview) {
@@ -98,7 +109,7 @@ export async function SyncFileCacheCheckFile(
       account,
       file.id,
       file,
-      syncPhotoFromFull,
+      "syncPhotoFromFull",
       priority
     );
   }
@@ -108,7 +119,7 @@ export async function SyncFileCacheCheckFile(
       account,
       file.id,
       file,
-      syncPhotoKeyWords,
+      "syncPhotoKeyWords",
       SyncQueueItemPriority.BATCH
     );
   }
@@ -118,7 +129,7 @@ export async function SyncFileCacheCheckFile(
       account,
       file.id,
       file,
-      syncVideoFromFull,
+      "syncVideoFromFull",
       SyncQueueItemPriority.BATCH
     );
   }
@@ -128,7 +139,7 @@ export async function SyncFileCacheCheckFile(
       account,
       file.id,
       file,
-      syncThumbnailFromVideoPreview,
+      "syncThumbnailFromVideoPreview",
       priority
     );
   }

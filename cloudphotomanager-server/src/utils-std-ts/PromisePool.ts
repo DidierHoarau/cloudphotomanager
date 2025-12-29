@@ -41,8 +41,23 @@ export class PromisePool {
     });
   }
 
+  public getAvailableSlots(): number {
+    return this.maxConcurrency - this.currentConcurrency;
+  }
+
+  public getCurrentConcurrency(): number {
+    return this.currentConcurrency;
+  }
+
+  public getQueueLength(): number {
+    return this.queue.length;
+  }
+
   private runNext() {
-    if (this.currentConcurrency < this.maxConcurrency && this.queue.length > 0) {
+    if (
+      this.currentConcurrency < this.maxConcurrency &&
+      this.queue.length > 0
+    ) {
       const { wrappedPromise, resolve, reject } = this.queue.shift();
       this.currentConcurrency++;
 

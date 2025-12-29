@@ -100,7 +100,7 @@ export class FolderRoutes {
         account,
         folder.id,
         folder,
-        SyncInventorySyncFolder,
+        "SyncInventorySyncFolder",
         SyncQueueItemPriority.INTERACTIVE
       );
       return res.status(200).send({});
@@ -135,7 +135,7 @@ export class FolderRoutes {
         account,
         folder.id,
         folderParent,
-        SyncInventorySyncFolder,
+        "SyncInventorySyncFolder",
         SyncQueueItemPriority.INTERACTIVE
       );
       return res.status(202).send({});

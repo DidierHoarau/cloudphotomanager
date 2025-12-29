@@ -19,7 +19,11 @@ import { TimeoutWait } from "../utils-std-ts/Timeout";
 import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
 import { SyncFileCacheCleanUp } from "./SyncFileCache";
 import { SyncInventoryInit, SyncInventorySyncFolder } from "./SyncInventory";
-import { SyncQueueGetCounts, SyncQueueQueueItem } from "./SyncQueue";
+import {
+  SyncQueueGetCounts,
+  SyncQueueQueueItem,
+  SyncQueueLoad,
+} from "./SyncQueue";
 import { OTelLogger, OTelMeter, OTelTracer } from "../OTelContext";
 
 const logger = OTelLogger().createModuleLogger("Scheduler");
@@ -33,6 +37,16 @@ export async function SchedulerInit(context: Span, configIn: Config) {
   const span = OTelTracer().startSpan("Scheduler_init", context);
   config = configIn;
   SyncInventoryInit(span);
+
+  // Load persisted queue
+  const accountDefinitions = await AccountDataList(span);
+  const accountsById = new Map();
+  for (const accountDef of accountDefinitions) {
+    const account = await AccountFactoryGetAccountImplementation(accountDef.id);
+    accountsById.set(accountDef.id, account);
+  }
+  await SyncQueueLoad(accountsById);
+
   SchedulerStartSchedule();
   OTelMeter().createObservableGauge(
     "photos.files.counts",
@@ -77,7 +91,7 @@ export async function SchedulerStartAccountSync(
       account,
       rootFolderCloud.id,
       rootFolderCloud,
-      SyncInventorySyncFolder,
+      "SyncInventorySyncFolder",
       SyncQueueItemPriority.NORMAL
     );
   }
@@ -92,7 +106,7 @@ export async function SchedulerStartAccountSync(
       account,
       folder.id,
       folder,
-      SyncInventorySyncFolder,
+      "SyncInventorySyncFolder",
       SyncQueueItemPriority.NORMAL
     );
   }
@@ -107,7 +121,7 @@ export async function SchedulerStartAccountSync(
       account,
       folder.id,
       folder,
-      SyncInventorySyncFolder,
+      "SyncInventorySyncFolder",
       SyncQueueItemPriority.NORMAL
     );
   }
@@ -122,7 +136,7 @@ export async function SchedulerStartAccountSync(
       account,
       folder.id,
       folder,
-      SyncInventorySyncFolder,
+      "SyncInventorySyncFolder",
       SyncQueueItemPriority.NORMAL
     );
   }
@@ -137,7 +151,7 @@ export async function SchedulerStartAccountSync(
       account,
       folder.id,
       folder,
-      SyncInventorySyncFolder,
+      "SyncInventorySyncFolder",
       SyncQueueItemPriority.NORMAL
     );
   }
