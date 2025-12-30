@@ -10,10 +10,6 @@
         <div class="stat-label">Waiting</div>
         <div class="stat-value">{{ queueData.counts.waiting || 0 }}</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">Total</div>
-        <div class="stat-value">{{ queueData.items.length }}</div>
-      </div>
     </div>
     <div class="queue-table">
       <Loading v-if="loading" />
@@ -87,7 +83,6 @@ export default {
         counts: {
           active: 0,
           waiting: 0,
-          blocking: 0,
         },
         items: [],
       },
