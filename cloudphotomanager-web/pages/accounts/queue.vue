@@ -1,5 +1,5 @@
 <template>
-  <div class="page">
+  <div class="page page-queue">
     <h1>Sync Queue</h1>
     <div class="queue-stats">
       <div class="stat-card">
@@ -15,9 +15,9 @@
         <div class="stat-value">{{ queueData.items.length }}</div>
       </div>
     </div>
-    <Loading v-if="loading" />
-    <div v-if="!loading && queueData.items.length > 0" class="queue-table">
-      <table>
+    <div class="queue-table">
+      <Loading v-if="loading" />
+      <table v-if="!loading && queueData.items.length > 0">
         <thead>
           <tr>
             <td>Status</td>
@@ -37,22 +37,19 @@
             }"
           >
             <td>
-              <span
-                class="badge"
-                :class="'status-' + item.status.toLowerCase()"
-              >
+              <kbd class="badge" :class="'status-' + item.status.toLowerCase()">
                 {{ item.status }}
-              </span>
+              </kbd>
             </td>
             <td>
-              <span
+              <kbd
                 class="badge"
                 :class="
                   'priority-' + getPriorityLabel(item.priority).toLowerCase()
                 "
               >
                 {{ getPriorityLabel(item.priority) }}
-              </span>
+              </kbd>
             </td>
             <td>{{ item.accountName }}</td>
             <td>
@@ -67,11 +64,11 @@
           </tr>
         </tbody>
       </table>
-    </div>
 
-    <div v-if="!loading && queueData.items.length === 0" class="empty-state">
-      <i class="bi bi-inbox"></i>
-      <p>Queue is empty</p>
+      <div v-if="!loading && queueData.items.length === 0" class="empty-state">
+        <i class="bi bi-inbox"></i>
+        <p>Queue is empty</p>
+      </div>
     </div>
   </div>
 </template>
@@ -102,7 +99,7 @@ export default {
     this.loading = false;
     this.intervalId = setInterval(async () => {
       if (!this.loading) {
-        await this.fetchQueue();
+        // await this.fetchQueue();
       }
     }, 10000);
   },
@@ -161,49 +158,34 @@ export default {
 </script>
 
 <style scoped>
+.page-queue {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+}
+
 .queue-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 1em;
-  margin-bottom: 2em;
 }
 
 .stat-card {
-  background: var(--bs-body-bg);
-  border: 1px solid var(--bs-border-color);
-  border-radius: 0.5em;
   padding: 1em;
   text-align: center;
 }
 
 .stat-label {
-  font-size: 0.9em;
   opacity: 0.7;
   margin-bottom: 0.5em;
 }
 
 .stat-value {
-  font-size: 2em;
+  font-size: 1.3em;
   font-weight: bold;
-}
-
-.page-actions {
-  margin-bottom: 1.5em;
-}
-
-.page-actions button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5em;
 }
 
 .queue-table {
   overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
 }
 
 tbody tr.active {
@@ -218,7 +200,7 @@ tbody tr.waiting {
   display: inline-block;
   padding: 0.25em 0.75em;
   border-radius: 0.25em;
-  font-size: 0.85em;
+  font-size: 0.7em;
   font-weight: 500;
 }
 
