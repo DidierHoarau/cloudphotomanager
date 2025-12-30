@@ -99,7 +99,7 @@ export default {
     this.loading = false;
     this.intervalId = setInterval(async () => {
       if (!this.loading) {
-        // await this.fetchQueue();
+        await this.fetchQueue();
       }
     }, 10000);
   },
