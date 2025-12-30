@@ -11,23 +11,11 @@
         <div class="stat-value">{{ queueData.counts.waiting || 0 }}</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Blocking</div>
-        <div class="stat-value">{{ queueData.counts.blocking || 0 }}</div>
-      </div>
-      <div class="stat-card">
         <div class="stat-label">Total</div>
         <div class="stat-value">{{ queueData.items.length }}</div>
       </div>
     </div>
-
-    <div class="actions page-actions">
-      <button @click="fetchQueue" :disabled="loading">
-        <i class="bi bi-arrow-clockwise"></i> Refresh
-      </button>
-    </div>
-
     <Loading v-if="loading" />
-
     <div v-if="!loading && queueData.items.length > 0" class="queue-table">
       <table>
         <thead>
@@ -37,7 +25,6 @@
             <td>Account</td>
             <td>Function</td>
             <td>Item</td>
-            <td>ID</td>
           </tr>
         </thead>
         <tbody>
@@ -77,9 +64,6 @@
               }}</span>
               <span v-else>-</span>
             </td>
-            <td>
-              <small>{{ item.id }}</small>
-            </td>
           </tr>
         </tbody>
       </table>
@@ -113,13 +97,14 @@ export default {
     };
   },
   async created() {
+    this.loading = true;
     await this.fetchQueue();
-    // Auto-refresh every 5 seconds
+    this.loading = false;
     this.intervalId = setInterval(async () => {
       if (!this.loading) {
         await this.fetchQueue();
       }
-    }, 5000);
+    }, 10000);
   },
   beforeUnmount() {
     if (this.intervalId) {
@@ -128,18 +113,15 @@ export default {
   },
   methods: {
     async fetchQueue() {
-      this.loading = true;
       try {
         const response = await axios.get(
           `${(await Config.get()).SERVER_URL}/sync/queue`,
           await AuthService.getAuthHeader()
         );
 
-        // Transform counts array to object
         const countsObj = {
           active: 0,
           waiting: 0,
-          blocking: 0,
         };
 
         if (response.data.counts) {
@@ -148,8 +130,6 @@ export default {
               countsObj.active = count.count;
             } else if (count.type === "WAITING") {
               countsObj.waiting = count.count;
-            } else if (count.type === "blocking") {
-              countsObj.blocking = count.count;
             }
           });
         }
@@ -181,10 +161,6 @@ export default {
 </script>
 
 <style scoped>
-h1 {
-  margin-bottom: 1.5em;
-}
-
 .queue-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -230,26 +206,12 @@ table {
   border-collapse: collapse;
 }
 
-thead td {
-  font-weight: bold;
-  border-bottom: 2px solid var(--bs-border-color);
-  padding: 0.75em;
-}
-
-tbody tr {
-  border-bottom: 1px solid var(--bs-border-color);
-}
-
 tbody tr.active {
   background-color: rgba(25, 135, 84, 0.1);
 }
 
 tbody tr.waiting {
   background-color: rgba(255, 193, 7, 0.05);
-}
-
-tbody td {
-  padding: 0.75em;
 }
 
 .badge {

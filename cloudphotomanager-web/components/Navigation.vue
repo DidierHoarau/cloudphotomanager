@@ -27,18 +27,6 @@
           ><i class="bi bi-clouds-fill"></i
         ></NuxtLink>
       </li>
-      <li v-if="authenticationStore.isAdmin">
-        <NuxtLink
-          to="/accounts/queue"
-          :class="
-            baseFolder === 'accounts' && $route.path.includes('queue')
-              ? 'active'
-              : 'inactive'
-          "
-          :title="'Sync Queue (' + syncStore.countTotal + ')'"
-          ><i class="bi bi-list-task"></i
-        ></NuxtLink>
-      </li>
       <li>
         <NuxtLink
           to="/users"
