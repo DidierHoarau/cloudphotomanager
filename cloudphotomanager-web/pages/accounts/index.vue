@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <p>Accounts</p>
+    <h1>Accounts</h1>
     <div class="actions page-actions">
       <NuxtLink to="/accounts/new"><i class="bi bi-plus-square"></i></NuxtLink>
     </div>
