@@ -29,7 +29,6 @@ export class RoutesFileOperationsFolderMove {
       };
     }
     fastify.post<PostFilesRequest>("/", async (req, res) => {
-      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
@@ -57,6 +56,10 @@ export class RoutesFileOperationsFolderMove {
               continue;
             }
             initialFolderId = file.folderId;
+            logger.info(
+              `Moving file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${req.body.folderpath}`,
+              spanSubProcess
+            );
             await account.moveFile(spanSubProcess, file, req.body.folderpath);
           }
           const initialFolder = await FolderDataGet(

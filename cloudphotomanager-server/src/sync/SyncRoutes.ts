@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { AuthGetUserSession } from "../users/Auth";
 import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
-import { SyncQueueGetCounts } from "./SyncQueue";
+import { SyncQueueGetCounts, SyncQueueGetQueue } from "./SyncQueue";
 
 export class SyncRoutes {
   //
@@ -12,7 +12,23 @@ export class SyncRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      return res.status(200).send({ sync: SyncQueueGetCounts(), recentEvents: await SyncEventHistoryGetRecent() });
+      return res
+        .status(200)
+        .send({
+          sync: SyncQueueGetCounts(),
+          recentEvents: await SyncEventHistoryGetRecent(),
+        });
+    });
+
+    fastify.get("/queue", async (req, res) => {
+      const userSession = await AuthGetUserSession(req);
+      if (!userSession.isAuthenticated) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      return res.status(200).send({
+        counts: SyncQueueGetCounts(),
+        items: SyncQueueGetQueue(),
+      });
     });
   }
 }

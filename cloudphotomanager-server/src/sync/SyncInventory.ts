@@ -19,18 +19,23 @@ import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SyncEventHistoryAdd } from "./SyncEventHistory";
 import { SyncFileCacheCheckFolder } from "./SyncFileCache";
-import { SyncQueueQueueItem } from "./SyncQueue";
+import { SyncQueueQueueItem, SyncQueueRegisterFunction } from "./SyncQueue";
 
 const logger = OTelLogger().createModuleLogger("SyncInventory");
 
 export async function SyncInventoryInit(context: Span): Promise<void> {
   const span = OTelTracer().startSpan("SyncInventory_init", context);
+
+  // Register the sync function
+  SyncQueueRegisterFunction("SyncInventorySyncFolder", SyncInventorySyncFolder);
+
   span.end();
 }
 
 export async function SyncInventorySyncFolder(
   account: Account,
-  knownFolder: Folder
+  knownFolder: Folder,
+  priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL
 ): Promise<void> {
   const span = OTelTracer().startSpan("SyncInventorySyncFolder");
   try {
@@ -51,7 +56,6 @@ export async function SyncInventorySyncFolder(
       knownFolder.id
     );
     const knownSubFolders = await FolderDataListSubFolders(span, knownFolder);
-
     let updated = false;
 
     // New Folder
@@ -64,8 +68,8 @@ export async function SyncInventorySyncFolder(
           account,
           cloudSubFolder.id,
           cloudSubFolder,
-          SyncInventorySyncFolder,
-          SyncQueueItemPriority.NORMAL
+          "SyncInventorySyncFolder",
+          priority
         );
       }
     }
@@ -108,7 +112,7 @@ export async function SyncInventorySyncFolder(
     knownFolder.info = cloudFolder.info;
     await FolderDataUpdate(span, knownFolder);
 
-    SyncFileCacheCheckFolder(span, account, knownFolder);
+    await SyncFileCacheCheckFolder(span, account, knownFolder);
 
     if (updated) {
       SyncEventHistoryAdd({

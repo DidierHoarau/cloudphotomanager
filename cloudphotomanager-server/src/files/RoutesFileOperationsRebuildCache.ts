@@ -24,7 +24,6 @@ export class RoutesFileOperationsRebuildCache {
       };
     }
     fastify.post<PostFilesRequest>("/", async (req, res) => {
-      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });

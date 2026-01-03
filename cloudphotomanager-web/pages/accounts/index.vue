@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <p>Accounts</p>
+    <h1>Accounts</h1>
     <div class="actions page-actions">
       <NuxtLink to="/accounts/new"><i class="bi bi-plus-square"></i></NuxtLink>
     </div>
@@ -43,15 +43,12 @@
         </tr>
       </tbody>
     </table>
-    <span class="sync-count" v-if="syncStore.countTotal > 0">
-      <kbd>Sync:&nbsp;{{ syncStore.countTotal }}</kbd>
-    </span>
+    <NuxtLink to="/accounts/queue">Synchronization Queue</NuxtLink>
   </div>
 </template>
 
 <script setup>
 const accountsStore = AccountsStore();
-const syncStore = SyncStore();
 </script>
 
 <script>

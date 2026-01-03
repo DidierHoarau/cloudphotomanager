@@ -7,8 +7,7 @@ export interface SyncQueueItem {
   id: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  callbackExecution: any;
+  functionName: string;
   priority: SyncQueueItemPriority;
   status: SyncQueueItemStatus;
 }
