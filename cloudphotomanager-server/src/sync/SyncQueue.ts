@@ -86,8 +86,7 @@ export function SyncQueueGetCounts(): any[] {
 export function SyncQueueGetQueue(): any[] {
   return queue.map((item) => ({
     id: item.id,
-    accountId: item.account.getAccountDefinition().id,
-    accountName: item.account.getAccountDefinition().name,
+    accountId: item.accountId,
     functionName: item.functionName,
     priority: item.priority,
     status: item.status,
@@ -132,7 +131,7 @@ export function SyncQueueQueueItem(
 
   const newQueueItem: SyncQueueItem = {
     id,
-    account,
+    accountId: account.getAccountDefinition().id,
     data,
     functionName,
     priority,
