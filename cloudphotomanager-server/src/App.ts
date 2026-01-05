@@ -32,6 +32,7 @@ import {
 } from "./OTelContext";
 import { AccountRoutes } from "./accounts/AccountRoutes";
 import { FolderRoutes } from "./folders/FolderRoutes";
+import { SyncQueueInit } from "./sync/SyncQueue";
 
 const logger = OTelLogger().createModuleLogger("App");
 
@@ -52,6 +53,7 @@ Promise.resolve().then(async () => {
 
   const span = OTelTracer().startSpan("init");
 
+  await SyncQueueInit(span);
   await SyncFileCacheInit(span, config);
   await SqlDbUtilsInit(span, config);
   await AuthInit(span, config);
