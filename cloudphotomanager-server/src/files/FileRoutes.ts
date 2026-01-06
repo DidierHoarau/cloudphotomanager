@@ -93,10 +93,8 @@ export class FileRoutes {
 
     fastify.get("/static/404", async (req, res) => {
       const uri = req.headers["x-original-uri"];
-      console.log(uri);
       const fileIdMatch = /\/static\/(.*)\/.\/.\/(.*)\/.*/.exec(uri as string);
       if (fileIdMatch) {
-        console.log(fileIdMatch);
         SyncFileCacheCheckAsync(
           fileIdMatch[1],
           fileIdMatch[2],
