@@ -38,7 +38,6 @@ export async function SyncQueueInit(context: Span): Promise<void> {
     try {
       const serializableQueue = await fs.readJSON(QUEUE_FILE_PATH);
       for (const item of serializableQueue) {
-        console.log(item);
         queue.push({
           id: item.id,
           accountId: item.accountId,
