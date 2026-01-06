@@ -78,7 +78,6 @@ export class FileRoutes {
         ).catch((error) => {
           logger.error("Error getting file for thumbnail sync", error);
         });
-
         return res.status(404).send({ error: "File Not Found" });
       }
       const stream = fs.createReadStream(filepath);
@@ -93,29 +92,18 @@ export class FileRoutes {
     });
 
     fastify.get("/static/404", async (req, res) => {
-      const span = OTelRequestSpan(req);
       const uri = req.headers["x-original-uri"];
       console.log(uri);
-      const fileIdMatch = /\/static\/.\/.\/(.*)\/.*/.exec(uri as string);
+      const fileIdMatch = /\/static\/(.*)\/.\/.\/(.*)\/.*/.exec(uri as string);
       if (fileIdMatch) {
-        const file = await FileDataGet(span, fileIdMatch[1]);
-        const cacheDir = await FileDataGetFileCacheDir(
-          span,
-          file.accountId,
-          file.id
-        );
-        if (
-          !fs.existsSync(`${cacheDir}/preview.webp`) ||
-          !fs.existsSync(`${cacheDir}/thumbnail.webp`)
-        ) {
-          SyncFileCacheCheckAsync(
-            file.accountId,
-            file.id,
-            SyncQueueItemPriority.INTERACTIVE
-          ).catch((error) => {
-            logger.error("Error getting file for thumbnail sync", error);
-          });
-        }
+        console.log(fileIdMatch);
+        SyncFileCacheCheckAsync(
+          fileIdMatch[1],
+          fileIdMatch[2],
+          SyncQueueItemPriority.INTERACTIVE
+        ).catch((error) => {
+          logger.error("Error getting file for thumbnail sync", error);
+        });
       }
       return res.status(404).send({ error: "File Not Found" });
     });
