@@ -118,7 +118,7 @@ export function SyncQueueRemoveItem(id: string): void {
 }
 
 export function SyncQueueQueueItem(
-  account: Account,
+  accountId: string,
   id: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any,
@@ -131,7 +131,7 @@ export function SyncQueueQueueItem(
 
   const newQueueItem: SyncQueueItem = {
     id,
-    accountId: account.getAccountDefinition().id,
+    accountId,
     data,
     functionName,
     priority,

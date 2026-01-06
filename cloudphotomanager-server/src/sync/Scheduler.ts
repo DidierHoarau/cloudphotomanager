@@ -75,7 +75,7 @@ export async function SchedulerStartAccountSync(
     rootFolderCloud.dateSync = new Date(0);
     await FolderDataAdd(span, rootFolderCloud);
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       rootFolderCloud.id,
       rootFolderCloud,
       "SyncInventorySyncFolder",
@@ -90,7 +90,7 @@ export async function SchedulerStartAccountSync(
     10
   )) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       folder.id,
       folder,
       "SyncInventorySyncFolder",
@@ -105,7 +105,7 @@ export async function SchedulerStartAccountSync(
     10
   )) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       folder.id,
       folder,
       "SyncInventorySyncFolder",
@@ -120,7 +120,7 @@ export async function SchedulerStartAccountSync(
     new Date(new Date().getTime() - OUTDATED_AGE)
   )) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       folder.id,
       folder,
       "SyncInventorySyncFolder",
@@ -135,7 +135,7 @@ export async function SchedulerStartAccountSync(
     10
   )) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       folder.id,
       folder,
       "SyncInventorySyncFolder",

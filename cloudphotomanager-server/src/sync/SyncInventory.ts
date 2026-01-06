@@ -65,7 +65,7 @@ export async function SyncInventorySyncFolder(
         updated = true;
         await FolderDataAdd(span, cloudSubFolder);
         await SyncQueueQueueItem(
-          account,
+          account.getAccountDefinition().id,
           cloudSubFolder.id,
           cloudSubFolder,
           "SyncInventorySyncFolder",

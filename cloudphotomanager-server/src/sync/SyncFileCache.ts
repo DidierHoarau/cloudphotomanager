@@ -8,6 +8,7 @@ import sharp from "sharp";
 import { AnalysisImagesGetLabels } from "../analysis/AnalysisImages";
 import { Config } from "../Config";
 import {
+  FileDataGet,
   FileDataGetFileCacheDir,
   FileDataGetFileTmpDir,
   FileDataListByFolder,
@@ -22,6 +23,7 @@ import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SystemCommand } from "../SystemCommand";
 import { SyncQueueQueueItem, SyncQueueRegisterFunction } from "./SyncQueue";
+import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 
 const logger = OTelLogger().createModuleLogger("SyncFileCache");
 let config: Config;
@@ -76,6 +78,21 @@ export async function SyncFileCacheRemoveFile(
   span.end();
 }
 
+export async function SyncFileCacheCheckAsync(
+  accountId: string,
+  fileId: string,
+  priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL
+) {
+  const span = OTelTracer().startSpan("SyncFileCacheCheckFileFromId");
+  await SyncFileCacheCheckFile(
+    span,
+    await AccountFactoryGetAccountImplementation(accountId),
+    await FileDataGet(span, fileId),
+    priority
+  );
+  span.end();
+}
+
 export async function SyncFileCacheCheckFile(
   context: Span,
   account: Account,
@@ -101,12 +118,18 @@ export async function SyncFileCacheCheckFile(
     (isImage && !hasThumbnail && accountCapabilities.downloadPhotoThumbnail) ||
     (isVideo && !hasThumbnail && accountCapabilities.downloadVideoThumbnail)
   ) {
-    await SyncQueueQueueItem(account, file.id, file, "syncThumbnail", priority);
+    await SyncQueueQueueItem(
+      account.getAccountDefinition().id,
+      file.id,
+      file,
+      "syncThumbnail",
+      priority
+    );
   }
 
   if (isImage && !hasImagePreview) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       file.id,
       file,
       "syncPhotoFromFull",
@@ -116,7 +139,7 @@ export async function SyncFileCacheCheckFile(
 
   if (isImage && !file.keywords) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       file.id,
       file,
       "syncPhotoKeyWords",
@@ -126,7 +149,7 @@ export async function SyncFileCacheCheckFile(
 
   if (isVideo && !hasVideoPreview) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       file.id,
       file,
       "syncVideoFromFull",
@@ -136,7 +159,7 @@ export async function SyncFileCacheCheckFile(
 
   if (isVideo && hasVideoPreview && !hasThumbnail) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       file.id,
       file,
       "syncThumbnailFromVideoPreview",
