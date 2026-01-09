@@ -53,9 +53,9 @@ Promise.resolve().then(async () => {
 
   const span = OTelTracer().startSpan("init");
 
+  await SqlDbUtilsInit(span, config);
   await SyncQueueInit(span);
   await SyncFileCacheInit(span, config);
-  await SqlDbUtilsInit(span, config);
   await AuthInit(span, config);
   await FileDataInit(span, config);
   await FolderDataInit(span);

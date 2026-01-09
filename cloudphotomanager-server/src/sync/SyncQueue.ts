@@ -9,6 +9,14 @@ import { PromisePool } from "../utils-std-ts/PromisePool";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
+import { SyncInventorySyncFolder } from "./SyncInventory";
+import {
+  syncVideoFromFull,
+  syncPhotoFromFull,
+  syncPhotoKeyWords,
+  syncThumbnail,
+  syncThumbnailFromVideoPreview,
+} from "./SyncFileCache";
 
 const MAX_PARALLEL_SYNC = 3;
 const QUEUE_FILE_PATH = path.join(
@@ -34,6 +42,17 @@ let queueProcessorRunning = false;
 export async function SyncQueueInit(context: Span): Promise<void> {
   const span = OTelTracer().startSpan("SyncQueueInit", context);
 
+  // Register all sync functions
+  SyncQueueRegisterFunction("SyncInventorySyncFolder", SyncInventorySyncFolder);
+  SyncQueueRegisterFunction("syncVideoFromFull", syncVideoFromFull);
+  SyncQueueRegisterFunction("syncPhotoFromFull", syncPhotoFromFull);
+  SyncQueueRegisterFunction("syncPhotoKeyWords", syncPhotoKeyWords);
+  SyncQueueRegisterFunction("syncThumbnail", syncThumbnail);
+  SyncQueueRegisterFunction(
+    "syncThumbnailFromVideoPreview",
+    syncThumbnailFromVideoPreview
+  );
+
   if (await fs.pathExists(QUEUE_FILE_PATH)) {
     try {
       const serializableQueue = await fs.readJSON(QUEUE_FILE_PATH);
@@ -57,13 +76,6 @@ export async function SyncQueueInit(context: Span): Promise<void> {
   processQueue();
 
   span.end();
-}
-
-export function SyncQueueRegisterFunction(
-  functionName: string,
-  fn: QueueFunction
-): void {
-  functionRegistry.set(functionName, fn);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -255,4 +267,11 @@ async function saveQueue(): Promise<void> {
   } catch (err) {
     logger.error("Error saving queue to file", err);
   }
+}
+
+function SyncQueueRegisterFunction(
+  functionName: string,
+  fn: QueueFunction
+): void {
+  functionRegistry.set(functionName, fn);
 }
