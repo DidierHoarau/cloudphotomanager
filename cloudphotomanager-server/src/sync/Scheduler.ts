@@ -18,12 +18,8 @@ import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { TimeoutWait } from "../utils-std-ts/Timeout";
 import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
 import { SyncFileCacheCleanUp } from "./SyncFileCache";
-import { SyncInventoryInit, SyncInventorySyncFolder } from "./SyncInventory";
-import {
-  SyncQueueGetCounts,
-  SyncQueueQueueItem,
-  SyncQueueLoad,
-} from "./SyncQueue";
+import { SyncInventoryInit } from "./SyncInventory";
+import { SyncQueueGetCounts, SyncQueueQueueItem } from "./SyncQueue";
 import { OTelLogger, OTelMeter, OTelTracer } from "../OTelContext";
 
 const logger = OTelLogger().createModuleLogger("Scheduler");
@@ -37,15 +33,6 @@ export async function SchedulerInit(context: Span, configIn: Config) {
   const span = OTelTracer().startSpan("Scheduler_init", context);
   config = configIn;
   SyncInventoryInit(span);
-
-  // Load persisted queue
-  const accountDefinitions = await AccountDataList(span);
-  const accountsById = new Map();
-  for (const accountDef of accountDefinitions) {
-    const account = await AccountFactoryGetAccountImplementation(accountDef.id);
-    accountsById.set(accountDef.id, account);
-  }
-  await SyncQueueLoad(accountsById);
 
   SchedulerStartSchedule();
   OTelMeter().createObservableGauge(
@@ -88,7 +75,7 @@ export async function SchedulerStartAccountSync(
     rootFolderCloud.dateSync = new Date(0);
     await FolderDataAdd(span, rootFolderCloud);
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       rootFolderCloud.id,
       rootFolderCloud,
       "SyncInventorySyncFolder",
@@ -103,7 +90,7 @@ export async function SchedulerStartAccountSync(
     10
   )) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       folder.id,
       folder,
       "SyncInventorySyncFolder",
@@ -118,7 +105,7 @@ export async function SchedulerStartAccountSync(
     10
   )) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       folder.id,
       folder,
       "SyncInventorySyncFolder",
@@ -133,7 +120,7 @@ export async function SchedulerStartAccountSync(
     new Date(new Date().getTime() - OUTDATED_AGE)
   )) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       folder.id,
       folder,
       "SyncInventorySyncFolder",
@@ -148,7 +135,7 @@ export async function SchedulerStartAccountSync(
     10
   )) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       folder.id,
       folder,
       "SyncInventorySyncFolder",

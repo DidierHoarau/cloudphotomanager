@@ -97,7 +97,7 @@ export class FolderRoutes {
         req.params.accountId
       );
       SyncQueueQueueItem(
-        account,
+        account.getAccountDefinition().id,
         folder.id,
         folder,
         "SyncInventorySyncFolder",
@@ -132,7 +132,7 @@ export class FolderRoutes {
         folder.folderpath
       );
       SyncQueueQueueItem(
-        account,
+        req.params.accountId,
         folder.id,
         folderParent,
         "SyncInventorySyncFolder",

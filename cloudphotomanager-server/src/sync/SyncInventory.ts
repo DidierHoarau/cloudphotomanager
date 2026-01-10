@@ -19,15 +19,14 @@ import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SyncEventHistoryAdd } from "./SyncEventHistory";
 import { SyncFileCacheCheckFolder } from "./SyncFileCache";
-import { SyncQueueQueueItem, SyncQueueRegisterFunction } from "./SyncQueue";
+import { SyncQueueQueueItem } from "./SyncQueue";
 
 const logger = OTelLogger().createModuleLogger("SyncInventory");
 
 export async function SyncInventoryInit(context: Span): Promise<void> {
   const span = OTelTracer().startSpan("SyncInventory_init", context);
 
-  // Register the sync function
-  SyncQueueRegisterFunction("SyncInventorySyncFolder", SyncInventorySyncFolder);
+  // Function registration moved to SyncQueueInit
 
   span.end();
 }
@@ -65,7 +64,7 @@ export async function SyncInventorySyncFolder(
         updated = true;
         await FolderDataAdd(span, cloudSubFolder);
         await SyncQueueQueueItem(
-          account,
+          account.getAccountDefinition().id,
           cloudSubFolder.id,
           cloudSubFolder,
           "SyncInventorySyncFolder",

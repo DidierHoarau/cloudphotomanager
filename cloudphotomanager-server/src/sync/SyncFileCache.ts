@@ -8,6 +8,7 @@ import sharp from "sharp";
 import { AnalysisImagesGetLabels } from "../analysis/AnalysisImages";
 import { Config } from "../Config";
 import {
+  FileDataGet,
   FileDataGetFileCacheDir,
   FileDataGetFileTmpDir,
   FileDataListByFolder,
@@ -21,7 +22,8 @@ import { Folder } from "../model/Folder";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SystemCommand } from "../SystemCommand";
-import { SyncQueueQueueItem, SyncQueueRegisterFunction } from "./SyncQueue";
+import { SyncQueueQueueItem } from "./SyncQueue";
+import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 
 const logger = OTelLogger().createModuleLogger("SyncFileCache");
 let config: Config;
@@ -30,16 +32,8 @@ export async function SyncFileCacheInit(context: Span, configIn: Config) {
   const span = OTelTracer().startSpan("SyncFileCacheInit", context);
   config = configIn;
 
-  // Register sync functions
-  SyncQueueRegisterFunction("syncVideoFromFull", syncVideoFromFull);
-  SyncQueueRegisterFunction("syncPhotoFromFull", syncPhotoFromFull);
-  SyncQueueRegisterFunction("syncPhotoKeyWords", syncPhotoKeyWords);
-  SyncQueueRegisterFunction("syncThumbnail", syncThumbnail);
-  SyncQueueRegisterFunction(
-    "syncThumbnailFromVideoPreview",
-    syncThumbnailFromVideoPreview
-  );
-  config = configIn;
+  // Function registration moved to SyncQueueInit
+
   await fs.rm(config.TMP_DIR, { recursive: true, force: true });
   span.end();
 }
@@ -76,6 +70,21 @@ export async function SyncFileCacheRemoveFile(
   span.end();
 }
 
+export async function SyncFileCacheCheckAsync(
+  accountId: string,
+  fileId: string,
+  priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL
+) {
+  const span = OTelTracer().startSpan("SyncFileCacheCheckFileFromId");
+  await SyncFileCacheCheckFile(
+    span,
+    await AccountFactoryGetAccountImplementation(accountId),
+    await FileDataGet(span, fileId),
+    priority
+  );
+  span.end();
+}
+
 export async function SyncFileCacheCheckFile(
   context: Span,
   account: Account,
@@ -101,12 +110,18 @@ export async function SyncFileCacheCheckFile(
     (isImage && !hasThumbnail && accountCapabilities.downloadPhotoThumbnail) ||
     (isVideo && !hasThumbnail && accountCapabilities.downloadVideoThumbnail)
   ) {
-    await SyncQueueQueueItem(account, file.id, file, "syncThumbnail", priority);
+    await SyncQueueQueueItem(
+      account.getAccountDefinition().id,
+      file.id,
+      file,
+      "syncThumbnail",
+      priority
+    );
   }
 
   if (isImage && !hasImagePreview) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       file.id,
       file,
       "syncPhotoFromFull",
@@ -116,7 +131,7 @@ export async function SyncFileCacheCheckFile(
 
   if (isImage && !file.keywords) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       file.id,
       file,
       "syncPhotoKeyWords",
@@ -126,7 +141,7 @@ export async function SyncFileCacheCheckFile(
 
   if (isVideo && !hasVideoPreview) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       file.id,
       file,
       "syncVideoFromFull",
@@ -136,7 +151,7 @@ export async function SyncFileCacheCheckFile(
 
   if (isVideo && hasVideoPreview && !hasThumbnail) {
     await SyncQueueQueueItem(
-      account,
+      account.getAccountDefinition().id,
       file.id,
       file,
       "syncThumbnailFromVideoPreview",
@@ -198,7 +213,7 @@ async function getVideoWidthWithFfprobe(
   }
 }
 
-async function syncVideoFromFull(account: Account, file: File) {
+export async function syncVideoFromFull(account: Account, file: File) {
   const span = OTelTracer().startSpan("syncVideoFromFull");
   try {
     const cacheDir = await FileDataGetFileCacheDir(
@@ -261,7 +276,7 @@ async function syncVideoFromFull(account: Account, file: File) {
   }
 }
 
-async function syncPhotoFromFull(account: Account, file: File) {
+export async function syncPhotoFromFull(account: Account, file: File) {
   const span = OTelTracer().startSpan("syncPhotoFromFull");
   try {
     const cacheDir = await FileDataGetFileCacheDir(
@@ -315,7 +330,7 @@ async function syncPhotoFromFull(account: Account, file: File) {
   }
 }
 
-async function syncPhotoKeyWords(account: Account, file: File) {
+export async function syncPhotoKeyWords(account: Account, file: File) {
   const span = OTelTracer().startSpan("syncPhotoKeyWords");
   const cacheDir = await FileDataGetFileCacheDir(
     span,
@@ -379,7 +394,7 @@ async function syncPhotoKeyWords(account: Account, file: File) {
   span.end();
 }
 
-async function syncThumbnail(account: Account, file: File) {
+export async function syncThumbnail(account: Account, file: File) {
   const span = OTelTracer().startSpan("syncThumbnail");
   try {
     const cacheDir = await FileDataGetFileCacheDir(
@@ -420,7 +435,10 @@ async function syncThumbnail(account: Account, file: File) {
   }
 }
 
-async function syncThumbnailFromVideoPreview(account: Account, file: File) {
+export async function syncThumbnailFromVideoPreview(
+  account: Account,
+  file: File
+) {
   const span = OTelTracer().startSpan("syncThumbnailFromVideoPreview");
   try {
     const cacheDir = await FileDataGetFileCacheDir(

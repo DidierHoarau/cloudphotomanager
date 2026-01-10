@@ -6,7 +6,17 @@ import { SyncQueueItem } from "../model/SyncQueueItem";
 import { SyncQueueItemStatus } from "../model/SyncQueueItemStatus";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { PromisePool } from "../utils-std-ts/PromisePool";
-import { OTelLogger } from "../OTelContext";
+import { OTelLogger, OTelTracer } from "../OTelContext";
+import { Span } from "@opentelemetry/sdk-trace-base";
+import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
+import { SyncInventorySyncFolder } from "./SyncInventory";
+import {
+  syncVideoFromFull,
+  syncPhotoFromFull,
+  syncPhotoKeyWords,
+  syncThumbnail,
+  syncThumbnailFromVideoPreview,
+} from "./SyncFileCache";
 
 const MAX_PARALLEL_SYNC = 3;
 const QUEUE_FILE_PATH = path.join(
@@ -16,7 +26,6 @@ const QUEUE_FILE_PATH = path.join(
 
 const logger = OTelLogger().createModuleLogger("SyncQueue");
 const queue: SyncQueueItem[] = [];
-
 type QueueFunction = (
   account: Account,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,52 +33,49 @@ type QueueFunction = (
   priority: SyncQueueItemPriority
 ) => Promise<void>;
 const functionRegistry = new Map<string, QueueFunction>();
-
 const promisePoolInteractive = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
 const promisePoolNormal = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
 const promisePoolBatch = new PromisePool(1, 5 * 3600 * 1000);
 let blockingOperations = 0;
 let queueProcessorRunning = false;
 
-export function SyncQueueRegisterFunction(
-  functionName: string,
-  fn: QueueFunction
-): void {
-  functionRegistry.set(functionName, fn);
-}
+export async function SyncQueueInit(context: Span): Promise<void> {
+  const span = OTelTracer().startSpan("SyncQueueInit", context);
 
-export async function SyncQueueLoad(
-  accountsById: Map<string, Account>
-): Promise<void> {
-  try {
-    if (await fs.pathExists(QUEUE_FILE_PATH)) {
+  // Register all sync functions
+  SyncQueueRegisterFunction("SyncInventorySyncFolder", SyncInventorySyncFolder);
+  SyncQueueRegisterFunction("syncVideoFromFull", syncVideoFromFull);
+  SyncQueueRegisterFunction("syncPhotoFromFull", syncPhotoFromFull);
+  SyncQueueRegisterFunction("syncPhotoKeyWords", syncPhotoKeyWords);
+  SyncQueueRegisterFunction("syncThumbnail", syncThumbnail);
+  SyncQueueRegisterFunction(
+    "syncThumbnailFromVideoPreview",
+    syncThumbnailFromVideoPreview
+  );
+
+  if (await fs.pathExists(QUEUE_FILE_PATH)) {
+    try {
       const serializableQueue = await fs.readJSON(QUEUE_FILE_PATH);
-      queue.length = 0; // Clear existing queue
-
       for (const item of serializableQueue) {
-        const account = accountsById.get(item.accountId);
-        if (account) {
-          queue.push({
-            id: item.id,
-            account,
-            data: item.data,
-            functionName: item.functionName,
-            priority: item.priority,
-            status: SyncQueueItemStatus.WAITING,
-          });
-        } else {
-          logger.warn(
-            `Account ${item.accountId} not found for queue item ${item.id}`
-          );
-        }
+        queue.push({
+          id: item.id,
+          accountId: item.accountId,
+          data: item.data,
+          functionName: item.functionName,
+          priority: item.priority,
+          status: SyncQueueItemStatus.WAITING,
+        });
       }
-
-      logger.info(`Loaded ${queue.length} items from queue`);
-      processQueue();
+    } catch (err) {
+      logger.error("Error reading queue file during init", err);
+      await fs.remove(QUEUE_FILE_PATH);
+      logger.info("Corrupted queue file removed");
     }
-  } catch (err) {
-    logger.error("Error loading queue from file", err);
   }
+
+  processQueue();
+
+  span.end();
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,8 +97,7 @@ export function SyncQueueGetCounts(): any[] {
 export function SyncQueueGetQueue(): any[] {
   return queue.map((item) => ({
     id: item.id,
-    accountId: item.account.getAccountDefinition().id,
-    accountName: item.account.getAccountDefinition().name,
+    accountId: item.accountId,
     functionName: item.functionName,
     priority: item.priority,
     status: item.status,
@@ -124,7 +129,7 @@ export function SyncQueueRemoveItem(id: string): void {
 }
 
 export function SyncQueueQueueItem(
-  account: Account,
+  accountId: string,
   id: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any,
@@ -137,7 +142,7 @@ export function SyncQueueQueueItem(
 
   const newQueueItem: SyncQueueItem = {
     id,
-    account,
+    accountId,
     data,
     functionName,
     priority,
@@ -213,9 +218,12 @@ async function processQueue(): Promise<void> {
 
         const itemProcess = async () => {
           item.status = SyncQueueItemStatus.ACTIVE;
-          await saveQueue(); // Save status change
-
-          await fn(item.account, item.data, item.priority)
+          await saveQueue();
+          await fn(
+            await AccountFactoryGetAccountImplementation(item.accountId),
+            item.data,
+            item.priority
+          )
             .catch((err) => {
               logger.error("Error Processing Queue Item", err);
             })
@@ -248,7 +256,7 @@ async function saveQueue(): Promise<void> {
   try {
     const serializableQueue = queue.map((item) => ({
       id: item.id,
-      accountId: item.account.getAccountDefinition().id,
+      accountId: item.accountId,
       data: item.data,
       functionName: item.functionName,
       priority: item.priority,
@@ -259,4 +267,11 @@ async function saveQueue(): Promise<void> {
   } catch (err) {
     logger.error("Error saving queue to file", err);
   }
+}
+
+function SyncQueueRegisterFunction(
+  functionName: string,
+  fn: QueueFunction
+): void {
+  functionRegistry.set(functionName, fn);
 }

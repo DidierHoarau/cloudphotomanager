@@ -2,9 +2,12 @@ import { FastifyInstance } from "fastify";
 import { AuthGetUserSession } from "../users/Auth";
 import { FileDataGet, FileDataGetFileCacheDir } from "./FileData";
 import * as fs from "fs-extra";
-import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
-import { SyncFileCacheCheckFile } from "../sync/SyncFileCache";
+import { SyncFileCacheCheckAsync } from "../sync/SyncFileCache";
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
+import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
+import { OTelLogger } from "../OTelContext";
+
+const logger = OTelLogger().createModuleLogger("FileRoutes");
 
 export class FileRoutes {
   //
@@ -29,11 +32,13 @@ export class FileRoutes {
       );
       const filepath = `${cacheDir}/thumbnail.webp`;
       if (!fs.existsSync(filepath)) {
-        SyncFileCacheCheckFile(
-          span,
-          await AccountFactoryGetAccountImplementation(req.params.accountId),
-          await FileDataGet(span, req.params.fileId)
-        );
+        SyncFileCacheCheckAsync(
+          req.params.accountId,
+          req.params.fileId,
+          SyncQueueItemPriority.INTERACTIVE
+        ).catch((error) => {
+          logger.error("Error getting file for thumbnail sync", error);
+        });
         return res.status(404).send({ error: "File Not Found" });
       }
       const stream = fs.createReadStream(filepath);
@@ -66,6 +71,13 @@ export class FileRoutes {
       );
       const filepath = `${cacheDir}/preview.webp`;
       if (!fs.existsSync(filepath)) {
+        SyncFileCacheCheckAsync(
+          req.params.accountId,
+          req.params.fileId,
+          SyncQueueItemPriority.INTERACTIVE
+        ).catch((error) => {
+          logger.error("Error getting file for thumbnail sync", error);
+        });
         return res.status(404).send({ error: "File Not Found" });
       }
       const stream = fs.createReadStream(filepath);
@@ -80,26 +92,16 @@ export class FileRoutes {
     });
 
     fastify.get("/static/404", async (req, res) => {
-      const span = OTelRequestSpan(req);
       const uri = req.headers["x-original-uri"];
-      const fileIdMatch = /\/static\/.\/.\/(.*)\/.*/.exec(uri as string);
+      const fileIdMatch = /\/static\/(.*)\/.\/.\/(.*)\/.*/.exec(uri as string);
       if (fileIdMatch) {
-        const file = await FileDataGet(span, fileIdMatch[1]);
-        const cacheDir = await FileDataGetFileCacheDir(
-          span,
-          file.accountId,
-          file.id
-        );
-        if (
-          !fs.existsSync(`${cacheDir}/preview.webp`) ||
-          !fs.existsSync(`${cacheDir}/thumbnail.webp`)
-        ) {
-          SyncFileCacheCheckFile(
-            span,
-            await AccountFactoryGetAccountImplementation(file.accountId),
-            file
-          );
-        }
+        SyncFileCacheCheckAsync(
+          fileIdMatch[1],
+          fileIdMatch[2],
+          SyncQueueItemPriority.INTERACTIVE
+        ).catch((error) => {
+          logger.error("Error getting file for thumbnail sync", error);
+        });
       }
       return res.status(404).send({ error: "File Not Found" });
     });
