@@ -20,14 +20,14 @@ export async function AuthInit(context: Span, configIn: Config) {
   const span = OTelTracer().startSpan("Auth_init", context);
   const authKeyRaw = await SqlDbUtilsQuerySQL(
     span,
-    'SELECT * FROM metadata WHERE type="auth_token"'
+    'SELECT * FROM metadata WHERE type="auth_token"',
   );
   if (authKeyRaw.length == 0) {
     configIn.JWT_KEY = uuidv4();
     await SqlDbUtilsExecSQL(
       span,
       'INSERT INTO metadata (type, value, dateCreated) VALUES ("auth_token", ?, ?)',
-      [configIn.JWT_KEY, new Date().toISOString()]
+      [configIn.JWT_KEY, new Date().toISOString()],
     );
   } else {
     configIn.JWT_KEY = authKeyRaw[0].value;
@@ -37,7 +37,7 @@ export async function AuthInit(context: Span, configIn: Config) {
 
 export async function AuthGenerateJWT(
   context: Span,
-  user: User
+  user: User,
 ): Promise<string> {
   const span = OTelTracer().startSpan("Auth_generateJWT", context);
   const userPermission = await UserPermissionDataGetForUser(span, user.id);
@@ -48,7 +48,7 @@ export async function AuthGenerateJWT(
       userName: user.name,
       permissions: { isAdmin: userPermission.info.isAdmin },
     },
-    config.JWT_KEY
+    config.JWT_KEY,
   );
 }
 
@@ -56,7 +56,7 @@ export async function AuthMustBeAuthenticated(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   req: any,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  res: any
+  res: any,
 ): Promise<void> {
   let authenticated = false;
   if (req.headers.authorization) {
@@ -81,8 +81,8 @@ export async function AuthGetUserSession(req: any): Promise<UserSession> {
     try {
       const info = jwt.verify(
         req.headers.authorization.split(" ")[1],
-        config.JWT_KEY
-      );
+        config.JWT_KEY,
+      ) as jwt.JwtPayload;
       userSession.userId = info.userId;
       userSession.isAuthenticated = true;
       userSession.permissions = info.permissions;
