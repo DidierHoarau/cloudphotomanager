@@ -1,5 +1,5 @@
 # BUILD
-FROM node:24-bullseye as builder
+FROM node:24 as builder
 
 WORKDIR /opt/src
 
@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y \
 COPY cloudphotomanager-server cloudphotomanager-server
 
 RUN cd cloudphotomanager-server && \
-    npm i && \
+    npm ci && \
     npm run build
 
 COPY cloudphotomanager-web cloudphotomanager-web
@@ -28,7 +28,7 @@ RUN cd cloudphotomanager-web && \
     npm run generate
 
 # RUN
-FROM node:24-bullseye
+FROM node:24
 
 COPY docker-config/entrypoint.sh /entrypoint.sh
 
