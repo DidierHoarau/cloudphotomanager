@@ -6,7 +6,7 @@ import { Config } from "../Config";
 
 export async function AnalysisImagesInit(
   context: Span,
-  inConfig: Config
+  inConfig: Config,
 ): Promise<void> {
   const span = OTelTracer().startSpan("AnalysisImagesInit", context);
   releasePipeline();
@@ -15,7 +15,7 @@ export async function AnalysisImagesInit(
 
 export async function AnalysisImagesGetLabels(
   context: Span,
-  imagePath: string
+  imagePath: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
   const span = OTelTracer().startSpan("AnalysisImagesGetLabels", context);
@@ -35,15 +35,13 @@ export async function AnalysisImagesGetLabels(
 
 // Private Function
 
-let dateLastUsed;
-let pipe;
+let dateLastUsed: Date = new Date();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let pipe: any;
 let pipeInitializing = false;
 
 function releasePipeline() {
-  if (
-    dateLastUsed ||
-    dateLastUsed < new Date(new Date().getTime() - 60 * 60 * 1000)
-  ) {
+  if (dateLastUsed < new Date(new Date().getTime() - 60 * 60 * 1000)) {
     pipe = null;
   }
   setTimeout(() => {
