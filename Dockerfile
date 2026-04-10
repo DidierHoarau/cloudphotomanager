@@ -18,8 +18,7 @@ RUN apt-get update && apt-get install -y \
 COPY cloudphotomanager-server cloudphotomanager-server
 
 RUN cd cloudphotomanager-server && \
-    npm ci && \
-    npm install sqlite3 --build-from-source && \
+    npm i && \
     npm run build
 
 COPY cloudphotomanager-web cloudphotomanager-web
