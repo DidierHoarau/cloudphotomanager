@@ -19,7 +19,7 @@ COPY cloudphotomanager-server cloudphotomanager-server
 
 RUN cd cloudphotomanager-server && \
     npm ci && \
-    npm install sqlite3 --build-from-source \
+    npm install sqlite3 --build-from-source && \
     npm run build
 
 COPY cloudphotomanager-web cloudphotomanager-web
