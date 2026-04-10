@@ -1,9 +1,14 @@
 # BUILD
-FROM node:25 as builder
+FROM ubuntu:24.04 as builder
 
 WORKDIR /opt/src
 
 RUN apt-get update && apt-get install -y \
+        curl \
+        ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y \
+        nodejs \
         build-essential \
         libvips-dev \
         libheif-dev \
@@ -30,11 +35,16 @@ RUN cd cloudphotomanager-web && \
     npm run generate
 
 # RUN
-FROM node:25
+FROM ubuntu:24.04
 
 COPY docker-config/entrypoint.sh /entrypoint.sh
 
 RUN apt-get update && apt-get install -y \
+        curl \
+        ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y \
+        nodejs \
         build-essential \
         darktable \
         dcraw \
