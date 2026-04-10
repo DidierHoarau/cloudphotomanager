@@ -20,7 +20,6 @@ COPY cloudphotomanager-server cloudphotomanager-server
 
 RUN cd cloudphotomanager-server && \
     npm i && \
-    npm rebuild sqlite3 --build-from-source && \
     npm rebuild better-sqlite3 --build-from-source && \
     npm run build
 
