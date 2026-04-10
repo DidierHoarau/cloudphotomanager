@@ -38,7 +38,7 @@ export async function SqlDbUtilsInit(
         SqlDbUtilsExecSQLFile(span, `${SQL_DIR}/${initFile}`);
         SqlDbUtilsQuerySQL(
           span,
-          'INSERT INTO metadata (type, value, dateCreated) VALUES ("db_version",?,?)',
+          "INSERT INTO metadata (type, value, dateCreated) VALUES ('db_version',?,?)",
           [dbVersionInitFile, new Date().toISOString()],
         );
       }
