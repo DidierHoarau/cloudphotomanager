@@ -16,7 +16,7 @@
 .page {
   overflow-y: auto;
   height: calc(100dvh - 5em);
-  padding: 0em 1em;
+  padding: 0;
 }
 
 #page-layout {

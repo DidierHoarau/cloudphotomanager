@@ -1,5 +1,5 @@
 # BUILD
-FROM ubuntu:24.04 as builder
+FROM ubuntu as builder
 
 WORKDIR /opt/src
 
@@ -35,7 +35,7 @@ RUN cd cloudphotomanager-web && \
     npm run generate
 
 # RUN
-FROM ubuntu:24.04
+FROM ubuntu
 
 COPY docker-config/entrypoint.sh /entrypoint.sh
 
