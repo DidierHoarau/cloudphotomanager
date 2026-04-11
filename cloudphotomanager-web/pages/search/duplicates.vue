@@ -62,7 +62,7 @@
 
 <script>
 import axios from "axios";
-import { debounce, find, findIndex } from "lodash";
+import { debounce, findIndex } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
@@ -86,6 +86,15 @@ export default {
     this.serverUrl = (await Config.get()).SERVER_URL;
     await AccountsStore().fetch();
     await FoldersStore().fetch();
+  },
+  computed: {
+    folderMap() {
+      const map = new Map();
+      for (const folder of FoldersStore().folders) {
+        map.set(folder.id, folder.folderpath);
+      }
+      return map;
+    },
   },
   methods: {
     async loadAccountDuplicate(accountId) {
@@ -114,30 +123,28 @@ export default {
         })
         .catch(handleError);
     },
-    async loadAccountDuplicateProcess() {
+    loadAccountDuplicateProcess() {
       const newFiles = [];
       for (const duplicate of this.analysis) {
-        const fileReference = JSON.parse(JSON.stringify(duplicate.files[0]));
-        fileReference.duplicates = duplicate;
         if (duplicate.files.length < 2) {
           continue;
         }
-        fileReference.filename = `(x${duplicate.files.length} duplicates) ${fileReference.filename}`;
+        const src = duplicate.files[0];
+        const fileReference = {
+          ...src,
+          info: src.info ? { ...src.info } : src.info,
+          filename: `(x${duplicate.files.length} duplicates) ${src.filename}`,
+          duplicates: duplicate,
+        };
         newFiles.push(fileReference);
       }
       this.files = newFiles;
-      console.log(this.files);
     },
     async onAccountSelected(account) {
-      console.log("Loading duplicates for account", account);
       await this.loadAccountDuplicate(account.id);
     },
     getFolderPath(id) {
-      const folder = find(FoldersStore().folders, { id });
-      if (!folder) {
-        return "";
-      }
-      return folder.folderpath;
+      return this.folderMap.get(id) ?? "";
     },
     async onFileSelected(file) {
       // TODO
@@ -166,11 +173,29 @@ export default {
               text: "File deleted",
             });
             const hashIndex = findIndex(this.analysis, { hash: file.hash });
-            this.analysis[hashIndex].files.splice(
-              findIndex(this.analysis[hashIndex].files, { id: file.id }),
-              1
-            );
-            this.loadAccountDuplicateProcess();
+            if (hashIndex < 0) return;
+            const duplicate = this.analysis[hashIndex];
+            const fileIndex = findIndex(duplicate.files, { id: file.id });
+            if (fileIndex >= 0) {
+              duplicate.files.splice(fileIndex, 1);
+            }
+            // Update files[] surgically: no full rebuild needed
+            const filesIndex = findIndex(this.files, (f) => f.duplicates === duplicate);
+            if (duplicate.files.length < 2) {
+              // No longer a duplicate group — remove from list
+              if (filesIndex >= 0) {
+                this.files.splice(filesIndex, 1);
+              }
+              // Also close dialog if it was showing this group
+              if (this.selectedFile && this.selectedFile.duplicates === duplicate) {
+                this.selectedFile = null;
+              }
+            } else if (filesIndex >= 0) {
+              // Update count label in-place
+              const entry = this.files[filesIndex];
+              const baseName = entry.filename.replace(/^\(x\d+ duplicates\) /, "");
+              entry.filename = `(x${duplicate.files.length} duplicates) ${baseName}`;
+            }
             EventBus.emit(EventTypes.FOLDER_UPDATED, {});
             EventBus.emit(EventTypes.FILE_UPDATED, {});
           })
