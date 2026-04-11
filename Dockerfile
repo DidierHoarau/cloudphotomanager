@@ -1,13 +1,19 @@
 # BUILD
-FROM node:24 as builder
+FROM ubuntu as builder
 
 WORKDIR /opt/src
 
 RUN apt-get update && apt-get install -y \
+        curl \
+        ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && apt-get install -y \
+        nodejs \
         build-essential \
         libvips-dev \
         libheif-dev \
         libfftw3-dev \
+        libsqlite3-dev \
         gcc \
         g++ \
         make \
@@ -18,7 +24,8 @@ RUN apt-get update && apt-get install -y \
 COPY cloudphotomanager-server cloudphotomanager-server
 
 RUN cd cloudphotomanager-server && \
-    npm ci && \
+    npm i && \
+    npm rebuild better-sqlite3 --build-from-source && \
     npm run build
 
 COPY cloudphotomanager-web cloudphotomanager-web
@@ -28,11 +35,16 @@ RUN cd cloudphotomanager-web && \
     npm run generate
 
 # RUN
-FROM node:24
+FROM ubuntu
 
 COPY docker-config/entrypoint.sh /entrypoint.sh
 
 RUN apt-get update && apt-get install -y \
+        curl \
+        ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && apt-get install -y \
+        nodejs \
         build-essential \
         darktable \
         dcraw \
