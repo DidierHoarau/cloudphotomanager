@@ -2,10 +2,18 @@
   <div class="file-preview">
     <i class="bi bi-x-circle action" v-on:click="clickedClose()"></i>
     <div v-if="authenticationStore.isAdmin" class="file-preview-operations">
-      <button class="secondary outline" v-on:click="clickedDelete()"><i class="bi bi-trash-fill"></i> Delete</button>
-      <button class="secondary outline" v-on:click="clickedMove()"><i class="bi bi-arrows-move"></i> Move...</button>
+      <button class="secondary outline" v-on:click="clickedDelete()">
+        <i class="bi bi-trash-fill"></i> Delete
+      </button>
+      <button class="secondary outline" v-on:click="clickedMove()">
+        <i class="bi bi-arrows-move"></i> Move...
+      </button>
     </div>
-    <DialogMove v-if="activeOperation == 'move'" :target="{ files: [file] }" @onDone="onOperationDone" />
+    <DialogMove
+      v-if="activeOperation == 'move'"
+      :target="{ files: [file] }"
+      @onDone="onOperationDone"
+    />
     <div id="media-container">
       <Loading v-if="mediaLoading" class="media-loading" />
       <img
@@ -23,7 +31,9 @@
         @mouseup="onImageMouseUp"
         @mouseleave="onImageMouseUp"
       />
-      <template v-if="file && videoDelayedLoadingDone && getType(file) == 'video'">
+      <template
+        v-if="file && videoDelayedLoadingDone && getType(file) == 'video'"
+      >
         <video
           class="media-content"
           v-if="!videoUnavailable"
@@ -32,7 +42,11 @@
           @loadeddata="onMediaLoaded"
           @error="onVideoError"
         >
-          <source :src="getVideoSource(file)" type="video/mp4" @error="onVideoError" />
+          <source
+            :src="getVideoSource(file)"
+            type="video/mp4"
+            @error="onVideoError"
+          />
         </video>
         <div v-else class="video-unavailable">
           <i class="bi bi-camera-video-off"></i>
@@ -41,9 +55,15 @@
       </template>
     </div>
     <div id="media-preload">
-      <img v-if="position > 0 && getType(files[position - 1]) == 'image'" :src="getImageSource(files[position - 1])" />
       <img
-        v-if="position + 1 < files.length - 1 && getType(files[position + 1]) == 'image'"
+        v-if="position > 0 && getType(files[position - 1]) == 'image'"
+        :src="getImageSource(files[position - 1])"
+      />
+      <img
+        v-if="
+          position + 1 < files.length - 1 &&
+          getType(files[position + 1]) == 'image'
+        "
         :src="getImageSource(files[position + 1])"
       />
     </div>
@@ -96,6 +116,13 @@ export default {
     this.position = this.inputFiles.position;
     this.loadMedia(true);
 
+    this._onKeyDown = (event) => {
+      if (event.key === "ArrowRight") this.nextMedia();
+      else if (event.key === "ArrowLeft") this.previousMedia();
+      else if (event.key === "Escape") this.clickedClose();
+    };
+    window.addEventListener("keydown", this._onKeyDown);
+
     const mediaContainer = document.querySelector("#media-container");
     const gestureManager = new Hammer.Manager(mediaContainer);
     gestureManager.add(new Hammer.Swipe({ threshold: 10, velocity: 0.3 }));
@@ -114,12 +141,18 @@ export default {
       pinchStartScale = this.imageScale;
     });
     gestureManager.on("pinchmove", (event) => {
-      this.imageScale = Math.min(10, Math.max(1, pinchStartScale * event.scale));
+      this.imageScale = Math.min(
+        10,
+        Math.max(1, pinchStartScale * event.scale),
+      );
       if (this.imageScale <= 1) {
         this.imageTranslateX = 0;
         this.imageTranslateY = 0;
       }
     });
+  },
+  unmounted() {
+    window.removeEventListener("keydown", this._onKeyDown);
   },
   methods: {
     clickedClose() {
@@ -132,12 +165,16 @@ export default {
       return FileUtils.getType(file);
     },
     async clickedDelete() {
-      if (confirm(`Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`) == true) {
+      if (
+        confirm(
+          `Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`,
+        ) == true
+      ) {
         await axios
           .post(
             `${(await Config.get()).SERVER_URL}/accounts/${this.file.accountId}/files/batch/operations/fileDelete`,
             { fileIdList: [this.file.id] },
-            await AuthService.getAuthHeader()
+            await AuthService.getAuthHeader(),
           )
           .then((res) => {
             EventBus.emit(EventTypes.ALERT_MESSAGE, {
@@ -201,11 +238,19 @@ export default {
       this.file = this.files[this.position];
       if (newRoute) {
         useRouter().push({
-          query: { accountId: this.file.accountId, folderId: this.file.folderId, fileId: this.file.id },
+          query: {
+            accountId: this.file.accountId,
+            folderId: this.file.folderId,
+            fileId: this.file.id,
+          },
         });
       } else {
         useRouter().replace({
-          query: { accountId: this.file.accountId, folderId: this.file.folderId, fileId: this.file.id },
+          query: {
+            accountId: this.file.accountId,
+            folderId: this.file.folderId,
+            fileId: this.file.id,
+          },
         });
       }
       setTimeout(() => {
@@ -218,12 +263,30 @@ export default {
     },
     getImageSource(file) {
       return (
-        this.staticUrl + "/" + file.accountId + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.webp"
+        this.staticUrl +
+        "/" +
+        file.accountId +
+        "/" +
+        file.id[0] +
+        "/" +
+        file.id[1] +
+        "/" +
+        file.id +
+        "/preview.webp"
       );
     },
     getVideoSource(file) {
       return (
-        this.staticUrl + "/" + file.accountId + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.mp4"
+        this.staticUrl +
+        "/" +
+        file.accountId +
+        "/" +
+        file.id[0] +
+        "/" +
+        file.id[1] +
+        "/" +
+        file.id +
+        "/preview.mp4"
       );
     },
     onMediaLoaded() {
@@ -252,8 +315,10 @@ export default {
     },
     onImageMouseMove(event) {
       if (!this.isDragging) return;
-      this.imageTranslateX = this.dragStartTranslateX + (event.clientX - this.dragStartX);
-      this.imageTranslateY = this.dragStartTranslateY + (event.clientY - this.dragStartY);
+      this.imageTranslateX =
+        this.dragStartTranslateX + (event.clientX - this.dragStartX);
+      this.imageTranslateY =
+        this.dragStartTranslateY + (event.clientY - this.dragStartY);
     },
     onImageMouseUp() {
       this.isDragging = false;
@@ -263,13 +328,19 @@ export default {
     imageTransformStyle() {
       return {
         transform: `scale(${this.imageScale}) translate(${this.imageTranslateX / this.imageScale}px, ${this.imageTranslateY / this.imageScale}px)`,
-        cursor: this.imageScale > 1 ? (this.isDragging ? "grabbing" : "grab") : "default",
+        cursor:
+          this.imageScale > 1
+            ? this.isDragging
+              ? "grabbing"
+              : "grab"
+            : "default",
         transition: this.isDragging ? "none" : "transform 0.1s ease-out",
         transformOrigin: "center center",
         userSelect: "none",
       };
     },
   },
+};
 </script>
 
 <style scoped>
@@ -311,6 +382,8 @@ export default {
   right: 1em;
   top: 1em;
   color: #aaf;
+  z-index: 100;
+  cursor: pointer;
 }
 .file-preview-operations {
   font-size: 1.5em;
@@ -318,6 +391,7 @@ export default {
   bottom: 1em;
   right: 1em;
   color: #aaf;
+  z-index: 100;
 }
 .file-preview-operations button {
   padding: 0.3em 0.7em;
@@ -389,9 +463,7 @@ export default {
   height: 0px;
 }
 .media-loading {
-  grid-column: 2;
-  grid-row: 2;
-  position: absolute;
+  position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
