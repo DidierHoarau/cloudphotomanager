@@ -53,6 +53,9 @@
       >
         <i class="bi bi-three-dots"></i> More...
       </button>
+      <button class="secondary outline" v-on:click="clickedOptions()">
+        <i class="bi bi-sliders"></i> Options...
+      </button>
       <span class="option-outtakes" v-if="outtakesCount > 0">
         <label>
           <input v-model="showOutakes" type="checkbox" /> OutTakes ({{
@@ -63,13 +66,16 @@
     </div>
     <div class="gallery-file-list">
       <Loading v-if="loading" />
-      <Gallery
-        v-else
-        :files="filterOuttakes(files)"
-        @focusGalleryItem="focusGalleryItem"
-        @onFileSelected="onFileSelected"
-        :selectedFiles="selectedFiles"
-      />
+      <template v-else>
+        <Gallery
+          :files="filterOuttakes(files)"
+          @focusGalleryItem="focusGalleryItem"
+          @onFileSelected="onFileSelected"
+          :selectedFiles="selectedFiles"
+        />
+        <div ref="sentinel" class="sentinel"></div>
+        <Loading v-if="loadingMore" />
+      </template>
     </div>
     <GalleryItemFocus
       v-if="displayFullScreen"
@@ -94,6 +100,13 @@
       :files="selectedFiles"
       @onDone="onDialogClosed"
     />
+    <DialogGalleryOptions
+      v-if="activeOperation == 'options'"
+      :includeSubFolders="includeSubFolders"
+      :sortOrder="sortOrder"
+      @onSave="onOptionsSaved"
+      @onClose="activeOperation = ''"
+    />
   </div>
 </template>
 
@@ -103,7 +116,7 @@ const authenticationStore = AuthenticationStore();
 
 <script>
 import axios from "axios";
-import { find, findIndex, sortBy, filter } from "lodash";
+import { find, findIndex, filter } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
@@ -128,11 +141,32 @@ export default {
       positionFocus: 0,
       showOutakes: false,
       outtakesCount: 0,
+      includeSubFolders: false,
+      sortOrder: "desc",
+      currentPage: 0,
+      pageSize: 60,
+      hasMore: false,
+      loadingMore: false,
+      observer: null,
     };
   },
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
     this.staticUrl = (await Config.get()).STATIC_URL;
+    try {
+      const saved = localStorage.getItem("galleryOptions");
+      if (saved) {
+        const o = JSON.parse(saved);
+        if (typeof o.includeSubFolders === "boolean") {
+          this.includeSubFolders = o.includeSubFolders;
+        }
+        if (o.sortOrder === "asc" || o.sortOrder === "desc") {
+          this.sortOrder = o.sortOrder;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
     await AccountsStore().fetch();
     if (AccountsStore().accounts.length > 0) {
       FoldersStore().fetch();
@@ -159,7 +193,7 @@ export default {
     ) {
       await this.fetchFiles(
         useRoute().query.accountId,
-        useRoute().query.folderId
+        useRoute().query.folderId,
       );
       this.focusGalleryItem(find(this.files, { id: useRoute().query.fileId }));
     } else if (useRoute().query.accountId && useRoute().query.folderId) {
@@ -171,10 +205,10 @@ export default {
         if (this.currentFolderId !== useRoute().query.folderId) {
           this.fetchFiles(
             useRoute().query.accountId,
-            useRoute().query.folderId
+            useRoute().query.folderId,
           );
         }
-      }
+      },
     );
     watch(
       () => useRoute().query.fileId,
@@ -183,17 +217,45 @@ export default {
           if (useRoute().query.fileId) {
             await this.fetchFiles(
               useRoute().query.accountId,
-              useRoute().query.folderId
+              useRoute().query.folderId,
             );
             this.focusGalleryItem(
-              find(this.files, { id: useRoute().query.fileId })
+              find(this.files, { id: useRoute().query.fileId }),
             );
           } else {
             this.displayFullScreen = false;
           }
         }, 500);
-      }
+      },
     );
+  },
+  mounted() {
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          this.hasMore &&
+          !this.loadingMore &&
+          !this.loading
+        ) {
+          this.loadMoreFiles();
+        }
+      },
+      { threshold: 0.1 },
+    );
+    if (this.$refs.sentinel) {
+      this.observer.observe(this.$refs.sentinel);
+    }
+  },
+  updated() {
+    if (this.observer && this.$refs.sentinel) {
+      this.observer.observe(this.$refs.sentinel);
+    }
+  },
+  beforeUnmount() {
+    if (this.observer) {
+      this.observer.disconnect();
+    }
   },
   methods: {
     filterOuttakes() {
@@ -212,29 +274,38 @@ export default {
         this.currentAccountId = accountId;
         this.currentFolderId = folderId;
         this.files = [];
+        this.currentPage = 0;
+        this.hasMore = false;
         this.loading = true;
       }
       this.requestEtag = requestEtag;
+      const serverUrl = (await Config.get()).SERVER_URL;
+      const params = new URLSearchParams({
+        includeSubFolders: String(this.includeSubFolders),
+        sortOrder: this.sortOrder,
+        page: "0",
+        pageSize: String(this.pageSize),
+      });
       await axios
         .get(
-          `${
-            (
-              await Config.get()
-            ).SERVER_URL
-          }/accounts/${accountId}/folders/${folderId}/files`,
-          await AuthService.getAuthHeader()
+          `${serverUrl}/accounts/${accountId}/folders/${folderId}/files-recursive?${params}`,
+          await AuthService.getAuthHeader(),
         )
         .then((res) => {
           this.outtakesCount = 0;
           if (this.requestEtag === requestEtag) {
-            this.files = sortBy(res.data.files, ["dateMedia"]);
-            for (const file of this.files) {
+            const newFiles = res.data.files || [];
+            for (const file of newFiles) {
               file.isOuttake = false;
               if (file.filename.indexOf("-outtake.") > 0) {
                 file.isOuttake = true;
                 this.outtakesCount++;
               }
             }
+            this.files = newFiles;
+            this.currentPage = 0;
+            this.hasMore =
+              res.data.total > (this.currentPage + 1) * this.pageSize;
           }
         })
         .catch(handleError)
@@ -244,6 +315,42 @@ export default {
         });
       this.folder = find(FoldersStore().folders, { id: folderId }) || {};
     },
+    async loadMoreFiles() {
+      if (!this.hasMore || this.loadingMore || this.loading) {
+        return;
+      }
+      this.loadingMore = true;
+      const nextPage = this.currentPage + 1;
+      const serverUrl = (await Config.get()).SERVER_URL;
+      const params = new URLSearchParams({
+        includeSubFolders: String(this.includeSubFolders),
+        sortOrder: this.sortOrder,
+        page: String(nextPage),
+        pageSize: String(this.pageSize),
+      });
+      await axios
+        .get(
+          `${serverUrl}/accounts/${this.currentAccountId}/folders/${this.currentFolderId}/files-recursive?${params}`,
+          await AuthService.getAuthHeader(),
+        )
+        .then((res) => {
+          const newFiles = res.data.files || [];
+          for (const file of newFiles) {
+            file.isOuttake = false;
+            if (file.filename.indexOf("-outtake.") > 0) {
+              file.isOuttake = true;
+              this.outtakesCount++;
+            }
+          }
+          this.files = [...this.files, ...newFiles];
+          this.currentPage = nextPage;
+          this.hasMore = res.data.total > (nextPage + 1) * this.pageSize;
+        })
+        .catch(handleError)
+        .finally(() => {
+          this.loadingMore = false;
+        });
+    },
     async clickedRefresh() {
       await axios
         .put(
@@ -251,7 +358,7 @@ export default {
             this.currentAccountId
           }/folders/${this.currentFolderId}/sync`,
           {},
-          await AuthService.getAuthHeader()
+          await AuthService.getAuthHeader(),
         )
         .catch(handleError);
       this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
@@ -345,6 +452,28 @@ export default {
     clickedAdvanced() {
       this.activeOperation = "advanced";
     },
+    clickedOptions() {
+      this.activeOperation = "options";
+    },
+    onOptionsSaved(options) {
+      this.includeSubFolders = options.includeSubFolders;
+      this.sortOrder = options.sortOrder;
+      try {
+        localStorage.setItem(
+          "galleryOptions",
+          JSON.stringify({
+            includeSubFolders: this.includeSubFolders,
+            sortOrder: this.sortOrder,
+          }),
+        );
+      } catch (e) {
+        // ignore
+      }
+      this.activeOperation = "";
+      if (this.currentAccountId && this.currentFolderId) {
+        this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
+      }
+    },
     async clickedDelete() {
       let message = `Delete the ${this.selectedFiles.length} selected files? (Can't be undone!)\n`;
       if (this.selectedFiles.length === 1) {
@@ -365,7 +494,7 @@ export default {
             {
               fileIdList,
             },
-            await AuthService.getAuthHeader()
+            await AuthService.getAuthHeader(),
           )
           .then((res) => {
             EventBus.emit(EventTypes.ALERT_MESSAGE, {
@@ -389,7 +518,7 @@ export default {
             `${(await Config.get()).SERVER_URL}/accounts/${
               this.folder.accountId
             }/folders/${this.folder.id}/operations/delete`,
-            await AuthService.getAuthHeader()
+            await AuthService.getAuthHeader(),
           )
           .then((res) => {
             EventBus.emit(EventTypes.ALERT_MESSAGE, {
@@ -423,6 +552,7 @@ export default {
 .gallery-files-actions button,
 .gallery-files-actions kbd {
   padding: 0.3em 0.7em;
+  margin-right: 0.5em;
   font-size: 0.8em;
 }
 
@@ -541,5 +671,9 @@ export default {
 }
 .option-outtakes label {
   display: inline;
+}
+.sentinel {
+  height: 1px;
+  width: 100%;
 }
 </style>
