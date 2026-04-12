@@ -202,7 +202,10 @@ export default {
     watch(
       () => useRoute().query.folderId,
       () => {
-        if (this.currentFolderId !== useRoute().query.folderId) {
+        if (
+          !this.displayFullScreen &&
+          this.currentFolderId !== useRoute().query.folderId
+        ) {
           this.fetchFiles(
             useRoute().query.accountId,
             useRoute().query.folderId,
@@ -215,10 +218,12 @@ export default {
       () => {
         setTimeout(async () => {
           if (useRoute().query.fileId) {
-            await this.fetchFiles(
-              useRoute().query.accountId,
-              useRoute().query.folderId,
-            );
+            if (!this.displayFullScreen) {
+              await this.fetchFiles(
+                useRoute().query.accountId,
+                useRoute().query.folderId,
+              );
+            }
             this.focusGalleryItem(
               find(this.files, { id: useRoute().query.fileId }),
             );
