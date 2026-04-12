@@ -7,10 +7,38 @@
     </div>
     <DialogMove v-if="activeOperation == 'move'" :target="{ files: [file] }" @onDone="onOperationDone" />
     <div id="media-container">
-      <img class="media-content" v-if="file && getType(file) == 'image'" :src="getImageSource(file)" />
-      <video class="media-content" v-if="file && videoDelayedLoadingDone && getType(file) == 'video'" controls>
-        <source :src="getVideoSource(file)" type="video/mp4" />
-      </video>
+      <Loading v-if="mediaLoading" class="media-loading" />
+      <img
+        class="media-content"
+        v-if="file && getType(file) == 'image'"
+        :src="getImageSource(file)"
+        ref="zoomableImage"
+        :style="imageTransformStyle"
+        :class="{ 'media-hidden': mediaLoading }"
+        @load="onMediaLoaded"
+        @error="onMediaLoaded"
+        @wheel.prevent="onImageWheel"
+        @mousedown="onImageMouseDown"
+        @mousemove="onImageMouseMove"
+        @mouseup="onImageMouseUp"
+        @mouseleave="onImageMouseUp"
+      />
+      <template v-if="file && videoDelayedLoadingDone && getType(file) == 'video'">
+        <video
+          class="media-content"
+          v-if="!videoUnavailable"
+          controls
+          :class="{ 'media-hidden': mediaLoading }"
+          @loadeddata="onMediaLoaded"
+          @error="onVideoError"
+        >
+          <source :src="getVideoSource(file)" type="video/mp4" @error="onVideoError" />
+        </video>
+        <div v-else class="video-unavailable">
+          <i class="bi bi-camera-video-off"></i>
+          <p>Video not yet available</p>
+        </div>
+      </template>
     </div>
     <div id="media-preload">
       <img v-if="position > 0 && getType(files[position - 1]) == 'image'" :src="getImageSource(files[position - 1])" />
@@ -48,6 +76,16 @@ export default {
       files: [],
       position: 0,
       videoDelayedLoadingDone: false,
+      videoUnavailable: false,
+      mediaLoading: true,
+      imageScale: 1,
+      imageTranslateX: 0,
+      imageTranslateY: 0,
+      isDragging: false,
+      dragStartX: 0,
+      dragStartY: 0,
+      dragStartTranslateX: 0,
+      dragStartTranslateY: 0,
     };
   },
   async created() {
@@ -60,12 +98,26 @@ export default {
 
     const mediaContainer = document.querySelector("#media-container");
     const gestureManager = new Hammer.Manager(mediaContainer);
-    gestureManager.add(new Hammer.Swipe());
+    gestureManager.add(new Hammer.Swipe({ threshold: 10, velocity: 0.3 }));
+    gestureManager.add(new Hammer.Pinch({ enable: true }));
+    gestureManager.get("swipe").requireFailure(gestureManager.get("pinch"));
+    let pinchStartScale = 1;
     gestureManager.on("swipe", (event) => {
+      if (this.imageScale > 1) return;
       if (event.offsetDirection === 2) {
         this.nextMedia();
       } else if (event.offsetDirection === 4) {
         this.previousMedia();
+      }
+    });
+    gestureManager.on("pinchstart", () => {
+      pinchStartScale = this.imageScale;
+    });
+    gestureManager.on("pinchmove", (event) => {
+      this.imageScale = Math.min(10, Math.max(1, pinchStartScale * event.scale));
+      if (this.imageScale <= 1) {
+        this.imageTranslateX = 0;
+        this.imageTranslateY = 0;
       }
     });
   },
@@ -141,6 +193,11 @@ export default {
     },
     loadMedia(newRoute = false) {
       this.videoDelayedLoadingDone = false;
+      this.videoUnavailable = false;
+      this.mediaLoading = true;
+      this.imageScale = 1;
+      this.imageTranslateX = 0;
+      this.imageTranslateY = 0;
       this.file = this.files[this.position];
       if (newRoute) {
         useRouter().push({
@@ -169,8 +226,50 @@ export default {
         this.staticUrl + "/" + file.accountId + "/" + file.id[0] + "/" + file.id[1] + "/" + file.id + "/preview.mp4"
       );
     },
+    onMediaLoaded() {
+      this.mediaLoading = false;
+    },
+    onVideoError() {
+      this.videoUnavailable = true;
+      this.mediaLoading = false;
+    },
+    onImageWheel(event) {
+      const delta = event.deltaY > 0 ? -0.15 : 0.15;
+      this.imageScale = Math.min(10, Math.max(1, this.imageScale + delta));
+      if (this.imageScale <= 1) {
+        this.imageTranslateX = 0;
+        this.imageTranslateY = 0;
+      }
+    },
+    onImageMouseDown(event) {
+      if (this.imageScale <= 1) return;
+      this.isDragging = true;
+      this.dragStartX = event.clientX;
+      this.dragStartY = event.clientY;
+      this.dragStartTranslateX = this.imageTranslateX;
+      this.dragStartTranslateY = this.imageTranslateY;
+      event.preventDefault();
+    },
+    onImageMouseMove(event) {
+      if (!this.isDragging) return;
+      this.imageTranslateX = this.dragStartTranslateX + (event.clientX - this.dragStartX);
+      this.imageTranslateY = this.dragStartTranslateY + (event.clientY - this.dragStartY);
+    },
+    onImageMouseUp() {
+      this.isDragging = false;
+    },
   },
-};
+  computed: {
+    imageTransformStyle() {
+      return {
+        transform: `scale(${this.imageScale}) translate(${this.imageTranslateX / this.imageScale}px, ${this.imageTranslateY / this.imageScale}px)`,
+        cursor: this.imageScale > 1 ? (this.isDragging ? "grabbing" : "grab") : "default",
+        transition: this.isDragging ? "none" : "transform 0.1s ease-out",
+        transformOrigin: "center center",
+        userSelect: "none",
+      };
+    },
+  },
 </script>
 
 <style scoped>
@@ -187,6 +286,7 @@ export default {
   grid-template-rows: 1fr auto 1fr;
   width: 100vw;
   height: 100vh;
+  position: relative;
 }
 #media-container img {
   grid-column: 2;
@@ -287,5 +387,35 @@ export default {
 #media-preload img {
   width: 0px;
   height: 0px;
+}
+.media-loading {
+  grid-column: 2;
+  grid-row: 2;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+}
+.media-hidden {
+  visibility: hidden;
+}
+.video-unavailable {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75em;
+  color: #aaf;
+  opacity: 0.7;
+  font-size: 1.2em;
+}
+.video-unavailable i {
+  font-size: 3em;
+}
+.video-unavailable p {
+  margin: 0;
 }
 </style>
