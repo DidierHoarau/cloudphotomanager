@@ -128,10 +128,13 @@ export default {
     gestureManager.add(new Hammer.Swipe({ threshold: 10, velocity: 0.3 }));
     gestureManager.add(new Hammer.Pinch({ enable: true }));
     gestureManager.add(
-      new Hammer.Pan({ threshold: 5, pointers: 1, direction: Hammer.DIRECTION_ALL }),
+      new Hammer.Pan({
+        threshold: 5,
+        pointers: 1,
+        direction: Hammer.DIRECTION_ALL,
+      }),
     );
     gestureManager.get("swipe").requireFailure(gestureManager.get("pinch"));
-    gestureManager.get("pan").requireFailure(gestureManager.get("swipe"));
     let pinchStartScale = 1;
     let panStartTranslateX = 0;
     let panStartTranslateY = 0;
@@ -156,7 +159,7 @@ export default {
         this.imageTranslateY = 0;
       }
     });
-    gestureManager.on("panstart", () => {
+    gestureManager.on("panstart", (event) => {
       if (this.imageScale <= 1) return;
       panStartTranslateX = this.imageTranslateX;
       panStartTranslateY = this.imageTranslateY;
