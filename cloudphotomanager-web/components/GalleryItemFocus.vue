@@ -127,8 +127,14 @@ export default {
     const gestureManager = new Hammer.Manager(mediaContainer);
     gestureManager.add(new Hammer.Swipe({ threshold: 10, velocity: 0.3 }));
     gestureManager.add(new Hammer.Pinch({ enable: true }));
+    gestureManager.add(
+      new Hammer.Pan({ threshold: 5, pointers: 1, direction: Hammer.DIRECTION_ALL }),
+    );
     gestureManager.get("swipe").requireFailure(gestureManager.get("pinch"));
+    gestureManager.get("pan").requireFailure(gestureManager.get("swipe"));
     let pinchStartScale = 1;
+    let panStartTranslateX = 0;
+    let panStartTranslateY = 0;
     gestureManager.on("swipe", (event) => {
       if (this.imageScale > 1) return;
       if (event.offsetDirection === 2) {
@@ -149,6 +155,16 @@ export default {
         this.imageTranslateX = 0;
         this.imageTranslateY = 0;
       }
+    });
+    gestureManager.on("panstart", () => {
+      if (this.imageScale <= 1) return;
+      panStartTranslateX = this.imageTranslateX;
+      panStartTranslateY = this.imageTranslateY;
+    });
+    gestureManager.on("panmove", (event) => {
+      if (this.imageScale <= 1) return;
+      this.imageTranslateX = panStartTranslateX + event.deltaX;
+      this.imageTranslateY = panStartTranslateY + event.deltaY;
     });
   },
   unmounted() {
