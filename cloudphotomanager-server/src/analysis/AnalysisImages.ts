@@ -9,6 +9,11 @@ export async function AnalysisImagesInit(
   inConfig: Config,
 ): Promise<void> {
   const span = OTelTracer().startSpan("AnalysisImagesInit", context);
+  config = inConfig;
+  if (releaseTimer) {
+    clearTimeout(releaseTimer);
+    releaseTimer = null;
+  }
   releasePipeline();
   span.end();
 }
@@ -19,6 +24,10 @@ export async function AnalysisImagesGetLabels(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
   const span = OTelTracer().startSpan("AnalysisImagesGetLabels", context);
+  if (config && !config.IMAGE_CLASSIFICATION_ENABLED) {
+    span.end();
+    return [];
+  }
   dateLastUsed = new Date();
   while (pipeInitializing) {
     await TimeoutWait(1000);
@@ -35,16 +44,25 @@ export async function AnalysisImagesGetLabels(
 
 // Private Function
 
-let dateLastUsed: Date = new Date();
+let config: Config | null = null;
+let dateLastUsed: Date | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let pipe: any;
 let pipeInitializing = false;
+let releaseTimer: NodeJS.Timeout | null = null;
 
-function releasePipeline() {
-  if (dateLastUsed < new Date(new Date().getTime() - 60 * 60 * 1000)) {
+async function releasePipeline() {
+  if (
+    dateLastUsed !== null &&
+    dateLastUsed < new Date(Date.now() - 60 * 60 * 1000)
+  ) {
+    if (pipe && typeof pipe.dispose === "function") {
+      await pipe.dispose();
+    }
     pipe = null;
+    dateLastUsed = null;
   }
-  setTimeout(() => {
+  releaseTimer = setTimeout(() => {
     releasePipeline();
   }, 3600 * 1000);
 }
