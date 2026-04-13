@@ -1,20 +1,70 @@
 <template>
   <div class="file-preview">
-    <i class="bi bi-x-circle action" v-on:click="clickedClose()"></i>
-    <div v-if="authenticationStore.isAdmin" class="file-preview-operations">
-      <button class="secondary outline" v-on:click="clickedDelete()">
-        <i class="bi bi-trash-fill"></i> Delete
-      </button>
-      <button class="secondary outline" v-on:click="clickedMove()">
-        <i class="bi bi-arrows-move"></i> Move...
-      </button>
-    </div>
     <DialogMove
       v-if="activeOperation == 'move'"
       :target="{ files: [file] }"
       @onDone="onOperationDone"
     />
-    <div id="media-container">
+    <div class="action-bar" :class="{ expanded: actionBarExpanded }">
+      <button
+        class="action-bar-toggle"
+        @click="actionBarExpanded = !actionBarExpanded"
+      >
+        <i
+          :class="
+            actionBarExpanded ? 'bi bi-chevron-left' : 'bi bi-chevron-right'
+          "
+        ></i>
+      </button>
+      <div class="action-bar-content">
+        <button
+          class="action-btn"
+          @click="previousMedia()"
+          :disabled="position === 0"
+          title="Previous"
+        >
+          <i class="bi bi-arrow-left"></i>
+        </button>
+        <button
+          class="action-btn"
+          @click="nextMedia()"
+          :disabled="position === files.length - 1"
+          title="Next"
+        >
+          <i class="bi bi-arrow-right"></i>
+        </button>
+        <div class="action-bar-divider"></div>
+        <button
+          class="action-btn"
+          v-if="file && getType(file) == 'image'"
+          @click="rotateImage()"
+          title="Rotate"
+        >
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+        <div
+          class="action-bar-divider"
+          v-if="authenticationStore.isAdmin"
+        ></div>
+        <template v-if="authenticationStore.isAdmin">
+          <button class="action-btn" @click="clickedMove()" title="Move">
+            <i class="bi bi-arrows-move"></i>
+          </button>
+          <button
+            class="action-btn action-btn-danger"
+            @click="clickedDelete()"
+            title="Delete"
+          >
+            <i class="bi bi-trash-fill"></i>
+          </button>
+        </template>
+        <div class="action-bar-divider"></div>
+        <button class="action-btn" @click="clickedClose()" title="Close">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+    </div>
+    <div id="media-container" ref="mediaContainer">
       <Loading v-if="mediaLoading" class="media-loading" />
       <img
         class="media-content"
@@ -92,6 +142,7 @@ export default {
       serverUrl: "",
       staticUrl: "",
       activeOperation: "",
+      actionBarExpanded: false,
       file: null,
       files: [],
       position: 0,
@@ -99,6 +150,7 @@ export default {
       videoUnavailable: false,
       mediaLoading: true,
       imageScale: 1,
+      imageRotation: 0,
       imageTranslateX: 0,
       imageTranslateY: 0,
       isDragging: false,
@@ -122,11 +174,21 @@ export default {
       else if (event.key === "Escape") this.clickedClose();
     };
     window.addEventListener("keydown", this._onKeyDown);
-
-    const mediaContainer = document.querySelector("#media-container");
-    const gestureManager = new Hammer.Manager(mediaContainer);
-    gestureManager.add(new Hammer.Swipe({ threshold: 10, velocity: 0.3 }));
+  },
+  mounted() {
+    const mediaContainer = this.$refs.mediaContainer;
+    if (!mediaContainer) return;
+    const gestureManager = new Hammer.Manager(mediaContainer, {
+      touchAction: "none",
+    });
     gestureManager.add(new Hammer.Pinch({ enable: true }));
+    gestureManager.add(
+      new Hammer.Swipe({
+        threshold: 10,
+        velocity: 0.3,
+        direction: Hammer.DIRECTION_HORIZONTAL,
+      }),
+    );
     gestureManager.add(
       new Hammer.Pan({
         threshold: 5,
@@ -135,6 +197,7 @@ export default {
       }),
     );
     gestureManager.get("swipe").requireFailure(gestureManager.get("pinch"));
+    gestureManager.get("pan").requireFailure(gestureManager.get("pinch"));
     let pinchStartScale = 1;
     let panStartTranslateX = 0;
     let panStartTranslateY = 0;
@@ -159,7 +222,7 @@ export default {
         this.imageTranslateY = 0;
       }
     });
-    gestureManager.on("panstart", (event) => {
+    gestureManager.on("panstart", () => {
       if (this.imageScale <= 1) return;
       panStartTranslateX = this.imageTranslateX;
       panStartTranslateY = this.imageTranslateY;
@@ -168,6 +231,14 @@ export default {
       if (this.imageScale <= 1) return;
       this.imageTranslateX = panStartTranslateX + event.deltaX;
       this.imageTranslateY = panStartTranslateY + event.deltaY;
+    });
+    gestureManager.on("panend", (event) => {
+      if (this.imageScale > 1) return;
+      if (event.deltaX < -50 || event.velocityX < -0.3) {
+        this.nextMedia();
+      } else if (event.deltaX > 50 || event.velocityX > 0.3) {
+        this.previousMedia();
+      }
     });
   },
   unmounted() {
@@ -252,6 +323,7 @@ export default {
       this.videoUnavailable = false;
       this.mediaLoading = true;
       this.imageScale = 1;
+      this.imageRotation = 0;
       this.imageTranslateX = 0;
       this.imageTranslateY = 0;
       this.file = this.files[this.position];
@@ -342,11 +414,14 @@ export default {
     onImageMouseUp() {
       this.isDragging = false;
     },
+    rotateImage() {
+      this.imageRotation = (this.imageRotation + 90) % 360;
+    },
   },
   computed: {
     imageTransformStyle() {
       return {
-        transform: `scale(${this.imageScale}) translate(${this.imageTranslateX / this.imageScale}px, ${this.imageTranslateY / this.imageScale}px)`,
+        transform: `scale(${this.imageScale}) rotate(${this.imageRotation}deg) translate(${this.imageTranslateX / this.imageScale}px, ${this.imageTranslateY / this.imageScale}px)`,
         cursor:
           this.imageScale > 1
             ? this.isDragging
@@ -377,6 +452,8 @@ export default {
   width: 100vw;
   height: 100vh;
   position: relative;
+  touch-action: none;
+  user-select: none;
 }
 #media-container img {
   grid-column: 2;
@@ -395,27 +472,86 @@ export default {
   width: auto;
   height: auto;
 }
-.file-preview .action {
-  font-size: 1.5em;
+.action-bar {
   position: fixed;
-  right: 1em;
-  top: 1em;
+  bottom: 0;
+  left: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  height: 3.5em;
+}
+.action-bar-toggle {
+  flex-shrink: 0;
+  width: 3.5em;
+  height: 3.5em;
+  background: rgba(20, 20, 40, 0.75);
+  backdrop-filter: blur(8px);
+  border: none;
+  border-top-right-radius: 0.6em;
   color: #aaf;
-  z-index: 100;
+  font-size: 1.1em;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
 }
-.file-preview-operations {
-  font-size: 1.5em;
-  position: fixed;
-  bottom: 1em;
-  right: 1em;
+.action-bar-toggle:hover {
+  background: rgba(40, 40, 80, 0.9);
+}
+.action-bar-content {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  height: 3.5em;
+  padding: 0 1em;
+  background: rgba(20, 20, 40, 0.75);
+  backdrop-filter: blur(8px);
+  border-top-right-radius: 0.6em;
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  transition:
+    max-width 0.35s ease,
+    opacity 0.25s ease;
+  pointer-events: none;
+}
+.action-bar.expanded .action-bar-content {
+  max-width: 100vw;
+  opacity: 1;
+  pointer-events: all;
+}
+.action-btn {
+  background: transparent;
+  border: none;
   color: #aaf;
-  z-index: 100;
+  font-size: 1.2em;
+  padding: 0.3em 0.5em;
+  cursor: pointer;
+  border-radius: 0.4em;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  white-space: nowrap;
 }
-.file-preview-operations button {
-  padding: 0.3em 0.7em;
-  font-size: 0.5em;
-  opacity: 0.5;
+.action-btn:hover:not(:disabled) {
+  background: rgba(170, 170, 255, 0.15);
+  color: #fff;
+}
+.action-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.action-btn-danger:hover:not(:disabled) {
+  background: rgba(255, 80, 80, 0.2);
+  color: #f88;
+}
+.action-bar-divider {
+  width: 1px;
+  height: 1.8em;
+  background: rgba(170, 170, 255, 0.25);
+  margin: 0 0.3em;
 }
 .animate-media-out-left {
   animation-duration: 0.3s;
