@@ -474,23 +474,24 @@ export default {
 }
 .action-bar {
   position: fixed;
-  bottom: 0;
+  bottom: 1em;
   left: 0;
   z-index: 200;
   display: flex;
   align-items: flex-end;
-  height: 3.5em;
+  height: 2.6em;
 }
 .action-bar-toggle {
   flex-shrink: 0;
-  width: 3.5em;
-  height: 3.5em;
-  background: rgba(20, 20, 40, 0.75);
-  backdrop-filter: blur(8px);
+  width: 2.6em;
+  height: 2.6em;
+  background: rgba(20, 20, 40, 0.45);
+  backdrop-filter: blur(6px);
   border: none;
-  border-top-right-radius: 0.6em;
+  border-top-right-radius: 0.5em;
+  border-bottom-right-radius: 0.5em;
   color: #aaf;
-  font-size: 1.1em;
+  font-size: 0.85em;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -498,17 +499,18 @@ export default {
   transition: background 0.2s;
 }
 .action-bar-toggle:hover {
-  background: rgba(40, 40, 80, 0.9);
+  background: rgba(40, 40, 80, 0.65);
 }
 .action-bar-content {
   display: flex;
   align-items: center;
-  gap: 0.4em;
-  height: 3.5em;
-  padding: 0 1em;
-  background: rgba(20, 20, 40, 0.75);
-  backdrop-filter: blur(8px);
-  border-top-right-radius: 0.6em;
+  gap: 0.2em;
+  height: 2.6em;
+  padding: 0 0.6em;
+  background: rgba(20, 20, 40, 0.45);
+  backdrop-filter: blur(6px);
+  border-top-right-radius: 0.5em;
+  border-bottom-right-radius: 0.5em;
   overflow: hidden;
   max-width: 0;
   opacity: 0;
@@ -526,10 +528,10 @@ export default {
   background: transparent;
   border: none;
   color: #aaf;
-  font-size: 1.2em;
-  padding: 0.3em 0.5em;
+  font-size: 0.95em;
+  padding: 0.25em 0.4em;
   cursor: pointer;
-  border-radius: 0.4em;
+  border-radius: 0.35em;
   transition:
     background 0.15s,
     color 0.15s;
@@ -549,9 +551,9 @@ export default {
 }
 .action-bar-divider {
   width: 1px;
-  height: 1.8em;
-  background: rgba(170, 170, 255, 0.25);
-  margin: 0 0.3em;
+  height: 1.4em;
+  background: rgba(170, 170, 255, 0.2);
+  margin: 0 0.2em;
 }
 .animate-media-out-left {
   animation-duration: 0.3s;
