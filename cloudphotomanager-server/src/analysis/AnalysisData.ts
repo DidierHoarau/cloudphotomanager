@@ -5,13 +5,42 @@ import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
 import { SqlDbUtilsQuerySQL } from "../utils-std-ts/SqlDbUtils";
 import { OTelTracer } from "../OTelContext";
 
+export async function AnalysisDataGetFileDuplicates(
+  context: Span,
+  accountId: string,
+  fileId: string,
+): Promise<AnalysisDuplicate | null> {
+  const span = OTelTracer().startSpan(
+    "AnalysisData_getFileDuplicates",
+    context,
+  );
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT * FROM files WHERE accountId = ? AND hash IN " +
+      " (SELECT hash FROM files WHERE id = ? AND accountId = ?) " +
+      " ORDER BY hash ",
+    [accountId, fileId, accountId],
+  );
+  span.end();
+  if (rawData.length < 2) {
+    return null;
+  }
+  const result: AnalysisDuplicate = {
+    accountId,
+    hash: rawData[0].hash,
+    files: rawData.map(fromRaw),
+    folders: [],
+  };
+  return result;
+}
+
 export async function AnalysisDataListAccountDuplicates(
   context: Span,
-  accountId: string
+  accountId: string,
 ): Promise<AnalysisDuplicate[]> {
   const span = OTelTracer().startSpan(
     "AnalysisData_listAccountDuplicates",
-    context
+    context,
   );
   const rawData = await SqlDbUtilsQuerySQL(
     span,
@@ -20,7 +49,7 @@ export async function AnalysisDataListAccountDuplicates(
       " WHERE accountId = ? AND hash IN " +
       " ( SELECT hash FROM files WHERE accountId = ? GROUP BY hash HAVING count(*) > 1) " +
       " ORDER BY hash ",
-    [accountId, accountId]
+    [accountId, accountId],
   );
   const analysis: AnalysisDuplicate[] = [];
   let currentAnalysisDuplicate: AnalysisDuplicate = null;

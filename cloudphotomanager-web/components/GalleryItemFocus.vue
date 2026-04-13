@@ -5,6 +5,11 @@
       :target="{ files: [file] }"
       @onDone="onOperationDone"
     />
+    <DialogFileInfo
+      v-if="showFileInfo && file"
+      :file="file"
+      @onClose="showFileInfo = false"
+    />
     <div class="action-bar" :class="{ expanded: actionBarExpanded }">
       <button
         class="action-bar-toggle"
@@ -58,6 +63,10 @@
             <i class="bi bi-trash-fill"></i>
           </button>
         </template>
+        <div class="action-bar-divider"></div>
+        <button class="action-btn" @click="showFileInfo = true" title="Info">
+          <i class="bi bi-info-circle"></i>
+        </button>
         <div class="action-bar-divider"></div>
         <button class="action-btn" @click="clickedClose()" title="Close">
           <i class="bi bi-x-lg"></i>
@@ -143,6 +152,7 @@ export default {
       staticUrl: "",
       activeOperation: "",
       actionBarExpanded: false,
+      showFileInfo: false,
       file: null,
       files: [],
       position: 0,

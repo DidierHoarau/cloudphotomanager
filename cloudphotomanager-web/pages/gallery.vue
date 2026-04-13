@@ -120,7 +120,6 @@ import { find, findIndex, filter } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
-import { FileUtils } from "~~/services/FileUtils";
 
 export default {
   data() {
@@ -129,8 +128,6 @@ export default {
       files: [],
       menuOpened: true,
       serverUrl: "",
-      staticUrl: "",
-      selectedFile: null,
       selectedFiles: [],
       requestEtag: "",
       currentAccountId: "",
@@ -148,11 +145,13 @@ export default {
       hasMore: false,
       loadingMore: false,
       observer: null,
+      _onFolderUpdated: null,
+      _onFileUpdated: null,
+      _onFolderSelected: null,
     };
   },
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
-    this.staticUrl = (await Config.get()).STATIC_URL;
     try {
       const saved = localStorage.getItem("galleryOptions");
       if (saved) {
@@ -171,7 +170,7 @@ export default {
     if (AccountsStore().accounts.length > 0) {
       FoldersStore().fetch();
     }
-    EventBus.on(EventTypes.FOLDER_UPDATED, (message) => {
+    this._onFolderUpdated = (message) => {
       if (
         message.accountId === this.currentAccountId &&
         message.folderId === this.currentFolderId
@@ -179,13 +178,16 @@ export default {
         this.fetchFiles(message.accountId, message.folderId, true);
         FoldersStore().fetch();
       }
-    });
-    EventBus.on(EventTypes.FILE_UPDATED, (message) => {
+    };
+    this._onFileUpdated = () => {
       FoldersStore().fetch();
-    });
-    EventBus.on(EventTypes.FOLDER_SELECTED, (message) => {
+    };
+    this._onFolderSelected = (message) => {
       this.fetchFiles(message.accountId, message.folderId, true);
-    });
+    };
+    EventBus.on(EventTypes.FOLDER_UPDATED, this._onFolderUpdated);
+    EventBus.on(EventTypes.FILE_UPDATED, this._onFileUpdated);
+    EventBus.on(EventTypes.FOLDER_SELECTED, this._onFolderSelected);
     if (
       useRoute().query.accountId &&
       useRoute().query.folderId &&
@@ -202,10 +204,8 @@ export default {
     watch(
       () => useRoute().query.folderId,
       () => {
-        if (
-          !this.displayFullScreen &&
-          this.currentFolderId !== useRoute().query.folderId
-        ) {
+        if (this.currentFolderId !== useRoute().query.folderId) {
+          this.displayFullScreen = false;
           this.fetchFiles(
             useRoute().query.accountId,
             useRoute().query.folderId,
@@ -261,13 +261,16 @@ export default {
     if (this.observer) {
       this.observer.disconnect();
     }
+    EventBus.off(EventTypes.FOLDER_UPDATED, this._onFolderUpdated);
+    EventBus.off(EventTypes.FILE_UPDATED, this._onFileUpdated);
+    EventBus.off(EventTypes.FOLDER_SELECTED, this._onFolderSelected);
   },
   methods: {
-    filterOuttakes() {
+    filterOuttakes(files) {
       if (!this.showOutakes) {
-        return filter(this.files, { isOuttake: false });
+        return filter(files, { isOuttake: false });
       }
-      return this.files;
+      return files;
     },
     async fetchFiles(accountId, folderId, forceLoading = false) {
       const requestEtag = new Date().toISOString();
@@ -378,14 +381,10 @@ export default {
         this.selectedFiles.splice(selectedIndex, 1);
       }
     },
-    isFileSelected(file) {
-      return findIndex(this.selectedFiles, { id: file.id }) >= 0;
-    },
     onFolderSelected(event) {
       useRouter().push({
         query: { accountId: event.folder.accountId, folderId: event.folder.id },
       });
-      this.fetchFiles(event.folder.accountId, event.folder.id);
     },
     focusGalleryItem(file) {
       if (!file) {
@@ -409,31 +408,6 @@ export default {
     },
     openListMenu() {
       this.menuOpened = !this.menuOpened;
-    },
-    displayDate(date) {
-      if (!date || new Date(date).getTime() === 0) {
-        return "";
-      }
-      return new Date(date).toLocaleString();
-    },
-    displaySize(size) {
-      if (!size) {
-        return "";
-      }
-      try {
-        if (size > 1000000000) {
-          return (Number(size) / 1000000000).toFixed(1) + " GB";
-        }
-        if (size > 1000000) {
-          return (Number(size) / 1000000).toFixed(1) + " MB";
-        }
-        if (size > 1000) {
-          return (Number(size) / 1000).toFixed(1) + " KB";
-        }
-        return size + " B";
-      } catch (err) {
-        return "";
-      }
     },
     onDialogClosed(result) {
       this.activeOperation = "";
@@ -518,7 +492,7 @@ export default {
       if (confirm(message) == true) {
         this.loading = true;
         SyncStore().markOperationInProgress();
-        axios
+        await axios
           .delete(
             `${(await Config.get()).SERVER_URL}/accounts/${
               this.folder.accountId
@@ -539,12 +513,11 @@ export default {
               },
             });
           })
-          .catch(handleError);
-        this.loading = false;
+          .catch(handleError)
+          .finally(() => {
+            this.loading = false;
+          });
       }
-    },
-    getType(file) {
-      return FileUtils.getType(file);
     },
   },
 };
