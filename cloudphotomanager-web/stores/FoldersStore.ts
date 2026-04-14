@@ -22,7 +22,10 @@ export const FoldersStore = defineStore("FoldersStore", {
       for (const accountIn of AccountsStore().accounts) {
         const account: any = accountIn;
         await axios
-          .get(`${(await Config.get()).SERVER_URL}/accounts/${account.id}/folders`, await AuthService.getAuthHeader())
+          .get(
+            `${(await Config.get()).SERVER_URL}/accounts/${account.id}/folders`,
+            await AuthService.getAuthHeader(),
+          )
           .then((res) => {
             for (const folder of sortBy(res.data.folders, ["folderpath"])) {
               if (folder.folderpath === "/") {
@@ -34,7 +37,10 @@ export const FoldersStore = defineStore("FoldersStore", {
                   depth: 0,
                   parentIndex: -1,
                   indentation: "",
-                  isCollapsed: PreferencesFolders.isCollapsed(folder.accountId, folder.id),
+                  isCollapsed: PreferencesFolders.isCollapsed(
+                    folder.accountId,
+                    folder.id,
+                  ),
                   isVisible: true,
                   children: 0,
                 });
@@ -43,7 +49,10 @@ export const FoldersStore = defineStore("FoldersStore", {
                 if (parentPath === "") {
                   parentPath = "/";
                 }
-                const parentIndex = findIndex(folders, { folderpath: parentPath, accountId: account.id });
+                const parentIndex = findIndex(folders, {
+                  folderpath: parentPath,
+                  accountId: account.id,
+                });
                 folders.push({
                   id: folder.id,
                   name: folder.folderpath.split("/").pop(),
@@ -52,7 +61,10 @@ export const FoldersStore = defineStore("FoldersStore", {
                   folderpath: formatFolderPath(folder.folderpath),
                   childrenCount: folder.childrenCount,
                   indentation: this.getIndentation(folder.folderpath),
-                  isCollapsed: PreferencesFolders.isCollapsed(folder.accountId, folder.id),
+                  isCollapsed: PreferencesFolders.isCollapsed(
+                    folder.accountId,
+                    folder.id,
+                  ),
                   isVisible: true,
                   parentIndex,
                   children: 0,
@@ -85,7 +97,10 @@ export const FoldersStore = defineStore("FoldersStore", {
           folder.isVisible = true;
           continue;
         }
-        if (!folders[folder.parentIndex].isVisible || folders[folder.parentIndex].isCollapsed) {
+        if (
+          !folders[folder.parentIndex].isVisible ||
+          folders[folder.parentIndex].isCollapsed
+        ) {
           folder.isVisible = false;
           continue;
         }
@@ -96,7 +111,7 @@ export const FoldersStore = defineStore("FoldersStore", {
       const counts = (
         await axios.get(
           `${(await Config.get()).SERVER_URL}/accounts/${accountId}/folders/counts`,
-          await AuthService.getAuthHeader()
+          await AuthService.getAuthHeader(),
         )
       ).data.counts;
       for (let element of counts) {
@@ -111,6 +126,35 @@ export const FoldersStore = defineStore("FoldersStore", {
       folder.isCollapsed = !folder.isCollapsed;
       PreferencesFolders.toggleCollapsed(folder.accountId, folder.id);
       this.checkVisibility(this.folders, folder.accountId);
+    },
+    expandToFolder(folderId: string) {
+      // Walk up the parent chain and un-collapse each ancestor
+      const folders = this.folders as any[];
+      let current = folders.find((f) => f.id === folderId);
+      if (!current) {
+        return;
+      }
+      const accountId = current.accountId;
+      const ancestorIndices: number[] = [];
+      while (current && current.parentIndex >= 0) {
+        ancestorIndices.push(current.parentIndex);
+        current = folders[current.parentIndex];
+      }
+      // Un-collapse from the top-most ancestor down
+      for (const idx of ancestorIndices.reverse()) {
+        const ancestor = folders[idx] as any;
+        if (ancestor.isCollapsed) {
+          ancestor.isCollapsed = false;
+          PreferencesFolders.setCollapsed(
+            ancestor.accountId,
+            ancestor.id,
+            false,
+          );
+        }
+      }
+      if (ancestorIndices.length > 0) {
+        this.checkVisibility(folders, accountId);
+      }
     },
     getParentFolder(folder: any) {
       return this.folders[folder.parentIndex];

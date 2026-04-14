@@ -12,9 +12,21 @@ export enum EventTypes {
 
 export function handleError(error: any): void {
   console.log(error);
-  let text = error.response;
-  if (error.response && error.response.data && error.response.data.error) {
-    text = error.response.data.error;
+  let text = "An unexpected error occurred";
+  if (error.response) {
+    if (error.response.data && error.response.data.error) {
+      text = error.response.data.error;
+    } else if (error.response.data && typeof error.response.data === "string") {
+      text = error.response.data;
+    } else if (error.response.statusText) {
+      text = `${error.response.status} - ${error.response.statusText}`;
+    } else {
+      text = `HTTP error ${error.response.status}`;
+    }
+  } else if (error.request) {
+    text = "No response from server";
+  } else if (error.message) {
+    text = error.message;
   }
   EventBus.emit(EventTypes.ALERT_MESSAGE, {
     type: "error",

@@ -1,9 +1,22 @@
 <template>
   <div class="page">
     <h1>Profile</h1>
-    <button v-on:click="logout()">Logout</button>
-    <button v-if="!isChangePasswordStarted" v-on:click="changePasswordStart(true)">Change Password</button>
-    <NuxtLink v-if="authenticationStore.isAdmin" to="/users/management"><button>Users</button></NuxtLink>
+    <p>
+      <button v-on:click="logout()">Logout</button>
+    </p>
+    <p>
+      <button
+        v-if="!isChangePasswordStarted"
+        v-on:click="changePasswordStart(true)"
+      >
+        Change Password
+      </button>
+    </p>
+    <p>
+      <NuxtLink v-if="authenticationStore.isAdmin" to="/users/management"
+        ><button>Users</button></NuxtLink
+      >
+    </p>
     <article v-if="isChangePasswordStarted">
       <h1>Change Password</h1>
       <label>Old Password</label>
@@ -46,7 +59,11 @@ export default {
     async login() {
       if (this.user.name && this.user.password) {
         await axios
-          .post(`${(await Config.get()).SERVER_URL}/users/session`, this.user, await AuthService.getAuthHeader())
+          .post(
+            `${(await Config.get()).SERVER_URL}/users/session`,
+            this.user,
+            await AuthService.getAuthHeader(),
+          )
           .then((res) => {
             AuthService.saveToken(res.data.token);
             AuthenticationStore().isAuthenticated = true;
@@ -67,7 +84,11 @@ export default {
     async changePassword() {
       if (this.user.password && this.user.passwordOld) {
         await axios
-          .put(`${(await Config.get()).SERVER_URL}/users/password`, this.user, await AuthService.getAuthHeader())
+          .put(
+            `${(await Config.get()).SERVER_URL}/users/password`,
+            this.user,
+            await AuthService.getAuthHeader(),
+          )
           .then((res) => {
             EventBus.emit(EventTypes.ALERT_MESSAGE, {
               type: "info",

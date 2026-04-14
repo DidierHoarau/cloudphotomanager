@@ -14,6 +14,10 @@ import {
   FolderDataListCountsForAccount,
   FolderDataListForAccount,
 } from "./FolderData";
+import {
+  FileDataListByFolderPaginated,
+  FileDataListByFolderRecursivePaginated,
+} from "../files/FileData";
 
 export class FolderRoutes {
   //
@@ -32,7 +36,7 @@ export class FolderRoutes {
       const folders = await UserPermissionCheckFilterFoldersForUser(
         span,
         await FolderDataListForAccount(span, req.params.accountId, true),
-        userSession.userId
+        userSession.userId,
       );
       return res.status(200).send({ folders });
     });
@@ -50,9 +54,65 @@ export class FolderRoutes {
       const counts = await FolderDataListCountsForAccount(
         span,
         req.params.accountId,
-        true
+        true,
       );
       return res.status(200).send({ counts });
+    });
+
+    fastify.get<{
+      Params: {
+        accountId: string;
+        folderId: string;
+      };
+      Querystring: {
+        includeSubFolders?: string;
+        sortOrder?: string;
+        page?: string;
+        pageSize?: string;
+      };
+    }>("/:folderId/files-recursive", async (req, res) => {
+      const span = OTelRequestSpan(req);
+      const userSession = await AuthGetUserSession(req);
+      if (!userSession.isAuthenticated) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const folder = await FolderDataGet(span, req.params.folderId);
+      if (!folder) {
+        return res
+          .status(200)
+          .send({ files: [], page: 0, pageSize: 50, total: 0 });
+      }
+      const includeSubFolders = req.query.includeSubFolders === "true";
+      const sortOrder: "asc" | "desc" =
+        req.query.sortOrder === "asc" ? "asc" : "desc";
+      const page = parseInt(req.query.page || "0", 10);
+      const pageSize = parseInt(req.query.pageSize || "60", 10);
+      let result: { files: any[]; total: number };
+      if (includeSubFolders) {
+        result = await FileDataListByFolderRecursivePaginated(
+          span,
+          req.params.accountId,
+          folder.folderpath,
+          sortOrder,
+          page,
+          pageSize,
+        );
+      } else {
+        result = await FileDataListByFolderPaginated(
+          span,
+          req.params.accountId,
+          req.params.folderId,
+          sortOrder,
+          page,
+          pageSize,
+        );
+      }
+      return res.status(200).send({
+        files: result.files,
+        page,
+        pageSize,
+        total: result.total,
+      });
     });
 
     fastify.get<{
@@ -73,7 +133,7 @@ export class FolderRoutes {
       const files = await FileDataListByFolder(
         span,
         req.params.accountId,
-        req.params.folderId
+        req.params.folderId,
       );
       return res.status(200).send({ files });
     });
@@ -94,14 +154,14 @@ export class FolderRoutes {
         return res.status(200).send({ files: [] });
       }
       const account = await AccountFactoryGetAccountImplementation(
-        req.params.accountId
+        req.params.accountId,
       );
       SyncQueueQueueItem(
         account.getAccountDefinition().id,
         folder.id,
         folder,
         "SyncInventorySyncFolder",
-        SyncQueueItemPriority.INTERACTIVE
+        SyncQueueItemPriority.INTERACTIVE,
       );
       return res.status(200).send({});
     });
@@ -123,20 +183,20 @@ export class FolderRoutes {
       }
       const folderParent = await FolderDataGetParent(span, folder.id);
       const account = await AccountFactoryGetAccountImplementation(
-        req.params.accountId
+        req.params.accountId,
       );
       account.deleteFolder(span, folder);
       await FolderDataDelete(
         span,
         account.getAccountDefinition().id,
-        folder.folderpath
+        folder.folderpath,
       );
       SyncQueueQueueItem(
         req.params.accountId,
         folder.id,
         folderParent,
         "SyncInventorySyncFolder",
-        SyncQueueItemPriority.INTERACTIVE
+        SyncQueueItemPriority.INTERACTIVE,
       );
       return res.status(202).send({});
     });

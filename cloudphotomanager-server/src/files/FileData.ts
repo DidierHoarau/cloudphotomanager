@@ -19,7 +19,7 @@ export async function FileDataInit(context: Span, configIn: Config) {
 export async function FileDataGetFileCacheDir(
   context: Span,
   accountId: string,
-  fileId: string
+  fileId: string,
 ): Promise<string> {
   return `${config.DATA_DIR}/cache/${accountId}/${fileId[0]}/${fileId[1]}/${fileId}`;
 }
@@ -27,7 +27,7 @@ export async function FileDataGetFileCacheDir(
 export async function FileDataGetFileTmpDir(
   context: Span,
   accountId: string,
-  fileId: string
+  fileId: string,
 ): Promise<string> {
   return `${config.TMP_DIR}/cache/${accountId}/${Date.now()}_${fileId}`;
 }
@@ -37,7 +37,7 @@ export async function FileDataGet(context: Span, id: string): Promise<File> {
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM files WHERE id = ? ",
-    [id]
+    [id],
   );
   if (rawData.length === 0) {
     return null;
@@ -51,13 +51,13 @@ export async function FileDataGetByFolderId(
   context: Span,
   accountId: string,
   folderId: string,
-  filename: string
+  filename: string,
 ): Promise<File> {
   const span = OTelTracer().startSpan("FileDataGetByFolderId", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM files WHERE accountId = ? AND folderpath = folderId AND filename = ? ",
-    [accountId, folderId, filename]
+    [accountId, folderId, filename],
   );
   if (rawData.length === 0) {
     return null;
@@ -69,13 +69,13 @@ export async function FileDataGetByFolderId(
 
 export async function FileDataListForAccount(
   context: Span,
-  accountId: string
+  accountId: string,
 ): Promise<File[]> {
   const span = OTelTracer().startSpan("FileDataListForAccount", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM files WHERE accountId = ?",
-    [accountId]
+    [accountId],
   );
   const files = [];
   rawData.forEach((fileRaw) => {
@@ -88,13 +88,13 @@ export async function FileDataListForAccount(
 export async function FileDataListByFolder(
   context: Span,
   accountId: string,
-  folderId: string
+  folderId: string,
 ): Promise<File[]> {
   const span = OTelTracer().startSpan("FileDataListByFolder", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM files WHERE accountId = ? AND folderId = ?",
-    [accountId, folderId]
+    [accountId, folderId],
   );
   const files = [];
   rawData.forEach((fileRaw) => {
@@ -123,7 +123,7 @@ export async function FileDataAdd(context: Span, file: File): Promise<void> {
       file.dateMedia ? file.dateMedia.toISOString() : null,
       JSON.stringify(file.info),
       JSON.stringify(file.metadata),
-    ]
+    ],
   );
   FolderDataRefreshCacheFoldersCounts(span);
   span.end();
@@ -149,7 +149,7 @@ export async function FileDataUpdate(context: Span, file: File): Promise<void> {
       JSON.stringify(file.info),
       JSON.stringify(file.metadata),
       file.id,
-    ]
+    ],
   );
   FolderDataRefreshCacheFoldersCounts(span);
   span.end();
@@ -157,13 +157,13 @@ export async function FileDataUpdate(context: Span, file: File): Promise<void> {
 
 export async function FileDataUpdateKeywords(
   context: Span,
-  file: File
+  file: File,
 ): Promise<void> {
   const span = OTelTracer().startSpan("FileDataUpdateKeywords", context);
   await SqlDbUtilsExecSQL(
     span,
     "UPDATE files SET keywords = ?, info = ? WHERE id = ? ",
-    [file.keywords, JSON.stringify(file.info), file.id]
+    [file.keywords, JSON.stringify(file.info), file.id],
   );
   FolderDataRefreshCacheFoldersCounts(span);
   span.end();
@@ -180,7 +180,7 @@ export async function FileDataGetCount(context: Span): Promise<number> {
   const span = OTelTracer().startSpan("FileDataGetCount", context);
   const countRaw = await SqlDbUtilsQuerySQL(
     span,
-    "SELECT COUNT(*) as count FROM files"
+    "SELECT COUNT(*) as count FROM files",
   );
   let count = 0;
   if (countRaw.length > 0) {
@@ -190,9 +190,73 @@ export async function FileDataGetCount(context: Span): Promise<number> {
   return count;
 }
 
+export async function FileDataListByFolderPaginated(
+  context: Span,
+  accountId: string,
+  folderId: string,
+  sortOrder: "asc" | "desc",
+  page: number,
+  pageSize: number,
+): Promise<{ files: File[]; total: number }> {
+  const span = OTelTracer().startSpan("FileDataListByFolderPaginated", context);
+  const order = sortOrder === "asc" ? "ASC" : "DESC";
+  const offset = page * pageSize;
+  const countRaw = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT COUNT(*) as count FROM files WHERE accountId = ? AND folderId = ?",
+    [accountId, folderId],
+  );
+  const total = countRaw.length > 0 ? countRaw[0].count : 0;
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    `SELECT * FROM files WHERE accountId = ? AND folderId = ? ORDER BY dateMedia ${order} LIMIT ? OFFSET ?`,
+    [accountId, folderId, pageSize, offset],
+  );
+  const files: File[] = [];
+  rawData.forEach((fileRaw: any) => {
+    files.push(fromRaw(fileRaw));
+  });
+  span.end();
+  return { files, total };
+}
+
+export async function FileDataListByFolderRecursivePaginated(
+  context: Span,
+  accountId: string,
+  folderpath: string,
+  sortOrder: "asc" | "desc",
+  page: number,
+  pageSize: number,
+): Promise<{ files: File[]; total: number }> {
+  const span = OTelTracer().startSpan(
+    "FileDataListByFolderRecursivePaginated",
+    context,
+  );
+  const order = sortOrder === "asc" ? "ASC" : "DESC";
+  const offset = page * pageSize;
+  const folderpathPattern = `${folderpath}%`;
+  const countRaw = await SqlDbUtilsQuerySQL(
+    span,
+    `SELECT COUNT(*) as count FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND folderpath LIKE ?)`,
+    [accountId, accountId, folderpathPattern],
+  );
+  const total = countRaw.length > 0 ? countRaw[0].count : 0;
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    `SELECT * FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND folderpath LIKE ?) ORDER BY dateMedia ${order} LIMIT ? OFFSET ?`,
+    [accountId, accountId, folderpathPattern, pageSize, offset],
+  );
+  const files: File[] = [];
+  rawData.forEach((fileRaw: any) => {
+    files.push(fromRaw(fileRaw));
+  });
+  span.end();
+  return { files, total };
+}
+
 export async function FileDataDeleteNoFolder(
   context: Span,
-  accountId: string
+  accountId: string,
 ): Promise<void> {
   const span = OTelTracer().startSpan("FileDataDeleteNoFolder", context);
   await SqlDbUtilsExecSQL(
@@ -202,7 +266,7 @@ export async function FileDataDeleteNoFolder(
        AND folderId NOT IN (
          SELECT id FROM folders WHERE accountId = ?
        )`,
-    [accountId, accountId]
+    [accountId, accountId],
   );
   FolderDataRefreshCacheFoldersCounts(span);
   span.end();
