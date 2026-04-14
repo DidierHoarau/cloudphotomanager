@@ -10,29 +10,37 @@
     />
     <Loading v-if="foldersStore.loading" class="folder-component-layout-list" />
     <div v-else class="folder-component-layout-list">
-      <div v-for="(folder, index) in foldersStore.folders" v-bind:key="folder.name">
+      <template
+        v-for="(folder, index) in foldersStore.folders"
+        :key="folder.id"
+      >
         <div
           v-if="isVisible(folder)"
           class="folder-layout"
           :class="{ 'source-active': selectedFolderId == folder.id }"
           :ref="'folder-' + folder.id"
         >
-          <span v-on:click="toggleFolderCollapsed(folder, index)" class="folder-layout-indent">
+          <span
+            @click="toggleFolderCollapsed(index)"
+            class="folder-layout-indent"
+          >
             <span v-if="!folderFilter" v-html="folder.indentation"></span>
             <i v-if="folder.children === 0" class="bi bi-images"></i>
             <i v-else-if="folder.isCollapsed" class="bi bi-folder"></i>
             <i v-else class="bi bi-folder2-open"></i>
           </span>
-          <div v-on:click="selectFolder(folder, index)" class="folder-layout-name">
-            <span v-if="!folder.isLabel"><i :class="'bi bi-' + folder.icon"></i>&nbsp;</span>
+          <div @click="selectFolder(folder)" class="folder-layout-name">
+            <span v-if="!folder.isLabel"
+              ><i :class="'bi bi-' + folder.icon"></i>&nbsp;</span
+            >
             <span v-if="!folderFilter">{{ folder.name }}</span>
             <span v-else>{{ folder.folderpath }}</span>
           </div>
-          <div v-on:click="selectFolder(folder, index)" class="folder-layout-count">
+          <div @click="selectFolder(folder)" class="folder-layout-count">
             {{ folder.counts }}
           </div>
         </div>
-      </div>
+      </template>
     </div>
   </div>
 </template>
@@ -42,48 +50,73 @@ const foldersStore = FoldersStore();
 </script>
 
 <script>
-import * as _ from "lodash";
-import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
+import { EventBus, EventTypes } from "~~/services/EventBus";
 
 export default {
   props: {
-    accountId: "",
+    accountId: {
+      type: String,
+      default: null,
+    },
   },
   data() {
     return {
       folderFilter: "",
       selectedFolderId: null,
+      _folderUpdatedHandler: null,
+      _routeWatcherStop: null,
     };
   },
+  computed: {
+    normalizedFilter() {
+      return this.folderFilter.toLowerCase().trim();
+    },
+  },
   async created() {
-    EventBus.on(EventTypes.FOLDER_UPDATED, (message) => {
-      FoldersStore().fetch();
-    });
+    this._folderUpdatedHandler = () => FoldersStore().fetch();
+    EventBus.on(EventTypes.FOLDER_UPDATED, this._folderUpdatedHandler);
+
     await FoldersStore().fetch();
-    if (useRoute().query.folderId) {
-      this.selectedFolderId = useRoute().query.folderId;
-      setTimeout(() => {
-        const element = this.$refs["folder-" + this.selectedFolderId];
-        if (element && element[0]) {
-          element[0].scrollIntoView({
-            behavior: "smooth",
-          });
-        }
-      }, 500);
+    const initialFolderId = useRoute().query.folderId;
+    if (initialFolderId) {
+      this.activateFolder(initialFolderId);
     }
-    watch(
+
+    this._routeWatcherStop = watch(
       () => useRoute().query.folderId,
-      () => {
-        if (useRoute().query.folderId) {
-          this.selectedFolderId = useRoute().query.folderId;
-        } else {
-          this.selectedFolderId = null;
+      (folderId) => {
+        this.selectedFolderId = folderId || null;
+        if (folderId) {
+          FoldersStore().expandToFolder(folderId);
+          this.scrollToFolder(folderId);
         }
-      }
+      },
     );
   },
+  unmounted() {
+    if (this._folderUpdatedHandler) {
+      EventBus.off(EventTypes.FOLDER_UPDATED, this._folderUpdatedHandler);
+    }
+    if (this._routeWatcherStop) {
+      this._routeWatcherStop();
+    }
+  },
   methods: {
-    selectFolder(folder, index) {
+    activateFolder(folderId) {
+      this.selectedFolderId = folderId;
+      FoldersStore().expandToFolder(folderId);
+      this.$nextTick(() => {
+        setTimeout(() => this.scrollToFolder(folderId), 300);
+      });
+    },
+    scrollToFolder(folderId) {
+      const element = this.$refs["folder-" + folderId];
+      const el = Array.isArray(element) ? element[0] : element;
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth" });
+      }
+    },
+    selectFolder(folder) {
       this.$emit("onFolderSelected", { folder });
       this.selectedFolderId = folder.id;
     },
@@ -91,15 +124,15 @@ export default {
       if (this.accountId && this.accountId !== folder.accountId) {
         return false;
       }
-      if (this.folderFilter) {
-        return folder.folderpath.toLowerCase().indexOf(this.folderFilter.toLowerCase().trim()) >= 0;
+      if (this.normalizedFilter) {
+        return folder.folderpath.toLowerCase().includes(this.normalizedFilter);
       }
       if (folder.folderpath === "/") {
         return true;
       }
       return folder.isVisible;
     },
-    toggleFolderCollapsed(label, index) {
+    toggleFolderCollapsed(index) {
       FoldersStore().toggleFolderCollapsed(index);
     },
   },

@@ -2,7 +2,7 @@
   <div class="file-preview">
     <DialogMove
       v-if="activeOperation == 'move'"
-      :target="{ files: [file] }"
+      :files="[file]"
       @onDone="onOperationDone"
     />
     <DialogFileInfo
@@ -337,19 +337,18 @@ export default {
       this.imageTranslateX = 0;
       this.imageTranslateY = 0;
       this.file = this.files[this.position];
+      const currentQuery = useRoute().query;
       if (newRoute) {
         useRouter().push({
           query: {
-            accountId: this.file.accountId,
-            folderId: this.file.folderId,
+            ...currentQuery,
             fileId: this.file.id,
           },
         });
       } else {
         useRouter().replace({
           query: {
-            accountId: this.file.accountId,
-            folderId: this.file.folderId,
+            ...currentQuery,
             fileId: this.file.id,
           },
         });

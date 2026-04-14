@@ -2,7 +2,12 @@
   <dialog open>
     <article>
       <header>
-        <a href="#close" aria-label="Close" class="close" v-on:click="clickedClose()"></a>
+        <a
+          href="#close"
+          aria-label="Close"
+          class="close"
+          v-on:click="clickedClose()"
+        ></a>
         Move File
       </header>
       <label>Destination Folder</label>
@@ -13,7 +18,12 @@
         @onFolderSelected="onFolderSelected"
       />
       <input id="name" v-model="selectedFolderpath" type="text" />
-      <button :disabled="loading || selectedFolderpath === ''" v-on:click="doAction()">Move</button>
+      <button
+        :disabled="loading || selectedFolderpath === ''"
+        v-on:click="doAction()"
+      >
+        Move
+      </button>
     </article>
   </dialog>
 </template>
@@ -30,7 +40,10 @@ import { AuthService } from "~~/services/AuthService";
 
 export default {
   props: {
-    files: [],
+    files: {
+      type: Array,
+      required: true,
+    },
   },
   data() {
     return {
@@ -72,7 +85,7 @@ export default {
             folderpath: this.selectedFolderpath,
             fileIdList,
           },
-          await AuthService.getAuthHeader()
+          await AuthService.getAuthHeader(),
         )
         .then((res) => {
           this.$emit("onDone", { status: "invalidated" });

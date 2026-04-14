@@ -168,7 +168,7 @@ export default {
     }
     await AccountsStore().fetch();
     if (AccountsStore().accounts.length > 0) {
-      FoldersStore().fetch();
+      await FoldersStore().fetch();
     }
     this._onFolderUpdated = (message) => {
       if (
@@ -200,6 +200,15 @@ export default {
       this.focusGalleryItem(find(this.files, { id: useRoute().query.fileId }));
     } else if (useRoute().query.accountId && useRoute().query.folderId) {
       this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
+    } else {
+      const firstRoot = FoldersStore().folders.find(
+        (f) => f.parentIndex === -1,
+      );
+      if (firstRoot) {
+        useRouter().replace({
+          query: { accountId: firstRoot.accountId, folderId: firstRoot.id },
+        });
+      }
     }
     watch(
       () => useRoute().query.folderId,

@@ -5,18 +5,52 @@ const PREFERENCES_LABELS_DISPLAY = "preferences_folders_display";
 export class PreferencesFolders {
   //
   public static isCollapsed(accountId: string, folderId: string): boolean {
-    const preferences = JSON.parse(localStorage.getItem(PREFERENCES_LABELS_DISPLAY) as string) || [];
-    return (find(preferences, { accountId, folderId }) || { accountId, folderId, isCollapsed: false }).isCollapsed;
+    const preferences =
+      JSON.parse(localStorage.getItem(PREFERENCES_LABELS_DISPLAY) as string) ||
+      [];
+    return (
+      find(preferences, { accountId, folderId }) || {
+        accountId,
+        folderId,
+        isCollapsed: false,
+      }
+    ).isCollapsed;
   }
 
   public static toggleCollapsed(accountId: string, folderId: string): void {
-    const preferences = JSON.parse(localStorage.getItem(PREFERENCES_LABELS_DISPLAY) as string) || [];
+    const preferences =
+      JSON.parse(localStorage.getItem(PREFERENCES_LABELS_DISPLAY) as string) ||
+      [];
     let folderPreferences = find(preferences, { folderId });
     if (!folderPreferences) {
       folderPreferences = { accountId, folderId, isCollapsed: false };
       preferences.push(folderPreferences);
     }
     folderPreferences.isCollapsed = !folderPreferences.isCollapsed;
-    localStorage.setItem(PREFERENCES_LABELS_DISPLAY, JSON.stringify(preferences));
+    localStorage.setItem(
+      PREFERENCES_LABELS_DISPLAY,
+      JSON.stringify(preferences),
+    );
+  }
+
+  public static setCollapsed(
+    accountId: string,
+    folderId: string,
+    isCollapsed: boolean,
+  ): void {
+    const preferences =
+      JSON.parse(localStorage.getItem(PREFERENCES_LABELS_DISPLAY) as string) ||
+      [];
+    let folderPreferences = find(preferences, { folderId });
+    if (!folderPreferences) {
+      folderPreferences = { accountId, folderId, isCollapsed };
+      preferences.push(folderPreferences);
+    } else {
+      folderPreferences.isCollapsed = isCollapsed;
+    }
+    localStorage.setItem(
+      PREFERENCES_LABELS_DISPLAY,
+      JSON.stringify(preferences),
+    );
   }
 }
