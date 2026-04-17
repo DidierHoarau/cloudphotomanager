@@ -107,13 +107,6 @@
       @onSave="onOptionsSaved"
       @onClose="activeOperation = ''"
     />
-    <DialogConfirm
-      v-if="showConfirmDialog"
-      :title="confirmDialogTitle"
-      :message="confirmDialogMessage"
-      @onConfirm="onConfirmDialog"
-      @onCancel="showConfirmDialog = false"
-    />
   </div>
 </template>
 
@@ -156,10 +149,6 @@ export default {
       _onFileUpdated: null,
       _onFolderSelected: null,
       _onOperationComplete: null,
-      showConfirmDialog: false,
-      confirmDialogTitle: "",
-      confirmDialogMessage: "",
-      confirmDialogCallback: null,
     };
   },
   async created() {
@@ -499,9 +488,7 @@ export default {
       if (this.selectedFiles.length === 1) {
         message = `Delete the file? (Can't be undone!)\nFile: ${this.selectedFiles[0].filename} \n`;
       }
-      this.confirmDialogTitle = "Confirm Delete";
-      this.confirmDialogMessage = message;
-      this.confirmDialogCallback = async () => {
+      if (confirm(message) == true) {
         SyncStore().markOperationInProgress();
         const fileIdList = [];
         for (const file of this.selectedFiles) {
@@ -524,15 +511,12 @@ export default {
             this.activeOperation = "";
           })
           .catch(handleError);
-      };
-      this.showConfirmDialog = true;
+      }
     },
     async clickedDeleteFolder() {
-      const message = `Delete the current Folder? (Can't be undone!)\n`;
-      this.confirmDialogTitle = "Confirm Delete";
-      this.confirmDialogMessage = message;
-      this.confirmDialogCallback = async () => {
-        const parentFolderId = FoldersStore().getParentFolder(this.folder).id;
+      let message = `Delete the current Folder? (Can't be undone!)\n`;
+      const parentFolderId = FoldersStore().getParentFolder(this.folder).id;
+      if (confirm(message) == true) {
         this.loading = true;
         SyncStore().markOperationInProgress();
         await axios
@@ -560,13 +544,6 @@ export default {
           .finally(() => {
             this.loading = false;
           });
-      };
-      this.showConfirmDialog = true;
-    },
-    onConfirmDialog() {
-      this.showConfirmDialog = false;
-      if (this.confirmDialogCallback) {
-        this.confirmDialogCallback();
       }
     },
   },
