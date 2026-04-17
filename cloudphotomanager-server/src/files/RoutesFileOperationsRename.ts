@@ -4,9 +4,6 @@ import { OTelLogger } from "../OTelContext";
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
-import * as md5Lib from "md5";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const md5 = (md5Lib as any).default || md5Lib;
 
 const logger = OTelLogger().createModuleLogger("FileOperationsRenameRoutes");
 
@@ -36,20 +33,16 @@ export class RoutesFileOperationsRename {
       }
 
       const accountId = req.params.accountId;
-      const fileIdNames = req.body.fileIdNames;
-      const fileIdList = fileIdNames.map((f: { id: string }) => f.id);
-      const queueId = md5(
-        `fileRename:${accountId}:${fileIdList.sort().join(",")}`,
-      );
-
-      SyncQueueQueueItem(
-        accountId,
-        queueId,
-        { fileIdNames },
-        "fileRename",
-        SyncQueueItemPriority.INTERACTIVE,
-        fileIdList,
-      );
+      for (const fileIdName of req.body.fileIdNames) {
+        SyncQueueQueueItem(
+          accountId,
+          `fileRename:${accountId}:${fileIdName.id}`,
+          { fileId: fileIdName.id, filename: fileIdName.filename },
+          "fileRename",
+          SyncQueueItemPriority.INTERACTIVE,
+          [fileIdName.id],
+        );
+      }
 
       return res.status(201).send({});
     });

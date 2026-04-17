@@ -17,6 +17,8 @@ import {
   syncPhotoKeyWords,
   syncThumbnail,
   syncThumbnailFromVideoPreview,
+  SyncFileCacheCheckFile,
+  SyncFileCacheRemoveFile,
 } from "./SyncFileCache";
 import { FileDataGet } from "../files/FileData";
 
@@ -56,10 +58,11 @@ export async function SyncQueueInit(context: Span): Promise<void> {
     "syncThumbnailFromVideoPreview",
     syncThumbnailFromVideoPreview,
   );
-  // Register blocking file operations
+  // Register individual file operations
   SyncQueueRegisterFunction("fileDelete", fileDeleteOperation);
   SyncQueueRegisterFunction("folderMove", folderMoveOperation);
   SyncQueueRegisterFunction("fileRename", fileRenameOperation);
+  SyncQueueRegisterFunction("fileCacheRebuild", fileCacheRebuildOperation);
 
   if (await fs.pathExists(QUEUE_FILE_PATH)) {
     try {
@@ -120,24 +123,21 @@ function resolveItemLabel(item: SyncQueueItem): string | null {
   if (d.id) {
     return d.name || d.filename || d.folderpath || d.id;
   }
-  // Interactive file operations: fileIdList (delete / move)
-  if (d.fileIdList && Array.isArray(d.fileIdList)) {
-    const count = d.fileIdList.length;
+  // Individual file operations — all use d.fileId
+  if (d.fileId) {
     if (item.functionName === "fileDelete") {
-      return count === 1 ? `Delete 1 file` : `Delete ${count} files`;
+      return `Delete: ${d.fileId}`;
     }
     if (item.functionName === "folderMove") {
       const dest = d.folderpath ? ` → ${d.folderpath}` : "";
-      return count === 1 ? `Move 1 file${dest}` : `Move ${count} files${dest}`;
+      return `Move: ${d.fileId}${dest}`;
     }
-  }
-  // Interactive file operations: fileIdNames (rename)
-  if (d.fileIdNames && Array.isArray(d.fileIdNames)) {
-    const count = d.fileIdNames.length;
-    if (count === 1) {
-      return `Rename: ${d.fileIdNames[0].filename || d.fileIdNames[0].id}`;
+    if (item.functionName === "fileRename") {
+      return `Rename: ${d.filename || d.fileId}`;
     }
-    return `Rename ${count} files`;
+    if (item.functionName === "fileCacheRebuild") {
+      return `Rebuild cache: ${d.fileId}`;
+    }
   }
   return null;
 }
@@ -364,7 +364,7 @@ function SyncQueueRegisterFunction(
   functionRegistry.set(functionName, fn);
 }
 
-// Blocking file operation implementations
+// Individual file operation implementations
 
 async function fileDeleteOperation(
   account: Account,
@@ -373,22 +373,17 @@ async function fileDeleteOperation(
 ): Promise<void> {
   const spanSubProcess = OTelTracer().startSpan("fileDeleteOperation");
   try {
-    let folderId = "";
-    for (const fileId of data.fileIdList as string[]) {
-      const file = await FileDataGet(spanSubProcess, fileId);
-      if (!file) {
-        continue;
-      }
-      folderId = file.folderId;
+    const file = await FileDataGet(spanSubProcess, data.fileId as string);
+    if (file) {
       logger.info(
         `Delete file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename}`,
         spanSubProcess,
       );
       await account.deleteFile(spanSubProcess, file);
-    }
-    if (folderId) {
-      const folder = await FolderDataGet(spanSubProcess, folderId);
-      await SyncInventorySyncFolder(account, folder);
+      const folder = await FolderDataGet(spanSubProcess, file.folderId);
+      if (folder) {
+        await SyncInventorySyncFolder(account, folder);
+      }
     }
   } catch (err) {
     logger.error("Error in fileDeleteOperation", err, spanSubProcess);
@@ -404,32 +399,28 @@ async function folderMoveOperation(
 ): Promise<void> {
   const spanSubProcess = OTelTracer().startSpan("folderMoveOperation");
   try {
-    let initialFolderId = "";
-    for (const fileId of data.fileIdList as string[]) {
-      const file = await FileDataGet(spanSubProcess, fileId);
-      if (!file) {
-        continue;
-      }
-      initialFolderId = file.folderId;
+    const file = await FileDataGet(spanSubProcess, data.fileId as string);
+    if (file) {
+      const initialFolderId = file.folderId;
       logger.info(
         `Moving file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${data.folderpath}`,
         spanSubProcess,
       );
       await account.moveFile(spanSubProcess, file, data.folderpath);
-    }
-    if (initialFolderId) {
       const initialFolder = await FolderDataGet(
         spanSubProcess,
         initialFolderId,
       );
-      await SyncInventorySyncFolder(account, initialFolder);
-    }
-    const targetFolder = await account.getFolderByPath(
-      spanSubProcess,
-      data.folderpath,
-    );
-    if (targetFolder) {
-      await SyncInventorySyncFolder(account, targetFolder);
+      if (initialFolder) {
+        await SyncInventorySyncFolder(account, initialFolder);
+      }
+      const targetFolder = await account.getFolderByPath(
+        spanSubProcess,
+        data.folderpath,
+      );
+      if (targetFolder) {
+        await SyncInventorySyncFolder(account, targetFolder);
+      }
     }
   } catch (err) {
     logger.error("Error in folderMoveOperation", err, spanSubProcess);
@@ -445,28 +436,43 @@ async function fileRenameOperation(
 ): Promise<void> {
   const spanSubProcess = OTelTracer().startSpan("fileRenameOperation");
   try {
-    let folderId = "";
-    for (const fileIdName of data.fileIdNames as {
-      id: string;
-      filename: string;
-    }[]) {
-      const file = await FileDataGet(spanSubProcess, fileIdName.id);
-      if (!file) {
-        continue;
-      }
-      folderId = file.folderId;
+    const file = await FileDataGet(spanSubProcess, data.fileId as string);
+    if (file) {
       logger.info(
-        `Rename file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${fileIdName.filename}`,
+        `Rename file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${data.filename}`,
         spanSubProcess,
       );
-      await account.renameFile(spanSubProcess, file, fileIdName.filename);
-    }
-    if (folderId) {
-      const folder = await FolderDataGet(spanSubProcess, folderId);
-      await SyncInventorySyncFolder(account, folder);
+      await account.renameFile(spanSubProcess, file, data.filename);
+      const folder = await FolderDataGet(spanSubProcess, file.folderId);
+      if (folder) {
+        await SyncInventorySyncFolder(account, folder);
+      }
     }
   } catch (err) {
     logger.error("Error in fileRenameOperation", err, spanSubProcess);
+  } finally {
+    spanSubProcess.end();
+  }
+}
+
+async function fileCacheRebuildOperation(
+  account: Account,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any,
+): Promise<void> {
+  const spanSubProcess = OTelTracer().startSpan("fileCacheRebuildOperation");
+  try {
+    const file = await FileDataGet(spanSubProcess, data.fileId as string);
+    if (file) {
+      logger.info(
+        `Rebuild cache: ${account.getAccountDefinition().id}: ${file.id} ${file.filename}`,
+        spanSubProcess,
+      );
+      await SyncFileCacheRemoveFile(spanSubProcess, account, file);
+      SyncFileCacheCheckFile(spanSubProcess, account, file);
+    }
+  } catch (err) {
+    logger.error("Error in fileCacheRebuildOperation", err, spanSubProcess);
   } finally {
     spanSubProcess.end();
   }

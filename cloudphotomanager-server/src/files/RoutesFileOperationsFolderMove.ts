@@ -4,9 +4,6 @@ import { OTelLogger } from "../OTelContext";
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
-import * as md5Lib from "md5";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const md5 = (md5Lib as any).default || md5Lib;
 
 const logger = OTelLogger().createModuleLogger(
   "FileOperationsFolderMoveRoutes",
@@ -38,20 +35,17 @@ export class RoutesFileOperationsFolderMove {
       }
 
       const accountId = req.params.accountId;
-      const fileIdList = req.body.fileIdList;
       const folderpath = req.body.folderpath;
-      const queueId = md5(
-        `folderMove:${accountId}:${fileIdList.sort().join(",")}:${folderpath}`,
-      );
-
-      SyncQueueQueueItem(
-        accountId,
-        queueId,
-        { fileIdList, folderpath },
-        "folderMove",
-        SyncQueueItemPriority.INTERACTIVE,
-        fileIdList,
-      );
+      for (const fileId of req.body.fileIdList) {
+        SyncQueueQueueItem(
+          accountId,
+          `folderMove:${accountId}:${fileId}:${folderpath}`,
+          { fileId, folderpath },
+          "folderMove",
+          SyncQueueItemPriority.INTERACTIVE,
+          [fileId],
+        );
+      }
 
       return res.status(201).send({});
     });

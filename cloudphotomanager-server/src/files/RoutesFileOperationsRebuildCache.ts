@@ -1,15 +1,13 @@
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
-import { OTelLogger, OTelTracer } from "../OTelContext";
-import {
-  SyncFileCacheCheckFile,
-  SyncFileCacheRemoveFile,
-} from "../sync/SyncFileCache";
+import { OTelLogger } from "../OTelContext";
+import { SyncQueueQueueItem } from "../sync/SyncQueue";
+import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
-import { FileDataGet } from "./FileData";
 
-const logger = OTelLogger().createModuleLogger("FileOperationsDeleteRoutes");
+const logger = OTelLogger().createModuleLogger(
+  "FileOperationsRebuildCacheRoutes",
+);
 
 export class RoutesFileOperationsRebuildCache {
   //
@@ -33,27 +31,17 @@ export class RoutesFileOperationsRebuildCache {
         return res.status(400).send({ error: "Missing parameter: fileIdList" });
       }
 
-      setTimeout(async () => {
-        const spanSubProcess = OTelTracer().startSpan(
-          "RoutesFileOperationsRebuildCache_post_process"
+      const accountId = req.params.accountId;
+      for (const fileId of req.body.fileIdList) {
+        SyncQueueQueueItem(
+          accountId,
+          `fileCacheRebuild:${accountId}:${fileId}`,
+          { fileId },
+          "fileCacheRebuild",
+          SyncQueueItemPriority.INTERACTIVE,
+          [fileId],
         );
-        try {
-          const account = await AccountFactoryGetAccountImplementation(
-            req.params.accountId
-          );
-          for (const fileId of req.body.fileIdList) {
-            const file = await FileDataGet(spanSubProcess, fileId);
-            if (!file) {
-              continue;
-            }
-            await SyncFileCacheRemoveFile(spanSubProcess, account, file);
-            SyncFileCacheCheckFile(spanSubProcess, account, file);
-          }
-        } catch (err) {
-          logger.error("Error Rebuilding Cache", err, spanSubProcess);
-        }
-        spanSubProcess.end();
-      }, 50);
+      }
 
       return res.status(202).send({});
     });

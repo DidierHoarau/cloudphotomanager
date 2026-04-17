@@ -187,10 +187,20 @@ export default {
       this.fetchFiles(message.accountId, message.folderId, true);
     };
     this._onOperationComplete = (message) => {
-      // Refresh the current folder when a file operation completes
+      // Only refresh if the operation is relevant to the currently displayed folder
       if (this.currentAccountId && this.currentFolderId) {
-        this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
-        FoldersStore().fetch();
+        const affectedFileIds = message?.fileIds || [];
+        const operationName = message?.operationName || "";
+        // For moves, we can't know the destination folder, so always refresh
+        const isMove = operationName === "folderMove";
+        const affectsCurrentView =
+          isMove ||
+          affectedFileIds.length === 0 ||
+          affectedFileIds.some((id) => this.files.some((f) => f.id === id));
+        if (affectsCurrentView) {
+          this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
+          FoldersStore().fetch();
+        }
       }
       this.selectedFiles = [];
     };

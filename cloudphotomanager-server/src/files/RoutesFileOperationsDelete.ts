@@ -4,9 +4,6 @@ import { OTelLogger } from "../OTelContext";
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
-import * as md5Lib from "md5";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const md5 = (md5Lib as any).default || md5Lib;
 
 const logger = OTelLogger().createModuleLogger("FileOperationsDeleteRoutes");
 
@@ -33,19 +30,16 @@ export class RoutesFileOperationsDelete {
       }
 
       const accountId = req.params.accountId;
-      const fileIdList = req.body.fileIdList;
-      const queueId = md5(
-        `fileDelete:${accountId}:${fileIdList.sort().join(",")}`,
-      );
-
-      SyncQueueQueueItem(
-        accountId,
-        queueId,
-        { fileIdList },
-        "fileDelete",
-        SyncQueueItemPriority.INTERACTIVE,
-        fileIdList,
-      );
+      for (const fileId of req.body.fileIdList) {
+        SyncQueueQueueItem(
+          accountId,
+          `fileDelete:${accountId}:${fileId}`,
+          { fileId },
+          "fileDelete",
+          SyncQueueItemPriority.INTERACTIVE,
+          [fileId],
+        );
+      }
 
       return res.status(202).send({});
     });
