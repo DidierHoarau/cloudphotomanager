@@ -234,7 +234,7 @@ export async function FileDataListByFolderRecursivePaginated(
   );
   const order = sortOrder === "asc" ? "ASC" : "DESC";
   const offset = page * pageSize;
-  const folderpathSubPattern = `${folderpath}/%`;
+  const folderpathSubPattern = folderpath === "/" ? `/%` : `${folderpath}/%`;
   const countRaw = await SqlDbUtilsQuerySQL(
     span,
     `SELECT COUNT(*) as count FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?))`,
