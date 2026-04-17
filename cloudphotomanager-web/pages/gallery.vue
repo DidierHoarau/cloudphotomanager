@@ -83,6 +83,20 @@
       class="gallery-item-focus"
       @onFileClosed="unFocusGalleryItem"
     />
+    <DialogConfirm
+      v-if="activeOperation == 'confirm-delete'"
+      title="Delete Files"
+      :message="confirmMessage"
+      @onConfirm="executeDelete"
+      @onCancel="activeOperation = ''"
+    />
+    <DialogConfirm
+      v-if="activeOperation == 'confirm-delete-folder'"
+      title="Delete Folder"
+      :message="confirmMessage"
+      @onConfirm="executeDeleteFolder"
+      @onCancel="activeOperation = ''"
+    />
     <DialogMove
       v-if="activeOperation == 'move'"
       :files="selectedFiles"
@@ -149,6 +163,8 @@ export default {
       _onFileUpdated: null,
       _onFolderSelected: null,
       _onOperationComplete: null,
+      confirmMessage: "",
+      _pendingDeleteFolderParentId: "",
     };
   },
   async created() {
@@ -187,22 +203,38 @@ export default {
       this.fetchFiles(message.accountId, message.folderId, true);
     };
     this._onOperationComplete = (message) => {
-      // Only refresh if the operation is relevant to the currently displayed folder
       if (this.currentAccountId && this.currentFolderId) {
         const affectedFileIds = message?.fileIds || [];
         const operationName = message?.operationName || "";
-        // For moves, we can't know the destination folder, so always refresh
-        const isMove = operationName === "folderMove";
-        const affectsCurrentView =
-          isMove ||
-          affectedFileIds.length === 0 ||
-          affectedFileIds.some((id) => this.files.some((f) => f.id === id));
-        if (affectsCurrentView) {
+        // Operations that require a gallery refresh:
+        // - fileDelete / folderMove: always refresh (file gone or moved away)
+        // - fileRename: always refresh (filename displayed in gallery)
+        // - SyncInventorySyncFolder: always refresh (folder contents changed)
+        // - syncThumbnail / syncThumbnailFromVideoPreview: refresh if file is in current view
+        // - syncPhotoFromFull / syncVideoFromFull: refresh if file is in current view
+        // - syncPhotoKeyWords / fileCacheRebuild: no gallery refresh needed
+        const alwaysRefreshOps = [
+          "fileDelete",
+          "folderMove",
+          "fileRename",
+          "SyncInventorySyncFolder",
+        ];
+        const refreshIfVisibleOps = [
+          "syncThumbnail",
+          "syncThumbnailFromVideoPreview",
+          "syncPhotoFromFull",
+          "syncVideoFromFull",
+        ];
+        const shouldRefresh =
+          alwaysRefreshOps.includes(operationName) ||
+          (refreshIfVisibleOps.includes(operationName) &&
+            affectedFileIds.some((id) => this.files.some((f) => f.id === id)));
+        if (shouldRefresh) {
           this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
           FoldersStore().fetch();
+          this.selectedFiles = [];
         }
       }
-      this.selectedFiles = [];
     };
     EventBus.on(EventTypes.FOLDER_UPDATED, this._onFolderUpdated);
     EventBus.on(EventTypes.FILE_UPDATED, this._onFileUpdated);
@@ -483,68 +515,75 @@ export default {
         this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
       }
     },
-    async clickedDelete() {
-      let message = `Delete the ${this.selectedFiles.length} selected files? (Can't be undone!)\n`;
+    clickedDelete() {
       if (this.selectedFiles.length === 1) {
-        message = `Delete the file? (Can't be undone!)\nFile: ${this.selectedFiles[0].filename} \n`;
+        this.confirmMessage = `Delete the file? (Can't be undone!)\nFile: ${this.selectedFiles[0].filename}`;
+      } else {
+        this.confirmMessage = `Delete the ${this.selectedFiles.length} selected files? (Can't be undone!)`;
       }
-      if (confirm(message) == true) {
-        SyncStore().markOperationInProgress();
-        const fileIdList = [];
-        for (const file of this.selectedFiles) {
-          fileIdList.push(file.id);
-        }
-        await axios
-          .post(
-            `${(await Config.get()).SERVER_URL}/accounts/${
-              this.currentAccountId
-            }/files/batch/operations/fileDelete`,
-            {
-              fileIdList,
-            },
-            await AuthService.getAuthHeader(),
-          )
-          .then((res) => {
-            EventBus.emit(EventTypes.ALERT_MESSAGE, {
-              text: "Delete queued — running in background",
-            });
-            this.activeOperation = "";
-          })
-          .catch(handleError);
-      }
+      this.activeOperation = "confirm-delete";
     },
-    async clickedDeleteFolder() {
-      let message = `Delete the current Folder? (Can't be undone!)\n`;
-      const parentFolderId = FoldersStore().getParentFolder(this.folder).id;
-      if (confirm(message) == true) {
-        this.loading = true;
-        SyncStore().markOperationInProgress();
-        await axios
-          .delete(
-            `${(await Config.get()).SERVER_URL}/accounts/${
-              this.folder.accountId
-            }/folders/${this.folder.id}/operations/delete`,
-            await AuthService.getAuthHeader(),
-          )
-          .then((res) => {
-            EventBus.emit(EventTypes.ALERT_MESSAGE, {
-              text: "Folder deleted",
-            });
-            this.onOperationDone({ status: "invalidated" });
-            FoldersStore().fetch();
-            useRouter().push({
-              path: "/gallery",
-              query: {
-                accountId: this.folder.accountId,
-                folderId: parentFolderId,
-              },
-            });
-          })
-          .catch(handleError)
-          .finally(() => {
-            this.loading = false;
-          });
+    async executeDelete() {
+      this.activeOperation = "";
+      SyncStore().markOperationInProgress();
+      const fileIdList = [];
+      for (const file of this.selectedFiles) {
+        fileIdList.push(file.id);
       }
+      await axios
+        .post(
+          `${(await Config.get()).SERVER_URL}/accounts/${
+            this.currentAccountId
+          }/files/batch/operations/fileDelete`,
+          {
+            fileIdList,
+          },
+          await AuthService.getAuthHeader(),
+        )
+        .then((res) => {
+          EventBus.emit(EventTypes.ALERT_MESSAGE, {
+            text: "Delete queued — running in background",
+          });
+        })
+        .catch(handleError);
+    },
+    clickedDeleteFolder() {
+      this.confirmMessage = `Delete the current Folder? (Can't be undone!)`;
+      this._pendingDeleteFolderParentId = FoldersStore().getParentFolder(
+        this.folder,
+      ).id;
+      this.activeOperation = "confirm-delete-folder";
+    },
+    async executeDeleteFolder() {
+      this.activeOperation = "";
+      const parentFolderId = this._pendingDeleteFolderParentId;
+      this.loading = true;
+      SyncStore().markOperationInProgress();
+      await axios
+        .delete(
+          `${(await Config.get()).SERVER_URL}/accounts/${
+            this.folder.accountId
+          }/folders/${this.folder.id}/operations/delete`,
+          await AuthService.getAuthHeader(),
+        )
+        .then((res) => {
+          EventBus.emit(EventTypes.ALERT_MESSAGE, {
+            text: "Folder deleted",
+          });
+          this.onOperationDone({ status: "invalidated" });
+          FoldersStore().fetch();
+          useRouter().push({
+            path: "/gallery",
+            query: {
+              accountId: this.folder.accountId,
+              folderId: parentFolderId,
+            },
+          });
+        })
+        .catch(handleError)
+        .finally(() => {
+          this.loading = false;
+        });
     },
   },
 };
