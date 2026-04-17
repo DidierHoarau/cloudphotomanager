@@ -106,7 +106,7 @@ export default {
       try {
         const response = await axios.get(
           `${(await Config.get()).SERVER_URL}/sync/queue`,
-          await AuthService.getAuthHeader()
+          await AuthService.getAuthHeader(),
         );
 
         const countsObj = {
