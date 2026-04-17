@@ -321,6 +321,7 @@ function broadcastQueueUpdate(): void {
     type: "queue_update",
     counts: SyncQueueGetCounts(),
     processingFileIds: SyncQueueGetProcessingFileIds(),
+    items: SyncQueueGetQueue(),
   });
 }
 

@@ -9,6 +9,7 @@ export const SyncStore = defineStore("SyncStore", {
     countBlocking: 0,
     counts: [] as { type: string; count: number }[],
     processingFileIds: [] as string[],
+    queueItems: [] as any[],
     monitoring: false,
     wsConnected: false,
     // Fallback polling state
@@ -41,17 +42,23 @@ export const SyncStore = defineStore("SyncStore", {
 
     async _connectWebSocket() {
       const config = await Config.get();
-      // Convert http(s) to ws(s)
-      const wsUrl = config.SERVER_URL.replace(/^https:\/\//, "wss://").replace(
-        /^http:\/\//,
-        "ws://",
-      );
+      // Build an absolute WS URL, handling relative SERVER_URL (e.g. "/api")
+      let serverUrl: string = config.SERVER_URL;
+      if (serverUrl.startsWith("/")) {
+        // Relative path: derive origin from window.location
+        const proto = window.location.protocol === "https:" ? "wss" : "ws";
+        serverUrl = `${proto}://${window.location.host}${serverUrl}`;
+      } else {
+        serverUrl = serverUrl
+          .replace(/^https:\/\//, "wss://")
+          .replace(/^http:\/\//, "ws://");
+      }
 
       const authHeader = await AuthService.getAuthHeader();
       const token =
         authHeader?.headers?.Authorization?.replace("Bearer ", "") || "";
 
-      const fullWsUrl = `${wsUrl}/sync/ws${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+      const fullWsUrl = `${serverUrl}/sync/ws${token ? `?token=${encodeURIComponent(token)}` : ""}`;
 
       let ws: WebSocket;
       try {
@@ -73,6 +80,7 @@ export const SyncStore = defineStore("SyncStore", {
           if (msg.type === "queue_update") {
             this.processingFileIds = msg.processingFileIds || [];
             this.counts = msg.counts || [];
+            this.queueItems = msg.items || [];
             let total = 0;
             for (const c of this.counts) {
               total += c.count;

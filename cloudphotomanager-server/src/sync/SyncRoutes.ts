@@ -70,6 +70,7 @@ export class SyncRoutes {
             type: "queue_update",
             counts: SyncQueueGetCounts(),
             processingFileIds: SyncQueueGetProcessingFileIds(),
+            items: SyncQueueGetQueue(),
           }),
         );
       } catch {
