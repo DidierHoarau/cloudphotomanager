@@ -88,7 +88,8 @@ export default {
           await AuthService.getAuthHeader(),
         )
         .then((res) => {
-          this.$emit("onDone", { status: "invalidated" });
+          // Close dialog; gallery will refresh when OPERATION_COMPLETE fires
+          this.$emit("onDone", {});
         })
         .catch(handleError);
       this.loading = false;

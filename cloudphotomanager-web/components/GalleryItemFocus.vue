@@ -52,13 +52,19 @@
           v-if="authenticationStore.isAdmin"
         ></div>
         <template v-if="authenticationStore.isAdmin">
-          <button class="action-btn" @click="clickedMove()" title="Move">
+          <button
+            class="action-btn"
+            @click="clickedMove()"
+            title="Move"
+            :disabled="isCurrentFileProcessing"
+          >
             <i class="bi bi-arrows-move"></i>
           </button>
           <button
             class="action-btn action-btn-danger"
             @click="clickedDelete()"
             title="Delete"
+            :disabled="isCurrentFileProcessing"
           >
             <i class="bi bi-trash-fill"></i>
           </button>
@@ -75,6 +81,9 @@
     </div>
     <div id="media-container" ref="mediaContainer">
       <Loading v-if="mediaLoading" class="media-loading" />
+      <div v-if="isCurrentFileProcessing" class="processing-banner">
+        <i class="bi bi-hourglass-split"></i>&nbsp; Operation in progress...
+      </div>
       <img
         class="media-content"
         v-if="file && getType(file) == 'image'"
@@ -131,6 +140,7 @@
 
 <script setup>
 const authenticationStore = AuthenticationStore();
+const syncStore = SyncStore();
 </script>
 
 <script>
@@ -278,9 +288,9 @@ export default {
           )
           .then((res) => {
             EventBus.emit(EventTypes.ALERT_MESSAGE, {
-              text: "File deleted",
+              text: "Delete queued — running in background",
             });
-            this.onOperationDone({ status: "invalidated" });
+            // Don't close focus view yet; file will be greyed out while processing
           })
           .catch(handleError);
       }
@@ -441,6 +451,10 @@ export default {
         transformOrigin: "center center",
         userSelect: "none",
       };
+    },
+    isCurrentFileProcessing() {
+      if (!this.file) return false;
+      return SyncStore().isFileProcessing(this.file.id);
     },
   },
 };
@@ -655,5 +669,19 @@ export default {
 }
 .video-unavailable p {
   margin: 0;
+}
+.processing-banner {
+  position: fixed;
+  top: 1em;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 20, 40, 0.75);
+  backdrop-filter: blur(6px);
+  color: #aaf;
+  padding: 0.4em 1.2em;
+  border-radius: 2em;
+  font-size: 0.9em;
+  z-index: 300;
+  pointer-events: none;
 }
 </style>

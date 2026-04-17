@@ -9,6 +9,7 @@ import { PromisePool } from "../utils-std-ts/PromisePool";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
+import { FolderDataGet } from "../folders/FolderData";
 import { SyncInventorySyncFolder } from "./SyncInventory";
 import {
   syncVideoFromFull,
@@ -17,11 +18,12 @@ import {
   syncThumbnail,
   syncThumbnailFromVideoPreview,
 } from "./SyncFileCache";
+import { FileDataGet } from "../files/FileData";
 
 const MAX_PARALLEL_SYNC = 3;
 const QUEUE_FILE_PATH = path.join(
   process.env.DATA_DIR || "/data",
-  "sync-queue.json"
+  "sync-queue.json",
 );
 
 const logger = OTelLogger().createModuleLogger("SyncQueue");
@@ -30,13 +32,15 @@ type QueueFunction = (
   account: Account,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any,
-  priority: SyncQueueItemPriority
+  priority: SyncQueueItemPriority,
 ) => Promise<void>;
 const functionRegistry = new Map<string, QueueFunction>();
 const promisePoolInteractive = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
 const promisePoolNormal = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
 const promisePoolBatch = new PromisePool(1, 5 * 3600 * 1000);
-let blockingOperations = 0;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type BroadcastFn = (message: any) => void;
+let broadcastFn: BroadcastFn | null = null;
 let queueProcessorRunning = false;
 
 export async function SyncQueueInit(context: Span): Promise<void> {
@@ -50,8 +54,12 @@ export async function SyncQueueInit(context: Span): Promise<void> {
   SyncQueueRegisterFunction("syncThumbnail", syncThumbnail);
   SyncQueueRegisterFunction(
     "syncThumbnailFromVideoPreview",
-    syncThumbnailFromVideoPreview
+    syncThumbnailFromVideoPreview,
   );
+  // Register blocking file operations
+  SyncQueueRegisterFunction("fileDelete", fileDeleteOperation);
+  SyncQueueRegisterFunction("folderMove", folderMoveOperation);
+  SyncQueueRegisterFunction("fileRename", fileRenameOperation);
 
   if (await fs.pathExists(QUEUE_FILE_PATH)) {
     try {
@@ -89,8 +97,49 @@ export function SyncQueueGetCounts(): any[] {
       type: SyncQueueItemStatus.WAITING,
       count: _.filter(queue, { status: SyncQueueItemStatus.WAITING }).length,
     },
-    { type: "blocking", count: blockingOperations },
   ];
+}
+
+export function SyncQueueGetProcessingFileIds(): string[] {
+  const ids: string[] = [];
+  for (const item of queue) {
+    if (item.fileIds) {
+      for (const fid of item.fileIds) {
+        ids.push(fid);
+      }
+    }
+  }
+  return ids;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolveItemLabel(item: SyncQueueItem): string | null {
+  const d = item.data;
+  if (!d) return null;
+  // Standard single-item data (e.g. SyncInventory, SyncFileCache)
+  if (d.id) {
+    return d.name || d.filename || d.folderpath || d.id;
+  }
+  // Interactive file operations: fileIdList (delete / move)
+  if (d.fileIdList && Array.isArray(d.fileIdList)) {
+    const count = d.fileIdList.length;
+    if (item.functionName === "fileDelete") {
+      return count === 1 ? `Delete 1 file` : `Delete ${count} files`;
+    }
+    if (item.functionName === "folderMove") {
+      const dest = d.folderpath ? ` → ${d.folderpath}` : "";
+      return count === 1 ? `Move 1 file${dest}` : `Move ${count} files${dest}`;
+    }
+  }
+  // Interactive file operations: fileIdNames (rename)
+  if (d.fileIdNames && Array.isArray(d.fileIdNames)) {
+    const count = d.fileIdNames.length;
+    if (count === 1) {
+      return `Rename: ${d.fileIdNames[0].filename || d.fileIdNames[0].id}`;
+    }
+    return `Rename ${count} files`;
+  }
+  return null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -101,22 +150,22 @@ export function SyncQueueGetQueue(): any[] {
     functionName: item.functionName,
     priority: item.priority,
     status: item.status,
-    // Include relevant data fields if available
-    dataInfo: item.data?.id
-      ? {
-          id: item.data.id,
-          name: item.data.name || item.data.filename || item.data.folderpath,
-        }
-      : null,
+    fileIds: item.fileIds || [],
+    label: resolveItemLabel(item),
   }));
 }
 
+// Kept as no-ops for backward compatibility
 export function SyncQueueSetBlockingOperationStart() {
-  blockingOperations++;
+  // no-op: operations now go through the queue
 }
 
 export function SyncQueueSetBlockingOperationEnd() {
-  blockingOperations--;
+  // no-op: operations now go through the queue
+}
+
+export function SyncQueueRegisterBroadcast(fn: BroadcastFn): void {
+  broadcastFn = fn;
 }
 
 export function SyncQueueRemoveItem(id: string): void {
@@ -134,7 +183,8 @@ export function SyncQueueQueueItem(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any,
   functionName: string,
-  priority: SyncQueueItemPriority
+  priority: SyncQueueItemPriority,
+  fileIds?: string[],
 ): void {
   if (_.find(queue, { id })) {
     return;
@@ -147,10 +197,12 @@ export function SyncQueueQueueItem(
     functionName,
     priority,
     status: SyncQueueItemStatus.WAITING,
+    fileIds: fileIds || [],
   };
 
   queue.push(newQueueItem);
   saveQueue();
+  broadcastQueueUpdate();
 
   processQueue();
 }
@@ -167,7 +219,7 @@ async function processQueue(): Promise<void> {
   try {
     while (queue.length > 0) {
       const waitingItems = queue.filter(
-        (item) => item.status === SyncQueueItemStatus.WAITING
+        (item) => item.status === SyncQueueItemStatus.WAITING,
       );
 
       if (waitingItems.length === 0) {
@@ -175,13 +227,13 @@ async function processQueue(): Promise<void> {
       }
 
       const interactiveItems = waitingItems.filter(
-        (item) => item.priority === SyncQueueItemPriority.INTERACTIVE
+        (item) => item.priority === SyncQueueItemPriority.INTERACTIVE,
       );
       const normalItems = waitingItems.filter(
-        (item) => item.priority === SyncQueueItemPriority.NORMAL
+        (item) => item.priority === SyncQueueItemPriority.NORMAL,
       );
       const batchItems = waitingItems.filter(
-        (item) => item.priority === SyncQueueItemPriority.BATCH
+        (item) => item.priority === SyncQueueItemPriority.BATCH,
       );
 
       const itemsToProcess: SyncQueueItem[] = [];
@@ -219,20 +271,31 @@ async function processQueue(): Promise<void> {
         const itemProcess = async () => {
           item.status = SyncQueueItemStatus.ACTIVE;
           await saveQueue();
+          broadcastQueueUpdate();
           await fn(
             await AccountFactoryGetAccountImplementation(item.accountId),
             item.data,
-            item.priority
+            item.priority,
           )
             .catch((err) => {
               logger.error("Error Processing Queue Item", err);
             })
             .finally(() => {
+              const completedItem = _.find(queue, { id: item.id });
+              const completedFileIds = completedItem?.fileIds || [];
+              const completedFunctionName = item.functionName;
+              const completedPriority = item.priority;
               const index = _.findIndex(queue, { id: item.id });
               if (index >= 0) {
                 queue.splice(index, 1);
                 saveQueue();
               }
+              broadcastOperationComplete(
+                completedFunctionName,
+                completedFileIds,
+                completedPriority,
+              );
+              broadcastQueueUpdate();
             });
         };
 
@@ -252,6 +315,29 @@ async function processQueue(): Promise<void> {
   }
 }
 
+function broadcastQueueUpdate(): void {
+  if (!broadcastFn) return;
+  broadcastFn({
+    type: "queue_update",
+    counts: SyncQueueGetCounts(),
+    processingFileIds: SyncQueueGetProcessingFileIds(),
+  });
+}
+
+function broadcastOperationComplete(
+  operationName: string,
+  fileIds: string[],
+  priority: SyncQueueItemPriority,
+): void {
+  if (!broadcastFn) return;
+  broadcastFn({
+    type: "operation_complete",
+    operationName,
+    fileIds,
+    priority,
+  });
+}
+
 async function saveQueue(): Promise<void> {
   try {
     const serializableQueue = queue.map((item) => ({
@@ -261,6 +347,7 @@ async function saveQueue(): Promise<void> {
       functionName: item.functionName,
       priority: item.priority,
       status: item.status,
+      fileIds: item.fileIds || [],
     }));
     await fs.ensureDir(path.dirname(QUEUE_FILE_PATH));
     await fs.writeJSON(QUEUE_FILE_PATH, serializableQueue, { spaces: 2 });
@@ -271,7 +358,115 @@ async function saveQueue(): Promise<void> {
 
 function SyncQueueRegisterFunction(
   functionName: string,
-  fn: QueueFunction
+  fn: QueueFunction,
 ): void {
   functionRegistry.set(functionName, fn);
+}
+
+// Blocking file operation implementations
+
+async function fileDeleteOperation(
+  account: Account,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any,
+): Promise<void> {
+  const spanSubProcess = OTelTracer().startSpan("fileDeleteOperation");
+  try {
+    let folderId = "";
+    for (const fileId of data.fileIdList as string[]) {
+      const file = await FileDataGet(spanSubProcess, fileId);
+      if (!file) {
+        continue;
+      }
+      folderId = file.folderId;
+      logger.info(
+        `Delete file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename}`,
+        spanSubProcess,
+      );
+      await account.deleteFile(spanSubProcess, file);
+    }
+    if (folderId) {
+      const folder = await FolderDataGet(spanSubProcess, folderId);
+      await SyncInventorySyncFolder(account, folder);
+    }
+  } catch (err) {
+    logger.error("Error in fileDeleteOperation", err, spanSubProcess);
+  } finally {
+    spanSubProcess.end();
+  }
+}
+
+async function folderMoveOperation(
+  account: Account,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any,
+): Promise<void> {
+  const spanSubProcess = OTelTracer().startSpan("folderMoveOperation");
+  try {
+    let initialFolderId = "";
+    for (const fileId of data.fileIdList as string[]) {
+      const file = await FileDataGet(spanSubProcess, fileId);
+      if (!file) {
+        continue;
+      }
+      initialFolderId = file.folderId;
+      logger.info(
+        `Moving file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${data.folderpath}`,
+        spanSubProcess,
+      );
+      await account.moveFile(spanSubProcess, file, data.folderpath);
+    }
+    if (initialFolderId) {
+      const initialFolder = await FolderDataGet(
+        spanSubProcess,
+        initialFolderId,
+      );
+      await SyncInventorySyncFolder(account, initialFolder);
+    }
+    const targetFolder = await account.getFolderByPath(
+      spanSubProcess,
+      data.folderpath,
+    );
+    if (targetFolder) {
+      await SyncInventorySyncFolder(account, targetFolder);
+    }
+  } catch (err) {
+    logger.error("Error in folderMoveOperation", err, spanSubProcess);
+  } finally {
+    spanSubProcess.end();
+  }
+}
+
+async function fileRenameOperation(
+  account: Account,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any,
+): Promise<void> {
+  const spanSubProcess = OTelTracer().startSpan("fileRenameOperation");
+  try {
+    let folderId = "";
+    for (const fileIdName of data.fileIdNames as {
+      id: string;
+      filename: string;
+    }[]) {
+      const file = await FileDataGet(spanSubProcess, fileIdName.id);
+      if (!file) {
+        continue;
+      }
+      folderId = file.folderId;
+      logger.info(
+        `Rename file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${fileIdName.filename}`,
+        spanSubProcess,
+      );
+      await account.renameFile(spanSubProcess, file, fileIdName.filename);
+    }
+    if (folderId) {
+      const folder = await FolderDataGet(spanSubProcess, folderId);
+      await SyncInventorySyncFolder(account, folder);
+    }
+  } catch (err) {
+    logger.error("Error in fileRenameOperation", err, spanSubProcess);
+  } finally {
+    spanSubProcess.end();
+  }
 }

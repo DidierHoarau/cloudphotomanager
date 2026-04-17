@@ -1,15 +1,12 @@
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
-import { FolderDataGet } from "../folders/FolderData";
-import { OTelLogger, OTelTracer } from "../OTelContext";
-import { SyncInventorySyncFolder } from "../sync/SyncInventory";
-import {
-  SyncQueueSetBlockingOperationEnd,
-  SyncQueueSetBlockingOperationStart,
-} from "../sync/SyncQueue";
+import { OTelLogger } from "../OTelContext";
+import { SyncQueueQueueItem } from "../sync/SyncQueue";
+import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
-import { FileDataGet } from "./FileData";
+import * as md5Lib from "md5";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const md5 = (md5Lib as any).default || md5Lib;
 
 const logger = OTelLogger().createModuleLogger("FileOperationsRenameRoutes");
 
@@ -38,38 +35,21 @@ export class RoutesFileOperationsRename {
           .send({ error: "Missing parameter: fileIdNames" });
       }
 
-      setTimeout(async () => {
-        SyncQueueSetBlockingOperationStart();
-        const spanSubProcess = OTelTracer().startSpan(
-          "RoutesFileOperationsRenameFile_post_process"
-        );
-        try {
-          let folderId = "";
-          const account = await AccountFactoryGetAccountImplementation(
-            req.params.accountId
-          );
-          for (const fileIdName of req.body.fileIdNames) {
-            const file = await FileDataGet(spanSubProcess, fileIdName.id);
-            if (!file) {
-              continue;
-            }
-            folderId = file.folderId;
-            logger.info(
-              `Rename file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${fileIdName.filename}`,
-              spanSubProcess
-            );
-            await account.renameFile(spanSubProcess, file, fileIdName.filename);
-          }
-          if (folderId) {
-            const folder = await FolderDataGet(spanSubProcess, folderId);
-            await SyncInventorySyncFolder(account, folder);
-          }
-        } catch (err) {
-          logger.error("Error Renaming File", err, spanSubProcess);
-        }
-        SyncQueueSetBlockingOperationEnd();
-        spanSubProcess.end();
-      }, 50);
+      const accountId = req.params.accountId;
+      const fileIdNames = req.body.fileIdNames;
+      const fileIdList = fileIdNames.map((f: { id: string }) => f.id);
+      const queueId = md5(
+        `fileRename:${accountId}:${fileIdList.sort().join(",")}`,
+      );
+
+      SyncQueueQueueItem(
+        accountId,
+        queueId,
+        { fileIdNames },
+        "fileRename",
+        SyncQueueItemPriority.INTERACTIVE,
+        fileIdList,
+      );
 
       return res.status(201).send({});
     });

@@ -52,9 +52,7 @@
               <code>{{ item.functionName }}</code>
             </td>
             <td>
-              <span v-if="item.dataInfo">{{
-                item.dataInfo.name || item.dataInfo.id
-              }}</span>
+              <span v-if="item.label">{{ item.label }}</span>
               <span v-else>-</span>
             </td>
           </tr>

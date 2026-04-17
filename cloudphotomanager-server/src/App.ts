@@ -4,6 +4,7 @@ import type { FastifyCookieOptions } from "@fastify/cookie";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
+import fastifyWebsocket from "@fastify/websocket";
 import Fastify from "fastify";
 import { watchFile } from "fs-extra";
 import * as path from "path";
@@ -67,6 +68,8 @@ Promise.resolve().then(async () => {
   // API
 
   const fastify = Fastify({});
+
+  fastify.register(fastifyWebsocket);
 
   if (config.CORS_POLICY_ORIGIN) {
     fastify.register(cors, {

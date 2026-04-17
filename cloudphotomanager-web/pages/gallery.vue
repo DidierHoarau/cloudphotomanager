@@ -148,6 +148,7 @@ export default {
       _onFolderUpdated: null,
       _onFileUpdated: null,
       _onFolderSelected: null,
+      _onOperationComplete: null,
     };
   },
   async created() {
@@ -185,9 +186,18 @@ export default {
     this._onFolderSelected = (message) => {
       this.fetchFiles(message.accountId, message.folderId, true);
     };
+    this._onOperationComplete = (message) => {
+      // Refresh the current folder when a file operation completes
+      if (this.currentAccountId && this.currentFolderId) {
+        this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
+        FoldersStore().fetch();
+      }
+      this.selectedFiles = [];
+    };
     EventBus.on(EventTypes.FOLDER_UPDATED, this._onFolderUpdated);
     EventBus.on(EventTypes.FILE_UPDATED, this._onFileUpdated);
     EventBus.on(EventTypes.FOLDER_SELECTED, this._onFolderSelected);
+    EventBus.on(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
     if (
       useRoute().query.accountId &&
       useRoute().query.folderId &&
@@ -273,6 +283,7 @@ export default {
     EventBus.off(EventTypes.FOLDER_UPDATED, this._onFolderUpdated);
     EventBus.off(EventTypes.FILE_UPDATED, this._onFileUpdated);
     EventBus.off(EventTypes.FOLDER_SELECTED, this._onFolderSelected);
+    EventBus.off(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
   },
   methods: {
     filterOuttakes(files) {
@@ -468,7 +479,6 @@ export default {
         message = `Delete the file? (Can't be undone!)\nFile: ${this.selectedFiles[0].filename} \n`;
       }
       if (confirm(message) == true) {
-        this.loading = true;
         SyncStore().markOperationInProgress();
         const fileIdList = [];
         for (const file of this.selectedFiles) {
@@ -486,13 +496,11 @@ export default {
           )
           .then((res) => {
             EventBus.emit(EventTypes.ALERT_MESSAGE, {
-              text: "File deleted",
+              text: "Delete queued — running in background",
             });
-            this.onOperationDone({ status: "invalidated" });
+            this.activeOperation = "";
           })
           .catch(handleError);
-
-        this.loading = false;
       }
     },
     async clickedDeleteFolder() {

@@ -9,4 +9,5 @@ export interface SyncQueueItem {
   functionName: string;
   priority: SyncQueueItemPriority;
   status: SyncQueueItemStatus;
+  fileIds?: string[];
 }

@@ -234,17 +234,17 @@ export async function FileDataListByFolderRecursivePaginated(
   );
   const order = sortOrder === "asc" ? "ASC" : "DESC";
   const offset = page * pageSize;
-  const folderpathPattern = `${folderpath}%`;
+  const folderpathSubPattern = `${folderpath}/%`;
   const countRaw = await SqlDbUtilsQuerySQL(
     span,
-    `SELECT COUNT(*) as count FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND folderpath LIKE ?)`,
-    [accountId, accountId, folderpathPattern],
+    `SELECT COUNT(*) as count FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?))`,
+    [accountId, accountId, folderpath, folderpathSubPattern],
   );
   const total = countRaw.length > 0 ? countRaw[0].count : 0;
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    `SELECT * FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND folderpath LIKE ?) ORDER BY dateMedia ${order} LIMIT ? OFFSET ?`,
-    [accountId, accountId, folderpathPattern, pageSize, offset],
+    `SELECT * FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?)) ORDER BY dateMedia ${order} LIMIT ? OFFSET ?`,
+    [accountId, accountId, folderpath, folderpathSubPattern, pageSize, offset],
   );
   const files: File[] = [];
   rawData.forEach((fileRaw: any) => {

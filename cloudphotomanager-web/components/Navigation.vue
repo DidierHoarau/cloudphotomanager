@@ -6,6 +6,15 @@
       </li>
     </ul>
     <ul class="menu-links">
+      <li v-if="syncStore.countTotal > 0">
+        <NuxtLink
+          to="/accounts/queue"
+          class="sync-indicator"
+          title="Operations in progress"
+        >
+          <i class="bi bi-hourglass-split"></i>
+        </NuxtLink>
+      </li>
       <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink
           to="/gallery"
@@ -35,14 +44,6 @@
         ></NuxtLink>
       </li>
     </ul>
-    <dialog
-      v-if="syncStore.countBlocking > 0"
-      open
-      class="dialog-operation-in-progress"
-    >
-      <i class="bi bi-hourglass-split"></i>&nbsp;&nbsp; Operations in progress,
-      please wait
-    </dialog>
   </nav>
 </template>
 
@@ -76,7 +77,7 @@ export default {
           .post(
             `${(await Config.get()).SERVER_URL}/users/session`,
             {},
-            await AuthService.getAuthHeader()
+            await AuthService.getAuthHeader(),
           )
           .then((res) => {
             AuthService.saveToken(res.data.token);
@@ -102,8 +103,18 @@ export default {
   padding: 0.3em 0.6em;
   opacity: 0.3;
 }
-/* Add styles to bring the dialog to the foreground */
-.dialog-operation-in-progress {
-  z-index: 9999;
+.sync-indicator {
+  opacity: 0.6;
+  font-size: 1em;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 </style>
