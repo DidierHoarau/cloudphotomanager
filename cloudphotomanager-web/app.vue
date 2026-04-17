@@ -35,7 +35,7 @@ main {
 #page-alert-messages {
   position: fixed;
   right: 1rem;
-  top: 1rem;
+  bottom: 5em;
   max-width: 80vw;
 }
 

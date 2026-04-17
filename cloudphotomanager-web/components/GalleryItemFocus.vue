@@ -10,6 +10,13 @@
       :file="file"
       @onClose="showFileInfo = false"
     />
+    <DialogConfirm
+      v-if="showConfirmDialog"
+      :title="confirmDialogTitle"
+      :message="confirmDialogMessage"
+      @onConfirm="onConfirmDialog"
+      @onCancel="showConfirmDialog = false"
+    />
     <div class="action-bar" :class="{ expanded: actionBarExpanded }">
       <button
         class="action-bar-toggle"
@@ -178,6 +185,10 @@ export default {
       dragStartY: 0,
       dragStartTranslateX: 0,
       dragStartTranslateY: 0,
+      showConfirmDialog: false,
+      confirmDialogTitle: "",
+      confirmDialogMessage: "",
+      confirmDialogCallback: null,
     };
   },
   async created() {
@@ -275,11 +286,9 @@ export default {
       return FileUtils.getType(file);
     },
     async clickedDelete() {
-      if (
-        confirm(
-          `Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`,
-        ) == true
-      ) {
+      this.confirmDialogTitle = "Confirm Delete";
+      this.confirmDialogMessage = `Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`;
+      this.confirmDialogCallback = async () => {
         await axios
           .post(
             `${(await Config.get()).SERVER_URL}/accounts/${this.file.accountId}/files/batch/operations/fileDelete`,
@@ -293,6 +302,13 @@ export default {
             // Don't close focus view yet; file will be greyed out while processing
           })
           .catch(handleError);
+      };
+      this.showConfirmDialog = true;
+    },
+    onConfirmDialog() {
+      this.showConfirmDialog = false;
+      if (this.confirmDialogCallback) {
+        this.confirmDialogCallback();
       }
     },
     onOperationDone(result) {

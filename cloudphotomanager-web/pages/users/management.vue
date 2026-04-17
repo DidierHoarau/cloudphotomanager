@@ -15,11 +15,21 @@
           <td>
             <div v-if="user.permissions && user.permissions.isAdmin">Admin</div>
             <div v-else-if="user.permissions">
-              <div v-for="folder in user.permissions.folders" v-bind:key="folder.id">
-                <i v-on:click="clickedPermissionsUserRemoveFolder(user, folder)" class="bi bi-trash-fill"></i
-                >&nbsp;&nbsp;({{ folder.accountName }})&nbsp;{{ folder.folderpath }}&nbsp;({{ folder.scope_tag }})
+              <div
+                v-for="folder in user.permissions.folders"
+                v-bind:key="folder.id"
+              >
+                <i
+                  v-on:click="clickedPermissionsUserRemoveFolder(user, folder)"
+                  class="bi bi-trash-fill"
+                ></i
+                >&nbsp;&nbsp;({{ folder.accountName }})&nbsp;{{
+                  folder.folderpath
+                }}&nbsp;({{ folder.scope_tag }})
               </div>
-              <div v-on:click="clickedPermissionsUserAddFolder(user)"><i class="bi bi-folder-plus"></i> Add Folder</div>
+              <div v-on:click="clickedPermissionsUserAddFolder(user)">
+                <i class="bi bi-folder-plus"></i> Add Folder
+              </div>
             </div>
           </td>
           <td>
@@ -38,6 +48,13 @@
       v-if="activeOperation == 'userIdAddPermission'"
       :userId="targetUserId"
       @onDone="onOperationDone"
+    />
+    <DialogConfirm
+      v-if="showConfirmDialog"
+      :title="confirmDialogTitle"
+      :message="confirmDialogMessage"
+      @onConfirm="onConfirmDialog"
+      @onCancel="showConfirmDialog = false"
     />
   </div>
 </template>
@@ -60,6 +77,10 @@ export default {
       activeOperation: "",
       isChangePasswordStarted: false,
       targetUserId: "",
+      showConfirmDialog: false,
+      confirmDialogTitle: "",
+      confirmDialogMessage: "",
+      confirmDialogCallback: null,
     };
   },
   async created() {
@@ -74,23 +95,34 @@ export default {
   methods: {
     async fetch() {
       await axios
-        .get(`${(await Config.get()).SERVER_URL}/users/`, await AuthService.getAuthHeader())
+        .get(
+          `${(await Config.get()).SERVER_URL}/users/`,
+          await AuthService.getAuthHeader(),
+        )
         .then(async (res) => {
           this.users = res.data.users;
           for (const user of this.users) {
             await axios
-              .get(`${(await Config.get()).SERVER_URL}/users/${user.id}/permissions`, await AuthService.getAuthHeader())
+              .get(
+                `${(await Config.get()).SERVER_URL}/users/${user.id}/permissions`,
+                await AuthService.getAuthHeader(),
+              )
               .then(async (res) => {
                 user.permissions = res.data.info;
                 for (const folder of user.permissions.folders || []) {
-                  const folderKnown = find(FoldersStore().folders, { id: folder.folderId });
-                  const accountKnown = find(AccountsStore().accounts, { id: folderKnown.accountId });
+                  const folderKnown = find(FoldersStore().folders, {
+                    id: folder.folderId,
+                  });
+                  const accountKnown = find(AccountsStore().accounts, {
+                    id: folderKnown.accountId,
+                  });
                   folder.scope_tag = "RO";
                   if (folder.scope === "ro_recursive") {
                     folder.scope_tag = "RO Recursive";
                   }
                   folder.accountName = accountKnown.name || "Unknown Folder";
-                  folder.folderpath = folderKnown.folderpath || "Unknown Folder";
+                  folder.folderpath =
+                    folderKnown.folderpath || "Unknown Folder";
                 }
               })
               .catch(handleError);
@@ -99,27 +131,44 @@ export default {
         .catch(handleError);
     },
     async clickedDelete(user) {
-      if (confirm(`Delete the user? (Can't be undone!)\nUser: ${user.name} \n`) == true) {
+      this.confirmDialogTitle = "Confirm Delete";
+      this.confirmDialogMessage = `Delete the user? (Can't be undone!)\nUser: ${user.name} \n`;
+      this.confirmDialogCallback = async () => {
         await axios
-          .delete(`${(await Config.get()).SERVER_URL}/users/${user.id}`, await AuthService.getAuthHeader())
+          .delete(
+            `${(await Config.get()).SERVER_URL}/users/${user.id}`,
+            await AuthService.getAuthHeader(),
+          )
           .then(async (res) => {
             await this.fetch();
           })
           .catch(handleError);
+      };
+      this.showConfirmDialog = true;
+    },
+    onConfirmDialog() {
+      this.showConfirmDialog = false;
+      if (this.confirmDialogCallback) {
+        this.confirmDialogCallback();
       }
     },
     async clickedPermissionsUserRemoveFolder(user, folder) {
       await axios
-        .get(`${(await Config.get()).SERVER_URL}/users/${user.id}/permissions`, await AuthService.getAuthHeader())
+        .get(
+          `${(await Config.get()).SERVER_URL}/users/${user.id}/permissions`,
+          await AuthService.getAuthHeader(),
+        )
         .then(async (res) => {
           const permissions = res.data;
-          const folderToRemove = findIndex(permissions.info.folders, { folderId: folder.folderId });
+          const folderToRemove = findIndex(permissions.info.folders, {
+            folderId: folder.folderId,
+          });
           if (folderToRemove >= 0) {
             permissions.info.folders.splice(folderToRemove, 1);
             await axios.put(
               `${(await Config.get()).SERVER_URL}/users/${user.id}/permissions`,
               permissions,
-              await AuthService.getAuthHeader()
+              await AuthService.getAuthHeader(),
             );
           }
           this.fetch();
