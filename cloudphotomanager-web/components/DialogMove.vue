@@ -73,11 +73,9 @@ export default {
     },
     async doAction() {
       this.loading = true;
+      const fileIdList = this.files.map((f) => f.id);
+      SyncStore().markFilesAsPending(fileIdList);
       SyncStore().markOperationInProgress();
-      const fileIdList = [];
-      for (const file of this.files) {
-        fileIdList.push(file.id);
-      }
       await axios
         .post(
           `${(await Config.get()).SERVER_URL}/accounts/${this.accountId}/files/batch/operations/folderMove`,

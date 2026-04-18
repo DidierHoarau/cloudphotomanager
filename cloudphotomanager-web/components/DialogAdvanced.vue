@@ -76,7 +76,6 @@ export default {
     async doActionSetOuttake() {
       this.loading = true;
       let accountId = "";
-      SyncStore().markOperationInProgress();
       const fileIdNames = [];
       for (const file of this.files) {
         if (file.filename.indexOf("-outtake") < 0) {
@@ -88,6 +87,8 @@ export default {
         }
       }
       if (fileIdNames.length > 0) {
+        SyncStore().markFilesAsPending(fileIdNames.map((f) => f.id));
+        SyncStore().markOperationInProgress();
         await axios
           .post(
             `${(await Config.get()).SERVER_URL}/accounts/${accountId}/files/batch/operations/fileRename`,
@@ -104,7 +105,6 @@ export default {
     async doActionUnSetOuttake() {
       this.loading = true;
       let accountId = "";
-      SyncStore().markOperationInProgress();
       const fileIdNames = [];
       for (const file of this.files) {
         if (file.filename.indexOf(`-outtake.${FileUtils.getExtention(file)}`) > 0) {
@@ -119,6 +119,8 @@ export default {
         }
       }
       if (fileIdNames.length > 0) {
+        SyncStore().markFilesAsPending(fileIdNames.map((f) => f.id));
+        SyncStore().markOperationInProgress();
         await axios
           .post(
             `${(await Config.get()).SERVER_URL}/accounts/${accountId}/files/batch/operations/fileRename`,

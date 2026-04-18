@@ -9,6 +9,7 @@ export const SyncStore = defineStore("SyncStore", {
     countBlocking: 0,
     counts: [] as { type: string; count: number }[],
     processingFileIds: [] as string[],
+    pendingFileIds: [] as string[],
     queueItems: [] as any[],
     monitoring: false,
     wsConnected: false,
@@ -27,7 +28,7 @@ export const SyncStore = defineStore("SyncStore", {
     isFileProcessing:
       (state) =>
       (fileId: string): boolean => {
-        return state.processingFileIds.includes(fileId);
+        return state.processingFileIds.includes(fileId) || state.pendingFileIds.includes(fileId);
       },
   },
 
@@ -87,6 +88,12 @@ export const SyncStore = defineStore("SyncStore", {
             }
             this.countTotal = total;
           } else if (msg.type === "operation_complete") {
+            const completedIds = msg.fileIds || [];
+            if (completedIds.length > 0) {
+              this.pendingFileIds = this.pendingFileIds.filter(
+                (id) => !completedIds.includes(id),
+              );
+            }
             EventBus.emit(EventTypes.OPERATION_COMPLETE, {
               operationName: msg.operationName,
               fileIds: msg.fileIds || [],
@@ -133,6 +140,14 @@ export const SyncStore = defineStore("SyncStore", {
 
     markOperationInProgress() {
       this.countTotal++;
+    },
+
+    markFilesAsPending(fileIds: string[]) {
+      for (const id of fileIds) {
+        if (!this.pendingFileIds.includes(id)) {
+          this.pendingFileIds.push(id);
+        }
+      }
     },
   },
 });

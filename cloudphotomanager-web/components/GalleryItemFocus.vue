@@ -161,7 +161,14 @@ import * as _ from "lodash";
 
 export default {
   props: {
-    inputFiles: {},
+    galleryFiles: {
+      type: Array,
+      required: true,
+    },
+    initialPosition: {
+      type: Number,
+      default: 0,
+    },
   },
   data() {
     return {
@@ -191,12 +198,35 @@ export default {
       confirmDialogCallback: null,
     };
   },
+  watch: {
+    galleryFiles(newFiles) {
+      if (newFiles === this.files) return;
+      if (!newFiles || newFiles.length === 0) {
+        this.clickedClose();
+        return;
+      }
+      const currentId = this.file?.id;
+      this.files = newFiles;
+      if (!currentId) {
+        this.position = Math.min(this.position, newFiles.length - 1);
+        this.loadMedia();
+        return;
+      }
+      const newIndex = newFiles.findIndex((f) => f.id === currentId);
+      if (newIndex >= 0) {
+        this.position = newIndex;
+      } else {
+        this.position = Math.min(this.position, newFiles.length - 1);
+        this.loadMedia();
+      }
+    },
+  },
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
     this.staticUrl = (await Config.get()).STATIC_URL;
 
-    this.files = this.inputFiles.files;
-    this.position = this.inputFiles.position;
+    this.files = this.galleryFiles;
+    this.position = this.initialPosition;
     this.loadMedia(true);
 
     this._onKeyDown = (event) => {
@@ -289,19 +319,33 @@ export default {
       this.confirmDialogTitle = "Confirm Delete";
       this.confirmDialogMessage = `Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`;
       this.confirmDialogCallback = async () => {
-        await axios
-          .post(
-            `${(await Config.get()).SERVER_URL}/accounts/${this.file.accountId}/files/batch/operations/fileDelete`,
-            { fileIdList: [this.file.id] },
+        const fileId = this.file.id;
+        const accountId = this.file.accountId;
+        try {
+          await axios.post(
+            `${this.serverUrl}/accounts/${accountId}/files/batch/operations/fileDelete`,
+            { fileIdList: [fileId] },
             await AuthService.getAuthHeader(),
-          )
-          .then((res) => {
-            EventBus.emit(EventTypes.ALERT_MESSAGE, {
-              text: "Delete queued — running in background",
-            });
-            // Don't close focus view yet; file will be greyed out while processing
-          })
-          .catch(handleError);
+          );
+          SyncStore().markFilesAsPending([fileId]);
+          EventBus.emit(EventTypes.ALERT_MESSAGE, {
+            text: "Delete queued \u2014 running in background",
+          });
+          // Auto-advance: remove file locally and show next
+          const removeIndex = this.files.findIndex((f) => f.id === fileId);
+          this.files = this.files.filter((f) => f.id !== fileId);
+          if (this.files.length === 0) {
+            this.clickedClose();
+          } else {
+            this.position = Math.min(
+              removeIndex >= 0 ? removeIndex : this.position,
+              this.files.length - 1,
+            );
+            this.loadMedia();
+          }
+        } catch (err) {
+          handleError(err);
+        }
       };
       this.showConfirmDialog = true;
     },
@@ -311,13 +355,23 @@ export default {
         this.confirmDialogCallback();
       }
     },
-    onOperationDone(result) {
-      if (result.status === "invalidated") {
-        this.$emit("onFileClosed", { status: "invalidated" });
-      }
+    onOperationDone() {
       this.activeOperation = "";
-      EventBus.emit(EventTypes.FOLDER_UPDATED, {});
-      EventBus.emit(EventTypes.FILE_UPDATED, {});
+      // After move: advance past the moved file
+      if (this.file) {
+        const fileId = this.file.id;
+        const removeIndex = this.files.findIndex((f) => f.id === fileId);
+        this.files = this.files.filter((f) => f.id !== fileId);
+        if (this.files.length === 0) {
+          this.clickedClose();
+        } else {
+          this.position = Math.min(
+            removeIndex >= 0 ? removeIndex : this.position,
+            this.files.length - 1,
+          );
+          this.loadMedia();
+        }
+      }
     },
     previousMedia() {
       if (this.files.length === 0 || this.position === 0) {

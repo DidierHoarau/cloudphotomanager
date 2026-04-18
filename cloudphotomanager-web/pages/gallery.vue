@@ -79,7 +79,8 @@
     </div>
     <GalleryItemFocus
       v-if="displayFullScreen"
-      :inputFiles="{ files, position: positionFocus }"
+      :galleryFiles="files"
+      :initialPosition="positionFocus"
       class="gallery-item-focus"
       @onFileClosed="unFocusGalleryItem"
     />
@@ -203,37 +204,49 @@ export default {
       this.fetchFiles(message.accountId, message.folderId, true);
     };
     this._onOperationComplete = (message) => {
-      if (this.currentAccountId && this.currentFolderId) {
-        const affectedFileIds = message?.fileIds || [];
-        const operationName = message?.operationName || "";
-        // Operations that require a gallery refresh:
-        // - fileDelete / folderMove: always refresh (file gone or moved away)
-        // - fileRename: always refresh (filename displayed in gallery)
-        // - SyncInventorySyncFolder: always refresh (folder contents changed)
-        // - syncThumbnail / syncThumbnailFromVideoPreview: refresh if file is in current view
-        // - syncPhotoFromFull / syncVideoFromFull: refresh if file is in current view
-        // - syncPhotoKeyWords / fileCacheRebuild: no gallery refresh needed
-        const alwaysRefreshOps = [
-          "fileDelete",
-          "folderMove",
-          "fileRename",
-          "SyncInventorySyncFolder",
-        ];
-        const refreshIfVisibleOps = [
-          "syncThumbnail",
-          "syncThumbnailFromVideoPreview",
-          "syncPhotoFromFull",
-          "syncVideoFromFull",
-        ];
-        const shouldRefresh =
-          alwaysRefreshOps.includes(operationName) ||
-          (refreshIfVisibleOps.includes(operationName) &&
-            affectedFileIds.some((id) => this.files.some((f) => f.id === id)));
-        if (shouldRefresh) {
-          this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
+      if (!this.currentAccountId || !this.currentFolderId) return;
+      const affectedFileIds = message?.fileIds || [];
+      const operationName = message?.operationName || "";
+
+      // File removal operations: update local array without full refresh
+      if (
+        (operationName === "fileDelete" || operationName === "folderMove") &&
+        affectedFileIds.length > 0
+      ) {
+        const removedSet = new Set(affectedFileIds);
+        this.files = this.files.filter((f) => !removedSet.has(f.id));
+        this.selectedFiles = this.selectedFiles.filter(
+          (f) => !removedSet.has(f.id),
+        );
+        this.outtakesCount = this.files.filter((f) => f.isOuttake).length;
+        FoldersStore().fetch();
+        return;
+      }
+
+      // Filename changes or folder-level sync: silent refresh (no loading flash)
+      if (
+        operationName === "fileRename" ||
+        operationName === "SyncInventorySyncFolder"
+      ) {
+        this.fetchFilesSilent();
+        if (operationName === "SyncInventorySyncFolder") {
           FoldersStore().fetch();
-          this.selectedFiles = [];
         }
+        return;
+      }
+
+      // Thumbnail/preview operations: silent refresh only if affected files visible
+      const refreshIfVisibleOps = [
+        "syncThumbnail",
+        "syncThumbnailFromVideoPreview",
+        "syncPhotoFromFull",
+        "syncVideoFromFull",
+      ];
+      if (
+        refreshIfVisibleOps.includes(operationName) &&
+        affectedFileIds.some((id) => this.files.some((f) => f.id === id))
+      ) {
+        this.fetchFilesSilent();
       }
     };
     EventBus.on(EventTypes.FOLDER_UPDATED, this._onFolderUpdated);
@@ -421,6 +434,37 @@ export default {
           this.loadingMore = false;
         });
     },
+    async fetchFilesSilent() {
+      if (!this.currentAccountId || !this.currentFolderId) return;
+      const serverUrl = (await Config.get()).SERVER_URL;
+      const totalToFetch = Math.max(
+        this.pageSize,
+        (this.currentPage + 1) * this.pageSize,
+      );
+      const params = new URLSearchParams({
+        includeSubFolders: String(this.includeSubFolders),
+        sortOrder: this.sortOrder,
+        page: "0",
+        pageSize: String(totalToFetch),
+      });
+      try {
+        const res = await axios.get(
+          `${serverUrl}/accounts/${this.currentAccountId}/folders/${this.currentFolderId}/files-recursive?${params}`,
+          await AuthService.getAuthHeader(),
+        );
+        const newFiles = res.data.files || [];
+        let outtakesCount = 0;
+        for (const file of newFiles) {
+          file.isOuttake = file.filename.indexOf("-outtake.") > 0;
+          if (file.isOuttake) outtakesCount++;
+        }
+        this.files = newFiles;
+        this.outtakesCount = outtakesCount;
+        this.hasMore = res.data.total > totalToFetch;
+      } catch (err) {
+        handleError(err);
+      }
+    },
     async clickedRefresh() {
       await axios
         .put(
@@ -456,7 +500,7 @@ export default {
       this.displayFullScreen = true;
       this.positionFocus = findIndex(this.files, { id: file.id });
     },
-    unFocusGalleryItem(result) {
+    unFocusGalleryItem() {
       useRouter().push({
         query: {
           accountId: this.currentAccountId,
@@ -464,9 +508,6 @@ export default {
         },
       });
       this.displayFullScreen = false;
-      if (result.status === "invalidated") {
-        this.fetchFiles(this.currentAccountId, this.currentFolderId);
-      }
     },
     openListMenu() {
       this.menuOpened = !this.menuOpened;
@@ -477,12 +518,9 @@ export default {
         this.selectedFiles = [];
       }
     },
-    onOperationDone(result) {
+    onOperationDone() {
       this.selectedFiles = [];
       this.activeOperation = "";
-      EventBus.emit(EventTypes.FOLDER_UPDATED, {});
-      EventBus.emit(EventTypes.FILE_UPDATED, {});
-      this.clickedRefresh();
     },
     clickedMove() {
       this.activeOperation = "move";
@@ -525,11 +563,9 @@ export default {
     },
     async executeDelete() {
       this.activeOperation = "";
+      const fileIdList = this.selectedFiles.map((f) => f.id);
+      SyncStore().markFilesAsPending(fileIdList);
       SyncStore().markOperationInProgress();
-      const fileIdList = [];
-      for (const file of this.selectedFiles) {
-        fileIdList.push(file.id);
-      }
       await axios
         .post(
           `${(await Config.get()).SERVER_URL}/accounts/${
@@ -540,7 +576,8 @@ export default {
           },
           await AuthService.getAuthHeader(),
         )
-        .then((res) => {
+        .then(() => {
+          this.selectedFiles = [];
           EventBus.emit(EventTypes.ALERT_MESSAGE, {
             text: "Delete queued — running in background",
           });
