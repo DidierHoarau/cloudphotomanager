@@ -28,7 +28,10 @@ export const SyncStore = defineStore("SyncStore", {
     isFileProcessing:
       (state) =>
       (fileId: string): boolean => {
-        return state.processingFileIds.includes(fileId) || state.pendingFileIds.includes(fileId);
+        return (
+          state.processingFileIds.includes(fileId) ||
+          state.pendingFileIds.includes(fileId)
+        );
       },
   },
 

@@ -1,82 +1,103 @@
 <template>
-  <dialog open>
-    <article>
-      <header>
-        <a
-          href="#close"
-          aria-label="Close"
-          class="close"
-          @click.prevent="clickedClose()"
-        ></a>
-        File Info
-      </header>
-      <table class="file-info-table">
-        <tbody>
-          <tr>
-            <td class="file-info-label">Name</td>
-            <td>{{ file.filename }}</td>
-          </tr>
-          <tr>
-            <td class="file-info-label">Location</td>
-            <td>
-              <NuxtLink
-                :to="folderLink(file.accountId, file.folderId)"
-                @click="clickedClose()"
-              >
-                {{ folderPath }}
-              </NuxtLink>
-            </td>
-          </tr>
-          <tr>
-            <td class="file-info-label">Date</td>
-            <td>{{ formatDate(file.dateMedia || file.dateSync) }}</td>
-          </tr>
-          <tr>
-            <td class="file-info-label">Size</td>
-            <td>{{ formatSize(file.info && file.info.size) }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <hr />
-      <strong>Duplicates</strong>
-      <Loading v-if="loadingDuplicates" />
-      <p v-else-if="!duplicates"><small>No duplicates found.</small></p>
-      <div v-else class="duplicate-files-table">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Folder</th>
-              <th scope="col">File</th>
-            </tr>
-          </thead>
+  <div>
+    <DialogConfirm
+      v-if="showConfirmDelete"
+      title="Confirm Delete"
+      :message="confirmDeleteMessage"
+      @onConfirm="executeDeleteDuplicate"
+      @onCancel="showConfirmDelete = false"
+    />
+    <dialog open>
+      <article>
+        <header>
+          <a
+            href="#close"
+            aria-label="Close"
+            class="close"
+            @click.prevent="clickedClose()"
+          ></a>
+          File Info
+        </header>
+        <table class="file-info-table">
           <tbody>
-            <tr v-for="dup in duplicates.files" :key="dup.id">
+            <tr>
+              <td class="file-info-label">Name</td>
+              <td>{{ file.filename }}</td>
+            </tr>
+            <tr>
+              <td class="file-info-label">Location</td>
               <td>
                 <NuxtLink
-                  :to="folderLink(dup.accountId, dup.folderId)"
+                  :to="folderLink(file.accountId, file.folderId)"
                   @click="clickedClose()"
                 >
-                  {{ getDuplicateFolderPath(dup.folderId) }}
+                  {{ folderPath }}
                 </NuxtLink>
               </td>
-              <td>{{ dup.filename }}</td>
+            </tr>
+            <tr>
+              <td class="file-info-label">Date</td>
+              <td>{{ formatDate(file.dateMedia || file.dateSync) }}</td>
+            </tr>
+            <tr>
+              <td class="file-info-label">Size</td>
+              <td>{{ formatSize(file.info && file.info.size) }}</td>
             </tr>
           </tbody>
         </table>
-      </div>
-    </article>
-  </dialog>
+        <hr />
+        <strong>Duplicates</strong>
+        <Loading v-if="loadingDuplicates" />
+        <p v-else-if="!duplicates"><small>No duplicates found.</small></p>
+        <div v-else class="duplicate-files-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Folder</th>
+                <th scope="col">File</th>
+                <th v-if="isAdmin" scope="col"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="dup in duplicates.files" :key="dup.id">
+                <td>
+                  <NuxtLink
+                    :to="folderLink(dup.accountId, dup.folderId)"
+                    @click="clickedClose()"
+                  >
+                    {{ getDuplicateFolderPath(dup.folderId) }}
+                  </NuxtLink>
+                </td>
+                <td>{{ dup.filename }}</td>
+                <td v-if="isAdmin">
+                  <button
+                    class="dup-delete-btn"
+                    @click="clickedDeleteDuplicate(dup)"
+                    :disabled="isDupProcessing(dup.id)"
+                    title="Delete this duplicate"
+                  >
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </dialog>
+  </div>
 </template>
 
 <script setup>
 const foldersStore = FoldersStore();
+const authenticationStore = AuthenticationStore();
 </script>
 
 <script>
 import axios from "axios";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
-import { handleError } from "~~/services/EventBus";
+import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 
 export default {
   props: {
@@ -89,6 +110,9 @@ export default {
     return {
       duplicates: null,
       loadingDuplicates: false,
+      showConfirmDelete: false,
+      confirmDeleteMessage: "",
+      pendingDeleteDup: null,
     };
   },
   async created() {
@@ -132,6 +156,41 @@ export default {
       const folder = FoldersStore().folders.find((f) => f.id === folderId);
       return folder ? folder.folderpath : folderId;
     },
+    clickedDeleteDuplicate(dup) {
+      this.confirmDeleteMessage = `Delete this duplicate? (Can't be undone!)\nFile: ${dup.filename}`;
+      this.pendingDeleteDup = dup;
+      this.showConfirmDelete = true;
+    },
+    async executeDeleteDuplicate() {
+      this.showConfirmDelete = false;
+      const dup = this.pendingDeleteDup;
+      if (!dup) return;
+      this.pendingDeleteDup = null;
+      SyncStore().markFilesAsPending([dup.id]);
+      SyncStore().markOperationInProgress();
+      try {
+        await axios.post(
+          `${(await Config.get()).SERVER_URL}/accounts/${dup.accountId}/files/batch/operations/fileDelete`,
+          { fileIdList: [dup.id] },
+          await AuthService.getAuthHeader(),
+        );
+        EventBus.emit(EventTypes.ALERT_MESSAGE, {
+          text: "Delete queued \u2014 running in background",
+        });
+        // Remove from local list
+        if (this.duplicates && this.duplicates.files) {
+          this.duplicates.files = this.duplicates.files.filter(
+            (f) => f.id !== dup.id,
+          );
+        }
+        this.$emit("onDuplicateDeleted", dup.id);
+      } catch (err) {
+        handleError(err);
+      }
+    },
+    isDupProcessing(fileId) {
+      return SyncStore().isFileProcessing(fileId);
+    },
   },
   computed: {
     folderPath() {
@@ -139,6 +198,9 @@ export default {
         (f) => f.id === this.file.folderId,
       );
       return folder ? folder.folderpath : this.file.folderId;
+    },
+    isAdmin() {
+      return AuthenticationStore().isAdmin;
     },
   },
 };
@@ -164,5 +226,22 @@ export default {
   max-width: 100%;
   overflow-x: auto;
   margin-top: 0.5em;
+}
+.dup-delete-btn {
+  background: transparent;
+  border: none;
+  color: #dc3545;
+  cursor: pointer;
+  padding: 0.2em 0.4em;
+  font-size: 0.9em;
+  border-radius: 0.25em;
+  transition: background 0.15s;
+}
+.dup-delete-btn:hover:not(:disabled) {
+  background: rgba(220, 53, 69, 0.15);
+}
+.dup-delete-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 </style>

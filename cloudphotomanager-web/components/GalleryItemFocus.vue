@@ -9,6 +9,7 @@
       v-if="showFileInfo && file"
       :file="file"
       @onClose="showFileInfo = false"
+      @onDuplicateDeleted="onDuplicateDeleted"
     />
     <DialogConfirm
       v-if="showConfirmDialog"
@@ -235,6 +236,29 @@ export default {
       else if (event.key === "Escape") this.clickedClose();
     };
     window.addEventListener("keydown", this._onKeyDown);
+
+    this._onOperationComplete = (message) => {
+      if (!this.file) return;
+      const operationName = message?.operationName || "";
+      const affectedFileIds = message?.fileIds || [];
+      if (
+        operationName === "fileDelete" &&
+        affectedFileIds.includes(this.file.id)
+      ) {
+        const removeIndex = this.files.findIndex((f) => f.id === this.file.id);
+        this.files = this.files.filter((f) => !affectedFileIds.includes(f.id));
+        if (this.files.length === 0) {
+          this.clickedClose();
+        } else {
+          this.position = Math.min(
+            removeIndex >= 0 ? removeIndex : this.position,
+            this.files.length - 1,
+          );
+          this.loadMedia();
+        }
+      }
+    };
+    EventBus.on(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
   },
   mounted() {
     const mediaContainer = this.$refs.mediaContainer;
@@ -304,6 +328,9 @@ export default {
   },
   unmounted() {
     window.removeEventListener("keydown", this._onKeyDown);
+    if (this._onOperationComplete) {
+      EventBus.off(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
+    }
   },
   methods: {
     clickedClose() {
@@ -311,6 +338,10 @@ export default {
     },
     clickedMove() {
       this.activeOperation = "move";
+    },
+    onDuplicateDeleted(fileId) {
+      // If the deleted duplicate is in our files list, remove it
+      this.files = this.files.filter((f) => f.id !== fileId);
     },
     getType(file) {
       return FileUtils.getType(file);
