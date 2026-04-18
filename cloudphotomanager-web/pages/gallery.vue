@@ -135,6 +135,7 @@ import { find, findIndex, filter } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
+import { FileUtils } from "~~/services/FileUtils";
 
 export default {
   data() {
@@ -495,6 +496,9 @@ export default {
     focusGalleryItem(file) {
       if (!file) {
         this.displayFullScreen = false;
+        return;
+      }
+      if (FileUtils.getType(file) === "unknown") {
         return;
       }
       this.displayFullScreen = true;

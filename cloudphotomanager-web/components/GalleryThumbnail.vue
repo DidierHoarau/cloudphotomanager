@@ -2,13 +2,17 @@
   <div :class="{ 'file-processing': isProcessing }">
     <div
       class="gallery-file-image"
-      v-on:click="!isProcessing && focusGalleryItem(file)"
+      v-on:click="!isProcessing && getType(file) !== 'unknown' && focusGalleryItem(file)"
     >
       <i
         v-if="getType(file) == 'video'"
         class="bi bi-play-circle gallery-file-video-type-overlay"
       ></i>
+      <div v-if="getType(file) === 'unknown'" class="unknown-type-placeholder">
+        <i class="bi bi-question-circle"></i>
+      </div>
       <img
+        v-else
         :src="
           staticUrl +
           '/' +
@@ -149,6 +153,19 @@ export default {
   width: 100%;
   height: 8em;
   object-fit: cover;
+}
+.unknown-type-placeholder {
+  width: 100%;
+  height: 8em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(128, 128, 128, 0.15);
+  cursor: default;
+}
+.unknown-type-placeholder i {
+  font-size: 2.5em;
+  opacity: 0.4;
 }
 .file-processing {
   opacity: 0.4;

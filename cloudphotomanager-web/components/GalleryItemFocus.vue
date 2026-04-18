@@ -33,7 +33,7 @@
         <button
           class="action-btn"
           @click="previousMedia()"
-          :disabled="position === 0"
+          :disabled="!hasPreviousSupported"
           title="Previous"
         >
           <i class="bi bi-arrow-left"></i>
@@ -41,7 +41,7 @@
         <button
           class="action-btn"
           @click="nextMedia()"
-          :disabled="position === files.length - 1"
+          :disabled="!hasNextSupported"
           title="Next"
         >
           <i class="bi bi-arrow-right"></i>
@@ -408,10 +408,16 @@ export default {
       if (this.files.length === 0 || this.position === 0) {
         return;
       }
+      // Find the previous supported file
+      let newPos = this.position - 1;
+      while (newPos >= 0 && this.getType(this.files[newPos]) === "unknown") {
+        newPos--;
+      }
+      if (newPos < 0) return;
       const mediaDomElement = document.querySelector(".media-content");
       mediaDomElement.classList.add("animate-media-out-right");
       setTimeout(() => {
-        this.position--;
+        this.position = newPos;
         this.loadMedia();
         this.file = this.files[this.position];
         mediaDomElement.classList.remove("animate-media-out-right");
@@ -426,10 +432,19 @@ export default {
       if (this.files.length === 0 || this.position === this.files.length - 1) {
         return;
       }
+      // Find the next supported file
+      let newPos = this.position + 1;
+      while (
+        newPos < this.files.length &&
+        this.getType(this.files[newPos]) === "unknown"
+      ) {
+        newPos++;
+      }
+      if (newPos >= this.files.length) return;
       const mediaDomElement = document.querySelector(".media-content");
       mediaDomElement.classList.add("animate-media-out-left");
       setTimeout(() => {
-        this.position++;
+        this.position = newPos;
         this.loadMedia();
         mediaDomElement.classList.remove("animate-media-out-left");
         mediaDomElement.classList.add("animate-media-in-right");
@@ -556,6 +571,18 @@ export default {
     isCurrentFileProcessing() {
       if (!this.file) return false;
       return SyncStore().isFileProcessing(this.file.id);
+    },
+    hasPreviousSupported() {
+      for (let i = this.position - 1; i >= 0; i--) {
+        if (this.getType(this.files[i]) !== "unknown") return true;
+      }
+      return false;
+    },
+    hasNextSupported() {
+      for (let i = this.position + 1; i < this.files.length; i++) {
+        if (this.getType(this.files[i]) !== "unknown") return true;
+      }
+      return false;
     },
   },
 };
