@@ -18,7 +18,6 @@ import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { TimeoutWait } from "../utils-std-ts/Timeout";
 import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
 import { SyncFileCacheCleanUp } from "./SyncFileCache";
-import { SyncInventoryInit } from "./SyncInventory";
 import { SyncQueueGetCounts, SyncQueueQueueItem } from "./SyncQueue";
 import { OTelLogger, OTelMeter, OTelTracer } from "../OTelContext";
 
@@ -32,7 +31,6 @@ let SOURCE_FETCH_FREQUENCY_DYNAMIC = 30 * 60 * 1000;
 export async function SchedulerInit(context: Span, configIn: Config) {
   const span = OTelTracer().startSpan("Scheduler_init", context);
   config = configIn;
-  SyncInventoryInit(span);
 
   SchedulerStartSchedule();
   OTelMeter().createObservableGauge(
@@ -74,7 +72,7 @@ export async function SchedulerStartAccountSync(
   if (!rootFolderKnown) {
     rootFolderCloud.dateSync = new Date(0);
     await FolderDataAdd(span, rootFolderCloud);
-    await SyncQueueQueueItem(
+    SyncQueueQueueItem(
       account.getAccountDefinition().id,
       rootFolderCloud.id,
       rootFolderCloud,
@@ -83,59 +81,38 @@ export async function SchedulerStartAccountSync(
     );
   }
 
-  // Top Newest sync folder
-  for (const folder of await FolderDataGetNewestSync(
-    span,
-    account.getAccountDefinition().id,
-    10
-  )) {
-    await SyncQueueQueueItem(
-      account.getAccountDefinition().id,
-      folder.id,
-      folder,
-      "SyncInventorySyncFolder",
-      SyncQueueItemPriority.NORMAL
-    );
+  // Collect folders to sync, deduplicating by ID
+  const foldersToSync = new Map<string, { folder: any }>();
+  const accountId = account.getAccountDefinition().id;
+
+  // Top newest-synced folders
+  for (const folder of await FolderDataGetNewestSync(span, accountId, 10)) {
+    foldersToSync.set(folder.id, { folder });
   }
 
-  // Top oldest sync folder
-  for (const folder of await FolderDataGetOldestSync(
-    span,
-    account.getAccountDefinition().id,
-    10
-  )) {
-    await SyncQueueQueueItem(
-      account.getAccountDefinition().id,
-      folder.id,
-      folder,
-      "SyncInventorySyncFolder",
-      SyncQueueItemPriority.NORMAL
-    );
+  // Top oldest-synced folders
+  for (const folder of await FolderDataGetOldestSync(span, accountId, 10)) {
+    foldersToSync.set(folder.id, { folder });
   }
 
-  // Outdated Folder
+  // Outdated folders
   for (const folder of await FolderDataGetOlderThan(
     span,
-    account.getAccountDefinition().id,
+    accountId,
     new Date(new Date().getTime() - OUTDATED_AGE)
   )) {
-    await SyncQueueQueueItem(
-      account.getAccountDefinition().id,
-      folder.id,
-      folder,
-      "SyncInventorySyncFolder",
-      SyncQueueItemPriority.NORMAL
-    );
+    foldersToSync.set(folder.id, { folder });
   }
 
-  // Top oldest sync files
-  for (const folder of await FolderDataGetNewstUpdate(
-    span,
-    account.getAccountDefinition().id,
-    10
-  )) {
-    await SyncQueueQueueItem(
-      account.getAccountDefinition().id,
+  // Folders containing newest-updated files
+  for (const folder of await FolderDataGetNewstUpdate(span, accountId, 10)) {
+    foldersToSync.set(folder.id, { folder });
+  }
+
+  // Queue deduplicated folders
+  for (const { folder } of foldersToSync.values()) {
+    SyncQueueQueueItem(
+      accountId,
       folder.id,
       folder,
       "SyncInventorySyncFolder",
@@ -159,12 +136,12 @@ async function SchedulerStartSchedule() {
     await FolderDataDeleteFoldersWithDuplicates(span);
 
     const accountDefinitions = await AccountDataList(span);
-    accountDefinitions.forEach(async (accountDefinition) => {
+    for (const accountDefinition of accountDefinitions) {
       logger.info(`Start Sync of Account ${accountDefinition.name}`, span);
       await SchedulerStartAccountSync(span, accountDefinition).catch((err) => {
         logger.error("Error Synchronizing Account", err, span);
       });
-    });
+    }
     const lastUpdates = await SyncEventHistoryGetRecent();
     if (
       lastUpdates.length === 0 ||

@@ -1,10 +1,16 @@
 <template>
   <div class="gallery-layout page">
-    <div
-      class="gallery-folders"
-      :class="{ 'gallery-folders-closed': !menuOpened }"
-    >
-      <FolderList monitorRoute="true" @onFolderSelected="onFolderSelected" />
+    <div class="gallery-folders-mobile-wrapper">
+      <div class="gallery-folders-toggle" @click="openListMenu">
+        <i :class="menuOpened ? 'bi bi-chevron-up' : 'bi bi-chevron-down'"></i>
+        Folders
+      </div>
+      <div
+        class="gallery-folders"
+        :class="{ 'gallery-folders-closed': !menuOpened }"
+      >
+        <FolderList monitorRoute="true" @onFolderSelected="onFolderSelected" />
+      </div>
     </div>
     <div class="gallery-files-actions">
       <button class="secondary outline" v-on:click="clickedRefresh()">
@@ -81,8 +87,10 @@
       v-if="displayFullScreen"
       :galleryFiles="files"
       :initialPosition="positionFocus"
+      :selectedFiles="selectedFiles"
       class="gallery-item-focus"
       @onFileClosed="unFocusGalleryItem"
+      @onFileSelected="onFileSelected"
     />
     <DialogConfirm
       v-if="activeOperation == 'confirm-delete'"
@@ -142,7 +150,15 @@ export default {
     return {
       folder: {},
       files: [],
-      menuOpened: true,
+      menuOpened: (() => {
+        try {
+          const saved = localStorage.getItem("galleryFolderListOpen");
+          if (saved !== null) return saved === "true";
+        } catch (e) {
+          /* ignore */
+        }
+        return true;
+      })(),
       serverUrl: "",
       selectedFiles: [],
       requestEtag: "",
@@ -515,6 +531,11 @@ export default {
     },
     openListMenu() {
       this.menuOpened = !this.menuOpened;
+      try {
+        localStorage.setItem("galleryFolderListOpen", String(this.menuOpened));
+      } catch (e) {
+        /* ignore */
+      }
     },
     onDialogClosed(result) {
       this.activeOperation = "";
@@ -645,7 +666,13 @@ export default {
   height: 2.2em;
 }
 
-@media (min-width: 701px) {
+@media (min-width: 801px) {
+  .gallery-folders-mobile-wrapper {
+    display: contents;
+  }
+  .gallery-folders-toggle {
+    display: none;
+  }
   .gallery-layout {
     display: grid;
     grid-template-rows: auto 1fr;
@@ -686,34 +713,56 @@ export default {
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 800px) {
   .gallery-layout {
     display: grid;
-    grid-template-rows: 1fr auto 2fr;
+    grid-template-rows: auto auto 1fr;
     grid-template-columns: 1fr;
     column-gap: 1em;
+  }
+  .gallery-folders-mobile-wrapper {
+    grid-row: 1;
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .gallery-folders-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    padding: 0.4em 0.5em;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    opacity: 0.7;
+  }
+  .gallery-folders-toggle i {
+    transition: transform 0.3s ease;
   }
   .gallery-files-actions {
     padding-top: 0.5em;
     grid-row: 2;
-    grid-column-start: 1;
-    grid-column-end: span 2;
+    grid-column: 1;
   }
   .gallery-file-list {
     overflow: auto;
     grid-row: 3;
-    grid-column-start: 1;
-    grid-column-end: span 2;
+    grid-column: 1;
   }
   .gallery-folders {
     overflow: auto;
-    height: 30vh;
-    grid-row: 1;
-    grid-column-start: 1;
-    grid-column-end: span 2;
+    height: 25vh;
+    transition:
+      height 0.3s ease,
+      opacity 0.3s ease;
+    opacity: 1;
   }
   .gallery-folders-closed {
     height: 0px !important;
+    opacity: 0;
+    overflow: hidden;
   }
 }
 

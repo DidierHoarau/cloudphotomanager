@@ -90,6 +90,9 @@ export default {
 </script>
 
 <style scoped>
+nav {
+  height: 2.5rem;
+}
 .menu-links li {
   padding-right: 1em;
   font-size: 1.2em;

@@ -18,18 +18,8 @@
       @onConfirm="onConfirmDialog"
       @onCancel="showConfirmDialog = false"
     />
-    <div class="action-bar" :class="{ expanded: actionBarExpanded }">
-      <button
-        class="action-bar-toggle"
-        @click="actionBarExpanded = !actionBarExpanded"
-      >
-        <i
-          :class="
-            actionBarExpanded ? 'bi bi-chevron-left' : 'bi bi-chevron-right'
-          "
-        ></i>
-      </button>
-      <div class="action-bar-content">
+    <div class="action-bar">
+      <div class="action-bar-main">
         <button
           class="action-btn"
           @click="previousMedia()"
@@ -47,6 +37,32 @@
           <i class="bi bi-arrow-right"></i>
         </button>
         <div class="action-bar-divider"></div>
+        <label class="action-checkbox" title="Select">
+          <input
+            type="checkbox"
+            :checked="isFileSelected"
+            @change="toggleSelection()"
+          />
+        </label>
+        <div class="action-bar-divider"></div>
+        <button class="action-btn" @click="showFileInfo = true" title="Info">
+          <i class="bi bi-info-circle"></i>
+        </button>
+        <button class="action-btn" @click="clickedClose()" title="Close">
+          <i class="bi bi-x-lg"></i>
+        </button>
+        <button
+          class="action-bar-toggle"
+          @click="actionBarExpanded = !actionBarExpanded"
+        >
+          <i
+            :class="
+              actionBarExpanded ? 'bi bi-chevron-down' : 'bi bi-chevron-up'
+            "
+          ></i>
+        </button>
+      </div>
+      <div class="action-bar-extra" :class="{ expanded: actionBarExpanded }">
         <button
           class="action-btn"
           v-if="file && getType(file) == 'image'"
@@ -55,11 +71,8 @@
         >
           <i class="bi bi-arrow-clockwise"></i>
         </button>
-        <div
-          class="action-bar-divider"
-          v-if="authenticationStore.isAdmin"
-        ></div>
         <template v-if="authenticationStore.isAdmin">
+          <div class="action-bar-divider"></div>
           <button
             class="action-btn"
             @click="clickedMove()"
@@ -77,14 +90,6 @@
             <i class="bi bi-trash-fill"></i>
           </button>
         </template>
-        <div class="action-bar-divider"></div>
-        <button class="action-btn" @click="showFileInfo = true" title="Info">
-          <i class="bi bi-info-circle"></i>
-        </button>
-        <div class="action-bar-divider"></div>
-        <button class="action-btn" @click="clickedClose()" title="Close">
-          <i class="bi bi-x-lg"></i>
-        </button>
       </div>
     </div>
     <div id="media-container" ref="mediaContainer">
@@ -159,6 +164,7 @@ import { AuthService } from "~~/services/AuthService";
 import { FileUtils } from "~~/services/FileUtils";
 import * as Hammer from "hammerjs";
 import * as _ from "lodash";
+import { findIndex } from "lodash";
 
 export default {
   props: {
@@ -169,6 +175,11 @@ export default {
     initialPosition: {
       type: Number,
       default: 0,
+    },
+    selectedFiles: {
+      type: Array,
+      required: false,
+      default: () => [],
     },
   },
   data() {
@@ -552,6 +563,11 @@ export default {
     rotateImage() {
       this.imageRotation = (this.imageRotation + 90) % 360;
     },
+    toggleSelection() {
+      if (this.file) {
+        this.$emit("onFileSelected", this.file);
+      }
+    },
   },
   computed: {
     imageTransformStyle() {
@@ -583,6 +599,10 @@ export default {
         if (this.getType(this.files[i]) !== "unknown") return true;
       }
       return false;
+    },
+    isFileSelected() {
+      if (!this.file) return false;
+      return findIndex(this.selectedFiles, { id: this.file.id }) >= 0;
     },
   },
 };
@@ -629,30 +649,22 @@ export default {
   left: 0;
   z-index: 200;
   display: flex;
-  align-items: flex-end;
-  height: 2.6em;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 0.3em;
 }
-.action-bar-toggle {
-  flex-shrink: 0;
-  width: 2.6em;
-  height: 2.6em;
-  background: rgba(20, 20, 40, 0.45);
-  backdrop-filter: blur(6px);
-  border: none;
-  border-top-right-radius: 0.5em;
-  border-bottom-right-radius: 0.5em;
-  color: #aaf;
-  font-size: 0.85em;
-  cursor: pointer;
+.action-bar-main {
   display: flex;
   align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
+  gap: 0.2em;
+  height: 2.6em;
+  padding: 0 0.6em;
+  background: rgba(20, 20, 40, 0.45);
+  backdrop-filter: blur(6px);
+  border-top-right-radius: 0.5em;
+  border-bottom-right-radius: 0.5em;
 }
-.action-bar-toggle:hover {
-  background: rgba(40, 40, 80, 0.65);
-}
-.action-bar-content {
+.action-bar-extra {
   display: flex;
   align-items: center;
   gap: 0.2em;
@@ -663,17 +675,55 @@ export default {
   border-top-right-radius: 0.5em;
   border-bottom-right-radius: 0.5em;
   overflow: hidden;
-  max-width: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
   opacity: 0;
   transition:
-    max-width 0.35s ease,
-    opacity 0.25s ease;
+    max-height 0.3s ease,
+    opacity 0.2s ease,
+    padding 0.3s ease;
   pointer-events: none;
 }
-.action-bar.expanded .action-bar-content {
-  max-width: 100vw;
+.action-bar-extra.expanded {
+  max-height: 3em;
+  padding-top: 0;
+  padding-bottom: 0;
+  height: 2.6em;
   opacity: 1;
   pointer-events: all;
+}
+.action-bar-toggle {
+  flex-shrink: 0;
+  width: 2.2em;
+  height: 2.2em;
+  background: transparent;
+  border: none;
+  color: #aaf;
+  font-size: 0.75em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.35em;
+  transition: background 0.2s;
+  margin-left: 0.2em;
+}
+.action-bar-toggle:hover {
+  background: rgba(170, 170, 255, 0.15);
+}
+.action-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0.25em 0.3em;
+}
+.action-checkbox input[type="checkbox"] {
+  width: 1.1em;
+  height: 1.1em;
+  cursor: pointer;
+  accent-color: #aaf;
 }
 .action-btn {
   background: transparent;

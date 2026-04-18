@@ -8,8 +8,8 @@
         @onCancel="showConfirmDelete = false"
       />
     </div>
-    <dialog open>
-      <article>
+    <div class="file-info-overlay" @click.self="clickedClose()">
+      <article class="file-info-dialog">
         <header>
           <a
             href="#close"
@@ -19,6 +19,13 @@
           ></a>
           File Info
         </header>
+        <div class="file-info-thumbnail">
+          <img
+            :src="thumbnailUrl"
+            onerror="this.onerror=null;this.src='/images/file-sync-in-progress.webp';"
+            alt="Thumbnail"
+          />
+        </div>
         <table class="file-info-table">
           <tbody>
             <tr>
@@ -85,7 +92,7 @@
           </table>
         </div>
       </article>
-    </dialog>
+    </div>
   </div>
 </template>
 
@@ -109,6 +116,7 @@ export default {
   },
   data() {
     return {
+      staticUrl: "",
       duplicates: null,
       loadingDuplicates: false,
       showConfirmDelete: false,
@@ -117,6 +125,7 @@ export default {
     };
   },
   async created() {
+    this.staticUrl = (await Config.get()).STATIC_URL;
     await this.loadDuplicates();
   },
   methods: {
@@ -203,11 +212,51 @@ export default {
     isAdmin() {
       return AuthenticationStore().isAdmin;
     },
+    thumbnailUrl() {
+      if (!this.file || !this.staticUrl) return "";
+      return (
+        this.staticUrl +
+        "/" +
+        this.file.accountId +
+        "/" +
+        this.file.id[0] +
+        "/" +
+        this.file.id[1] +
+        "/" +
+        this.file.id +
+        "/thumbnail.webp"
+      );
+    },
   },
 };
 </script>
 
 <style scoped>
+.file-info-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+.file-info-dialog {
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  width: 30em;
+}
+.file-info-thumbnail {
+  text-align: center;
+  margin-bottom: 0.75em;
+}
+.file-info-thumbnail img {
+  max-width: 100%;
+  max-height: 12em;
+  object-fit: contain;
+  border-radius: 0.35em;
+}
 .file-info-table {
   width: 100%;
   border-collapse: collapse;

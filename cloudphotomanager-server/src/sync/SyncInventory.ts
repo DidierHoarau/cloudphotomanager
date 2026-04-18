@@ -1,5 +1,4 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import * as _ from "lodash";
 import {
   FileDataAdd,
   FileDataDelete,
@@ -23,61 +22,58 @@ import { SyncQueueQueueItem } from "./SyncQueue";
 
 const logger = OTelLogger().createModuleLogger("SyncInventory");
 
-export async function SyncInventoryInit(context: Span): Promise<void> {
-  const span = OTelTracer().startSpan("SyncInventory_init", context);
-
-  // Function registration moved to SyncQueueInit
-
-  span.end();
-}
-
 export async function SyncInventorySyncFolder(
   account: Account,
   knownFolder: Folder,
-  priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL
+  priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL,
 ): Promise<void> {
   const span = OTelTracer().startSpan("SyncInventorySyncFolder");
   try {
     logger.info(
       `Sync folder: ${account.getAccountDefinition().id}: ${knownFolder.folderpath}`,
-      span
+      span,
     );
 
     const cloudFolder = await account.getFolder(span, knownFolder);
     const cloudSubFolders = await account.listFoldersInFolder(
       span,
-      cloudFolder
+      cloudFolder,
     );
     const cloudSubFiles = await account.listFilesInFolder(span, cloudFolder);
     const knownSubFiles = await FileDataListByFolder(
       span,
       account.getAccountDefinition().id,
-      knownFolder.id
+      knownFolder.id,
     );
     const knownSubFolders = await FolderDataListSubFolders(span, knownFolder);
     let updated = false;
 
+    // Build lookup maps for O(1) access
+    const knownSubFolderIds = new Set(knownSubFolders.map((f) => f.id));
+    const knownSubFileIds = new Set(knownSubFiles.map((f) => f.id));
+    const cloudSubFolderIds = new Set(cloudSubFolders.map((f) => f.id));
+    const cloudSubFileIds = new Set(cloudSubFiles.map((f) => f.id));
+
     // New Folder
     for (const cloudSubFolder of cloudSubFolders) {
-      const knownSubFolder = _.find(knownSubFolders, { id: cloudSubFolder.id });
-      if (!knownSubFolder) {
+      if (!knownSubFolderIds.has(cloudSubFolder.id)) {
         updated = true;
         await FolderDataAdd(span, cloudSubFolder);
-        await SyncQueueQueueItem(
+        SyncQueueQueueItem(
           account.getAccountDefinition().id,
           cloudSubFolder.id,
           cloudSubFolder,
           "SyncInventorySyncFolder",
-          priority
+          priority,
         );
       }
     }
 
     // New Files
-    for (const cloudSubFile of cloudSubFiles) {
-      const knownSubFile = _.find(knownSubFiles, { id: cloudSubFile.id });
-      if (!knownSubFile) {
-        updated = true;
+    const newFiles = cloudSubFiles.filter((f) => !knownSubFileIds.has(f.id));
+    if (newFiles.length > 0) {
+      updated = true;
+      for (const cloudSubFile of newFiles) {
         cloudSubFile.folderId = knownFolder.id;
         await FileDataAdd(span, cloudSubFile);
       }
@@ -85,22 +81,23 @@ export async function SyncInventorySyncFolder(
 
     // Deleted Folders
     for (const knownSubFolder of knownSubFolders) {
-      const cloudSubFolder = _.find(cloudSubFolders, { id: knownSubFolder.id });
-      if (!cloudSubFolder) {
+      if (!cloudSubFolderIds.has(knownSubFolder.id)) {
         updated = true;
         await FolderDataDeletePathRecursive(
           span,
           account.getAccountDefinition().id,
-          knownSubFolder.folderpath
+          knownSubFolder.folderpath,
         );
       }
     }
 
     // Deleted Files
-    for (const knownSubFile of knownSubFiles) {
-      const cloudSubFile = _.find(cloudSubFiles, { id: knownSubFile.id });
-      if (!cloudSubFile) {
-        updated = true;
+    const deletedFiles = knownSubFiles.filter(
+      (f) => !cloudSubFileIds.has(f.id),
+    );
+    if (deletedFiles.length > 0) {
+      updated = true;
+      for (const knownSubFile of deletedFiles) {
         await FileDataDelete(span, knownSubFile.id);
       }
     }
@@ -122,11 +119,15 @@ export async function SyncInventorySyncFolder(
         action: SyncEventActions.UPDATED,
       });
     }
-  } catch (errSync) {
-    span.setStatus({ code: 2, message: errSync.message });
-    span.recordException(errSync);
+  } catch (errSync: unknown) {
+    const message =
+      errSync instanceof Error ? errSync.message : String(errSync);
+    span.setStatus({ code: 2, message });
+    if (errSync instanceof Error) {
+      span.recordException(errSync);
+    }
     span.end();
-    throw new Error("SyncInventorySyncFolder Failed");
+    throw errSync;
   }
 
   span.end();

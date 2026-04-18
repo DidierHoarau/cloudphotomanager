@@ -33,7 +33,7 @@ onUnmounted(() => {
 
 .page {
   overflow-y: auto;
-  height: calc(var(--app-height, 100dvh) - 5em);
+  height: 100%;
   padding: 0;
 }
 
@@ -42,7 +42,7 @@ onUnmounted(() => {
   height: var(--app-height, 100dvh);
   display: grid;
   overflow: hidden;
-  grid-template-rows: 4em 1fr;
+  grid-template-rows: auto 1fr;
 }
 
 header,
