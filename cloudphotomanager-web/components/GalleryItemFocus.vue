@@ -410,10 +410,15 @@ export default {
         newPos += step;
       }
       if (newPos < 0 || newPos >= this.files.length) return;
-      const mediaDomElement = this.$refs.mediaContainer?.querySelector(".media-content");
+      const mediaDomElement =
+        this.$refs.mediaContainer?.querySelector(".media-content");
       if (!mediaDomElement) return;
-      const outClass = isPrevious ? "animate-media-out-right" : "animate-media-out-left";
-      const inClass = isPrevious ? "animate-media-in-left" : "animate-media-in-right";
+      const outClass = isPrevious
+        ? "animate-media-out-right"
+        : "animate-media-out-left";
+      const inClass = isPrevious
+        ? "animate-media-in-left"
+        : "animate-media-in-right";
       mediaDomElement.classList.add(outClass);
       setTimeout(() => {
         this.position = newPos;
