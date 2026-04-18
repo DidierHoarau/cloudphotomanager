@@ -1,12 +1,13 @@
 <template>
   <div>
-    <DialogConfirm
-      v-if="showConfirmDelete"
-      title="Confirm Delete"
-      :message="confirmDeleteMessage"
-      @onConfirm="executeDeleteDuplicate"
-      @onCancel="showConfirmDelete = false"
-    />
+    <div v-if="showConfirmDelete" class="confirm-overlay">
+      <DialogConfirm
+        title="Confirm Delete"
+        :message="confirmDeleteMessage"
+        @onConfirm="executeDeleteDuplicate"
+        @onCancel="showConfirmDelete = false"
+      />
+    </div>
     <dialog open>
       <article>
         <header>
@@ -224,8 +225,35 @@ export default {
 }
 .duplicate-files-table {
   max-width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
   margin-top: 0.5em;
+}
+.duplicate-files-table table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.duplicate-files-table td,
+.duplicate-files-table th {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  padding: 0.3em 0.4em;
+  vertical-align: middle;
+}
+.duplicate-files-table th:last-child,
+.duplicate-files-table td:last-child {
+  width: 2.5em;
+  text-align: center;
+  word-break: normal;
+}
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
 }
 .dup-delete-btn {
   background: transparent;

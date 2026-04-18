@@ -2,7 +2,9 @@
   <div :class="{ 'file-processing': isProcessing }">
     <div
       class="gallery-file-image"
-      v-on:click="!isProcessing && getType(file) !== 'unknown' && focusGalleryItem(file)"
+      v-on:click="
+        !isProcessing && getType(file) !== 'unknown' && focusGalleryItem(file)
+      "
     >
       <i
         v-if="getType(file) == 'video'"
