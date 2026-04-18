@@ -1,10 +1,10 @@
 <template>
   <div class="gallery-layout page">
     <div class="gallery-folders-mobile-wrapper">
-      <div class="gallery-folders-toggle" @click="openListMenu">
+      <button class="gallery-folders-toggle" @click="openListMenu">
+        <span>Folders</span>
         <i :class="menuOpened ? 'bi bi-chevron-up' : 'bi bi-chevron-down'"></i>
-        Folders
-      </div>
+      </button>
       <div
         class="gallery-folders"
         :class="{ 'gallery-folders-closed': !menuOpened }"
@@ -666,7 +666,7 @@ export default {
   height: 2.2em;
 }
 
-@media (min-width: 801px) {
+@media (min-width: 901px) {
   .gallery-folders-mobile-wrapper {
     display: contents;
   }
@@ -678,6 +678,7 @@ export default {
     grid-template-rows: auto 1fr;
     grid-template-columns: auto 1fr 1fr;
     column-gap: 1em;
+    overflow: hidden;
   }
   .gallery-files-actions {
     padding-top: 0.5em;
@@ -713,12 +714,13 @@ export default {
   }
 }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .gallery-layout {
     display: grid;
     grid-template-rows: auto auto 1fr;
     grid-template-columns: 1fr;
     column-gap: 1em;
+    overflow: hidden;
   }
   .gallery-folders-mobile-wrapper {
     grid-row: 1;
@@ -730,16 +732,32 @@ export default {
   .gallery-folders-toggle {
     display: flex;
     align-items: center;
-    gap: 0.4em;
-    padding: 0.4em 0.5em;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.5em 0.75em;
     font-size: 0.85em;
     font-weight: 600;
     cursor: pointer;
     user-select: none;
-    opacity: 0.7;
+    border: 1px solid transparent;
+    border-radius: 0.4em;
+    opacity: 0.85;
+    box-sizing: border-box;
+    margin: 0;
+    transition:
+      opacity 0.2s ease,
+      background-color 0.2s ease,
+      border-color 0.2s ease;
+  }
+  .gallery-folders-toggle:hover {
+    opacity: 1;
+  }
+  .gallery-folders-toggle:active {
+    opacity: 0.95;
   }
   .gallery-folders-toggle i {
     transition: transform 0.3s ease;
+    font-size: 1em;
   }
   .gallery-files-actions {
     padding-top: 0.5em;
@@ -770,6 +788,13 @@ export default {
   .source-active {
     background-color: #333;
   }
+  .gallery-folders-toggle {
+    background-color: #4a4a4a55;
+    border-color: #6a6a6a66;
+  }
+  .gallery-folders-toggle:hover {
+    background-color: #5a5a5a66;
+  }
   .gallery-folders {
     background-color: #33333333;
   }
@@ -777,6 +802,13 @@ export default {
 @media (prefers-color-scheme: light) {
   .source-active {
     background-color: #bbb;
+  }
+  .gallery-folders-toggle {
+    background-color: #bdbdbd4d;
+    border-color: #a0a0a066;
+  }
+  .gallery-folders-toggle:hover {
+    background-color: #b0b0b066;
   }
   .gallery-folders {
     background-color: #aaaaaa33;

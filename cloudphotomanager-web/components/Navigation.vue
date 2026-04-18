@@ -91,11 +91,11 @@ export default {
 
 <style scoped>
 nav {
-  height: 2.5rem;
+  height: 2rem;
 }
 .menu-links li {
   padding-right: 1em;
-  font-size: 1.2em;
+  font-size: 1.1em;
 }
 .inactive {
   opacity: 0.4;

@@ -45,9 +45,13 @@ onUnmounted(() => {
   grid-template-rows: auto 1fr;
 }
 
-header,
+header {
+  padding: 0.2em 0.5em;
+}
+
 main {
   padding: 0.5em;
+  overflow: hidden;
 }
 
 #page-alert-messages {
