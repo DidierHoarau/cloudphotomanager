@@ -8,6 +8,7 @@ export enum EventTypes {
   ALERT_MESSAGE = "ALERT_MESSAGE",
   AUTH_CODE = "AUTH_CODE",
   FOLDER_SELECTED = "FOLDER_SELECTED",
+  OPERATION_COMPLETE = "OPERATION_COMPLETE",
 }
 
 export function handleError(error: any): void {

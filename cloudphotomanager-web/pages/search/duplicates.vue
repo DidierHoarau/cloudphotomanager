@@ -57,6 +57,13 @@
         </div>
       </article>
     </dialog>
+    <DialogConfirm
+      v-if="showConfirmDialog"
+      :title="confirmDialogTitle"
+      :message="confirmDialogMessage"
+      @onConfirm="onConfirmDialog"
+      @onCancel="showConfirmDialog = false"
+    />
   </div>
 </template>
 
@@ -80,6 +87,10 @@ export default {
       requestEtag: "",
       analysisFilter: "",
       selectedFiles: [],
+      showConfirmDialog: false,
+      confirmDialogTitle: "",
+      confirmDialogMessage: "",
+      confirmDialogCallback: null,
     };
   },
   async created() {
@@ -105,11 +116,9 @@ export default {
       await axios
         .get(
           `${
-            (
-              await Config.get()
-            ).SERVER_URL
+            (await Config.get()).SERVER_URL
           }/accounts/${accountId}/analysis/duplicates`,
-          await AuthService.getAuthHeader()
+          await AuthService.getAuthHeader(),
         )
         .then((res) => {
           if (this.requestEtag === requestEtag) {
@@ -153,20 +162,16 @@ export default {
       this.selectedFile = file;
     },
     async deleteDuplicate(file) {
-      if (
-        confirm(
-          `Delete the file? (Can't be undone!)\nFile: ${
-            file.filename
-          } \nFolder: ${this.getFolderPath(file.folderId)}`
-        ) == true
-      ) {
+      this.confirmDialogTitle = "Confirm Delete";
+      this.confirmDialogMessage = `Delete the file? (Can't be undone!)\nFile: ${file.filename} \nFolder: ${this.getFolderPath(file.folderId)}`;
+      this.confirmDialogCallback = async () => {
         await axios
           .post(
             `${(await Config.get()).SERVER_URL}/accounts/${
               file.accountId
             }/files/batch/operations/fileDelete`,
             { fileIdList: [file.id] },
-            await AuthService.getAuthHeader()
+            await AuthService.getAuthHeader(),
           )
           .then((res) => {
             EventBus.emit(EventTypes.ALERT_MESSAGE, {
@@ -180,26 +185,42 @@ export default {
               duplicate.files.splice(fileIndex, 1);
             }
             // Update files[] surgically: no full rebuild needed
-            const filesIndex = findIndex(this.files, (f) => f.duplicates === duplicate);
+            const filesIndex = findIndex(
+              this.files,
+              (f) => f.duplicates === duplicate,
+            );
             if (duplicate.files.length < 2) {
               // No longer a duplicate group — remove from list
               if (filesIndex >= 0) {
                 this.files.splice(filesIndex, 1);
               }
               // Also close dialog if it was showing this group
-              if (this.selectedFile && this.selectedFile.duplicates === duplicate) {
+              if (
+                this.selectedFile &&
+                this.selectedFile.duplicates === duplicate
+              ) {
                 this.selectedFile = null;
               }
             } else if (filesIndex >= 0) {
               // Update count label in-place
               const entry = this.files[filesIndex];
-              const baseName = entry.filename.replace(/^\(x\d+ duplicates\) /, "");
+              const baseName = entry.filename.replace(
+                /^\(x\d+ duplicates\) /,
+                "",
+              );
               entry.filename = `(x${duplicate.files.length} duplicates) ${baseName}`;
             }
             EventBus.emit(EventTypes.FOLDER_UPDATED, {});
             EventBus.emit(EventTypes.FILE_UPDATED, {});
           })
           .catch(handleError);
+      };
+      this.showConfirmDialog = true;
+    },
+    onConfirmDialog() {
+      this.showConfirmDialog = false;
+      if (this.confirmDialogCallback) {
+        this.confirmDialogCallback();
       }
     },
     clickedClose() {

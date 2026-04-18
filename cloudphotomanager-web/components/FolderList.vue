@@ -88,7 +88,6 @@ export default {
         this.selectedFolderId = folderId || null;
         if (folderId) {
           FoldersStore().expandToFolder(folderId);
-          this.scrollToFolder(folderId);
         }
       },
     );

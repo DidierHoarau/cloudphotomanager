@@ -1,15 +1,9 @@
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
-import { FolderDataGet } from "../folders/FolderData";
-import { OTelLogger, OTelTracer } from "../OTelContext";
-import { SyncInventorySyncFolder } from "../sync/SyncInventory";
-import {
-  SyncQueueSetBlockingOperationEnd,
-  SyncQueueSetBlockingOperationStart,
-} from "../sync/SyncQueue";
+import { OTelLogger } from "../OTelContext";
+import { SyncQueueQueueItem } from "../sync/SyncQueue";
+import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
-import { FileDataGet } from "./FileData";
 
 const logger = OTelLogger().createModuleLogger("FileOperationsDeleteRoutes");
 
@@ -35,38 +29,17 @@ export class RoutesFileOperationsDelete {
         return res.status(400).send({ error: "Missing parameter: fileIdList" });
       }
 
-      setTimeout(async () => {
-        const spanSubProcess = OTelTracer().startSpan(
-          "RoutesFileOperationsDelete_postFiles_process"
+      const accountId = req.params.accountId;
+      for (const fileId of req.body.fileIdList) {
+        SyncQueueQueueItem(
+          accountId,
+          `fileDelete:${accountId}:${fileId}`,
+          { fileId },
+          "fileDelete",
+          SyncQueueItemPriority.INTERACTIVE,
+          [fileId],
         );
-        SyncQueueSetBlockingOperationStart();
-        try {
-          let folderId = "";
-          const account = await AccountFactoryGetAccountImplementation(
-            req.params.accountId
-          );
-          for (const fileId of req.body.fileIdList) {
-            const file = await FileDataGet(spanSubProcess, fileId);
-            if (!file) {
-              continue;
-            }
-            folderId = file.folderId;
-            logger.info(
-              `Delete file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename}`,
-              spanSubProcess
-            );
-            await account.deleteFile(spanSubProcess, file);
-          }
-          if (folderId) {
-            const folder = await FolderDataGet(spanSubProcess, folderId);
-            await SyncInventorySyncFolder(account, folder);
-          }
-        } catch (err) {
-          logger.error("Error Removing File from Account", err, spanSubProcess);
-        }
-        SyncQueueSetBlockingOperationEnd();
-        spanSubProcess.end();
-      }, 50);
+      }
 
       return res.status(202).send({});
     });

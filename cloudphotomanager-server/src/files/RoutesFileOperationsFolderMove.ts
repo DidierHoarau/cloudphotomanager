@@ -1,18 +1,12 @@
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
-import { FolderDataGet } from "../folders/FolderData";
-import { OTelLogger, OTelTracer } from "../OTelContext";
-import { SyncInventorySyncFolder } from "../sync/SyncInventory";
-import {
-  SyncQueueSetBlockingOperationEnd,
-  SyncQueueSetBlockingOperationStart,
-} from "../sync/SyncQueue";
+import { OTelLogger } from "../OTelContext";
+import { SyncQueueQueueItem } from "../sync/SyncQueue";
+import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
-import { FileDataGet } from "./FileData";
 
 const logger = OTelLogger().createModuleLogger(
-  "FileOperationsFolderMoveRoutes"
+  "FileOperationsFolderMoveRoutes",
 );
 
 export class RoutesFileOperationsFolderMove {
@@ -40,44 +34,18 @@ export class RoutesFileOperationsFolderMove {
         return res.status(400).send({ error: "Missing parameter: fileIdList" });
       }
 
-      setTimeout(async () => {
-        const spanSubProcess = OTelTracer().startSpan(
-          "RoutesFileOperationsFolderMove_postFiles_process"
+      const accountId = req.params.accountId;
+      const folderpath = req.body.folderpath;
+      for (const fileId of req.body.fileIdList) {
+        SyncQueueQueueItem(
+          accountId,
+          `folderMove:${accountId}:${fileId}:${folderpath}`,
+          { fileId, folderpath },
+          "folderMove",
+          SyncQueueItemPriority.INTERACTIVE,
+          [fileId],
         );
-        SyncQueueSetBlockingOperationStart();
-        try {
-          let initialFolderId = "";
-          const account = await AccountFactoryGetAccountImplementation(
-            req.params.accountId
-          );
-          for (const fileId of req.body.fileIdList) {
-            const file = await FileDataGet(spanSubProcess, fileId);
-            if (!file) {
-              continue;
-            }
-            initialFolderId = file.folderId;
-            logger.info(
-              `Moving file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${req.body.folderpath}`,
-              spanSubProcess
-            );
-            await account.moveFile(spanSubProcess, file, req.body.folderpath);
-          }
-          const initialFolder = await FolderDataGet(
-            spanSubProcess,
-            initialFolderId
-          );
-          await SyncInventorySyncFolder(account, initialFolder);
-          const targetFolder = await account.getFolderByPath(
-            spanSubProcess,
-            req.body.folderpath
-          );
-          await SyncInventorySyncFolder(account, targetFolder);
-        } catch (err) {
-          logger.error("Error Moving File", err, spanSubProcess);
-        }
-        SyncQueueSetBlockingOperationEnd();
-        spanSubProcess.end();
-      }, 50);
+      }
 
       return res.status(201).send({});
     });

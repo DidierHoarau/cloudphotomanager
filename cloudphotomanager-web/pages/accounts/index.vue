@@ -44,6 +44,13 @@
       </tbody>
     </table>
     <NuxtLink to="/accounts/queue">Synchronization Queue</NuxtLink>
+    <DialogConfirm
+      v-if="showConfirmDialog"
+      :title="confirmDialogTitle"
+      :message="confirmDialogMessage"
+      @onConfirm="onConfirmDialog"
+      @onCancel="showConfirmDialog = false"
+    />
   </div>
 </template>
 
@@ -59,27 +66,37 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 
 export default {
   data() {
-    return {};
+    return {
+      showConfirmDialog: false,
+      confirmDialogTitle: "",
+      confirmDialogMessage: "",
+      confirmDialogCallback: null,
+    };
   },
   async created() {
     AccountsStore().fetch();
   },
   methods: {
     async clickedDelete(account) {
-      if (
-        confirm(
-          `Delete the account? (Can't be undone!)\nAccount: ${account.name} \n`
-        ) == true
-      ) {
+      this.confirmDialogTitle = "Confirm Delete";
+      this.confirmDialogMessage = `Delete the account? (Can't be undone!)\nAccount: ${account.name} \n`;
+      this.confirmDialogCallback = async () => {
         await axios
           .delete(
             `${(await Config.get()).SERVER_URL}/accounts/${account.id}`,
-            await AuthService.getAuthHeader()
+            await AuthService.getAuthHeader(),
           )
           .then(async (res) => {
             AccountsStore().fetch();
           })
           .catch(handleError);
+      };
+      this.showConfirmDialog = true;
+    },
+    onConfirmDialog() {
+      this.showConfirmDialog = false;
+      if (this.confirmDialogCallback) {
+        this.confirmDialogCallback();
       }
     },
   },

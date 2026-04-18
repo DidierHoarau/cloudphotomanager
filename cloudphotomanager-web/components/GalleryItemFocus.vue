@@ -7,25 +7,24 @@
     />
     <DialogFileInfo
       v-if="showFileInfo && file"
+      :key="file.id"
       :file="file"
       @onClose="showFileInfo = false"
+      @onDuplicateDeleted="onDuplicateDeleted"
     />
-    <div class="action-bar" :class="{ expanded: actionBarExpanded }">
-      <button
-        class="action-bar-toggle"
-        @click="actionBarExpanded = !actionBarExpanded"
-      >
-        <i
-          :class="
-            actionBarExpanded ? 'bi bi-chevron-left' : 'bi bi-chevron-right'
-          "
-        ></i>
-      </button>
-      <div class="action-bar-content">
+    <DialogConfirm
+      v-if="showConfirmDialog"
+      :title="confirmDialogTitle"
+      :message="confirmDialogMessage"
+      @onConfirm="onConfirmDialog"
+      @onCancel="showConfirmDialog = false"
+    />
+    <div class="action-bar">
+      <div class="action-bar-main">
         <button
           class="action-btn"
           @click="previousMedia()"
-          :disabled="position === 0"
+          :disabled="!hasPreviousSupported"
           title="Previous"
         >
           <i class="bi bi-arrow-left"></i>
@@ -33,12 +32,38 @@
         <button
           class="action-btn"
           @click="nextMedia()"
-          :disabled="position === files.length - 1"
+          :disabled="!hasNextSupported"
           title="Next"
         >
           <i class="bi bi-arrow-right"></i>
         </button>
         <div class="action-bar-divider"></div>
+        <label class="action-checkbox" title="Select">
+          <input
+            type="checkbox"
+            :checked="isFileSelected"
+            @change="toggleSelection()"
+          />
+        </label>
+        <div class="action-bar-divider"></div>
+        <button class="action-btn" @click="showFileInfo = true" title="Info">
+          <i class="bi bi-info-circle"></i>
+        </button>
+        <button class="action-btn" @click="clickedClose()" title="Close">
+          <i class="bi bi-x-lg"></i>
+        </button>
+        <button
+          class="action-bar-toggle"
+          @click="actionBarExpanded = !actionBarExpanded"
+        >
+          <i
+            :class="
+              actionBarExpanded ? 'bi bi-chevron-down' : 'bi bi-chevron-up'
+            "
+          ></i>
+        </button>
+      </div>
+      <div class="action-bar-extra" :class="{ expanded: actionBarExpanded }">
         <button
           class="action-btn"
           v-if="file && getType(file) == 'image'"
@@ -47,34 +72,32 @@
         >
           <i class="bi bi-arrow-clockwise"></i>
         </button>
-        <div
-          class="action-bar-divider"
-          v-if="authenticationStore.isAdmin"
-        ></div>
         <template v-if="authenticationStore.isAdmin">
-          <button class="action-btn" @click="clickedMove()" title="Move">
+          <div class="action-bar-divider"></div>
+          <button
+            class="action-btn"
+            @click="clickedMove()"
+            title="Move"
+            :disabled="isCurrentFileProcessing"
+          >
             <i class="bi bi-arrows-move"></i>
           </button>
           <button
             class="action-btn action-btn-danger"
             @click="clickedDelete()"
             title="Delete"
+            :disabled="isCurrentFileProcessing"
           >
             <i class="bi bi-trash-fill"></i>
           </button>
         </template>
-        <div class="action-bar-divider"></div>
-        <button class="action-btn" @click="showFileInfo = true" title="Info">
-          <i class="bi bi-info-circle"></i>
-        </button>
-        <div class="action-bar-divider"></div>
-        <button class="action-btn" @click="clickedClose()" title="Close">
-          <i class="bi bi-x-lg"></i>
-        </button>
       </div>
     </div>
     <div id="media-container" ref="mediaContainer">
       <Loading v-if="mediaLoading" class="media-loading" />
+      <div v-if="isCurrentFileProcessing" class="processing-banner">
+        <i class="bi bi-hourglass-split"></i>&nbsp; Operation in progress...
+      </div>
       <img
         class="media-content"
         v-if="file && getType(file) == 'image'"
@@ -131,6 +154,7 @@
 
 <script setup>
 const authenticationStore = AuthenticationStore();
+const syncStore = SyncStore();
 </script>
 
 <script>
@@ -140,11 +164,23 @@ import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { FileUtils } from "~~/services/FileUtils";
 import * as Hammer from "hammerjs";
-import * as _ from "lodash";
+import { findIndex } from "lodash";
 
 export default {
   props: {
-    inputFiles: {},
+    galleryFiles: {
+      type: Array,
+      required: true,
+    },
+    initialPosition: {
+      type: Number,
+      default: 0,
+    },
+    selectedFiles: {
+      type: Array,
+      required: false,
+      default: () => [],
+    },
   },
   data() {
     return {
@@ -168,14 +204,41 @@ export default {
       dragStartY: 0,
       dragStartTranslateX: 0,
       dragStartTranslateY: 0,
+      showConfirmDialog: false,
+      confirmDialogTitle: "",
+      confirmDialogMessage: "",
+      confirmDialogCallback: null,
     };
+  },
+  watch: {
+    galleryFiles(newFiles) {
+      if (newFiles === this.files) return;
+      if (!newFiles || newFiles.length === 0) {
+        this.clickedClose();
+        return;
+      }
+      const currentId = this.file?.id;
+      this.files = newFiles;
+      if (!currentId) {
+        this.position = Math.min(this.position, newFiles.length - 1);
+        this.loadMedia();
+        return;
+      }
+      const newIndex = newFiles.findIndex((f) => f.id === currentId);
+      if (newIndex >= 0) {
+        this.position = newIndex;
+      } else {
+        this.position = Math.min(this.position, newFiles.length - 1);
+        this.loadMedia();
+      }
+    },
   },
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
     this.staticUrl = (await Config.get()).STATIC_URL;
 
-    this.files = this.inputFiles.files;
-    this.position = this.inputFiles.position;
+    this.files = this.galleryFiles;
+    this.position = this.initialPosition;
     this.loadMedia(true);
 
     this._onKeyDown = (event) => {
@@ -184,6 +247,19 @@ export default {
       else if (event.key === "Escape") this.clickedClose();
     };
     window.addEventListener("keydown", this._onKeyDown);
+
+    this._onOperationComplete = (message) => {
+      if (!this.file) return;
+      const operationName = message?.operationName || "";
+      const affectedFileIds = message?.fileIds || [];
+      if (
+        operationName === "fileDelete" &&
+        affectedFileIds.includes(this.file.id)
+      ) {
+        this.removeFileAndAdvance(affectedFileIds);
+      }
+    };
+    EventBus.on(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
   },
   mounted() {
     const mediaContainer = this.$refs.mediaContainer;
@@ -253,6 +329,9 @@ export default {
   },
   unmounted() {
     window.removeEventListener("keydown", this._onKeyDown);
+    if (this._onOperationComplete) {
+      EventBus.off(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
+    }
   },
   methods: {
     clickedClose() {
@@ -261,72 +340,102 @@ export default {
     clickedMove() {
       this.activeOperation = "move";
     },
+    onDuplicateDeleted(fileId) {
+      // If the deleted duplicate is in our files list, remove it
+      this.files = this.files.filter((f) => f.id !== fileId);
+    },
     getType(file) {
       return FileUtils.getType(file);
     },
-    async clickedDelete() {
-      if (
-        confirm(
-          `Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`,
-        ) == true
-      ) {
-        await axios
-          .post(
-            `${(await Config.get()).SERVER_URL}/accounts/${this.file.accountId}/files/batch/operations/fileDelete`,
-            { fileIdList: [this.file.id] },
-            await AuthService.getAuthHeader(),
-          )
-          .then((res) => {
-            EventBus.emit(EventTypes.ALERT_MESSAGE, {
-              text: "File deleted",
-            });
-            this.onOperationDone({ status: "invalidated" });
-          })
-          .catch(handleError);
+    removeFileAndAdvance(fileIds) {
+      const removeIndex = this.files.findIndex((f) => fileIds.includes(f.id));
+      this.files = this.files.filter((f) => !fileIds.includes(f.id));
+      if (this.files.length === 0) {
+        this.clickedClose();
+      } else {
+        this.position = Math.min(
+          removeIndex >= 0 ? removeIndex : this.position,
+          this.files.length - 1,
+        );
+        this.loadMedia();
       }
     },
-    onOperationDone(result) {
-      if (result.status === "invalidated") {
-        this.$emit("onFileClosed", { status: "invalidated" });
+    async clickedDelete() {
+      this.confirmDialogTitle = "Confirm Delete";
+      this.confirmDialogMessage = `Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`;
+      this.confirmDialogCallback = async () => {
+        const fileId = this.file.id;
+        const accountId = this.file.accountId;
+        try {
+          await axios.post(
+            `${this.serverUrl}/accounts/${accountId}/files/batch/operations/fileDelete`,
+            { fileIdList: [fileId] },
+            await AuthService.getAuthHeader(),
+          );
+          SyncStore().markFilesAsPending([fileId]);
+          EventBus.emit(EventTypes.ALERT_MESSAGE, {
+            text: "Delete queued \u2014 running in background",
+          });
+          this.removeFileAndAdvance([fileId]);
+        } catch (err) {
+          handleError(err);
+        }
+      };
+      this.showConfirmDialog = true;
+    },
+    onConfirmDialog() {
+      this.showConfirmDialog = false;
+      if (this.confirmDialogCallback) {
+        this.confirmDialogCallback();
       }
+    },
+    onOperationDone() {
       this.activeOperation = "";
-      EventBus.emit(EventTypes.FOLDER_UPDATED, {});
-      EventBus.emit(EventTypes.FILE_UPDATED, {});
+      if (this.file) {
+        this.removeFileAndAdvance([this.file.id]);
+      }
+    },
+    navigateMedia(direction) {
+      const isPrevious = direction === "previous";
+      if (this.files.length === 0) return;
+      if (isPrevious && this.position === 0) return;
+      if (!isPrevious && this.position === this.files.length - 1) return;
+      const step = isPrevious ? -1 : 1;
+      let newPos = this.position + step;
+      while (
+        newPos >= 0 &&
+        newPos < this.files.length &&
+        this.getType(this.files[newPos]) === "unknown"
+      ) {
+        newPos += step;
+      }
+      if (newPos < 0 || newPos >= this.files.length) return;
+      const mediaDomElement =
+        this.$refs.mediaContainer?.querySelector(".media-content");
+      if (!mediaDomElement) return;
+      const outClass = isPrevious
+        ? "animate-media-out-right"
+        : "animate-media-out-left";
+      const inClass = isPrevious
+        ? "animate-media-in-left"
+        : "animate-media-in-right";
+      mediaDomElement.classList.add(outClass);
+      setTimeout(() => {
+        this.position = newPos;
+        this.loadMedia();
+        mediaDomElement.classList.remove(outClass);
+        mediaDomElement.classList.add(inClass);
+      }, 300);
+      setTimeout(() => {
+        mediaDomElement.classList.remove("animate-media-in-left");
+        mediaDomElement.classList.remove("animate-media-in-right");
+      }, 700);
     },
     previousMedia() {
-      if (this.files.length === 0 || this.position === 0) {
-        return;
-      }
-      const mediaDomElement = document.querySelector(".media-content");
-      mediaDomElement.classList.add("animate-media-out-right");
-      setTimeout(() => {
-        this.position--;
-        this.loadMedia();
-        this.file = this.files[this.position];
-        mediaDomElement.classList.remove("animate-media-out-right");
-        mediaDomElement.classList.add("animate-media-in-left");
-      }, 300);
-      setTimeout(() => {
-        mediaDomElement.classList.remove("animate-media-in-left");
-        mediaDomElement.classList.remove("animate-media-in-right");
-      }, 700);
+      this.navigateMedia("previous");
     },
     nextMedia() {
-      if (this.files.length === 0 || this.position === this.files.length - 1) {
-        return;
-      }
-      const mediaDomElement = document.querySelector(".media-content");
-      mediaDomElement.classList.add("animate-media-out-left");
-      setTimeout(() => {
-        this.position++;
-        this.loadMedia();
-        mediaDomElement.classList.remove("animate-media-out-left");
-        mediaDomElement.classList.add("animate-media-in-right");
-      }, 300);
-      setTimeout(() => {
-        mediaDomElement.classList.remove("animate-media-in-right");
-        mediaDomElement.classList.remove("animate-media-in-left");
-      }, 700);
+      this.navigateMedia("next");
     },
     loadMedia(newRoute = false) {
       this.videoDelayedLoadingDone = false;
@@ -426,6 +535,11 @@ export default {
     rotateImage() {
       this.imageRotation = (this.imageRotation + 90) % 360;
     },
+    toggleSelection() {
+      if (this.file) {
+        this.$emit("onFileSelected", this.file);
+      }
+    },
   },
   computed: {
     imageTransformStyle() {
@@ -441,6 +555,26 @@ export default {
         transformOrigin: "center center",
         userSelect: "none",
       };
+    },
+    isCurrentFileProcessing() {
+      if (!this.file) return false;
+      return SyncStore().isFileProcessing(this.file.id);
+    },
+    hasPreviousSupported() {
+      for (let i = this.position - 1; i >= 0; i--) {
+        if (this.getType(this.files[i]) !== "unknown") return true;
+      }
+      return false;
+    },
+    hasNextSupported() {
+      for (let i = this.position + 1; i < this.files.length; i++) {
+        if (this.getType(this.files[i]) !== "unknown") return true;
+      }
+      return false;
+    },
+    isFileSelected() {
+      if (!this.file) return false;
+      return findIndex(this.selectedFiles, { id: this.file.id }) >= 0;
     },
   },
 };
@@ -487,30 +621,22 @@ export default {
   left: 0;
   z-index: 200;
   display: flex;
-  align-items: flex-end;
-  height: 2.6em;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 0.3em;
 }
-.action-bar-toggle {
-  flex-shrink: 0;
-  width: 2.6em;
-  height: 2.6em;
-  background: rgba(20, 20, 40, 0.45);
-  backdrop-filter: blur(6px);
-  border: none;
-  border-top-right-radius: 0.5em;
-  border-bottom-right-radius: 0.5em;
-  color: #aaf;
-  font-size: 0.85em;
-  cursor: pointer;
+.action-bar-main {
   display: flex;
   align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
+  gap: 0.2em;
+  height: 2.6em;
+  padding: 0 0.6em;
+  background: rgba(20, 20, 40, 0.45);
+  backdrop-filter: blur(6px);
+  border-top-right-radius: 0.5em;
+  border-bottom-right-radius: 0.5em;
 }
-.action-bar-toggle:hover {
-  background: rgba(40, 40, 80, 0.65);
-}
-.action-bar-content {
+.action-bar-extra {
   display: flex;
   align-items: center;
   gap: 0.2em;
@@ -521,17 +647,55 @@ export default {
   border-top-right-radius: 0.5em;
   border-bottom-right-radius: 0.5em;
   overflow: hidden;
-  max-width: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
   opacity: 0;
   transition:
-    max-width 0.35s ease,
-    opacity 0.25s ease;
+    max-height 0.3s ease,
+    opacity 0.2s ease,
+    padding 0.3s ease;
   pointer-events: none;
 }
-.action-bar.expanded .action-bar-content {
-  max-width: 100vw;
+.action-bar-extra.expanded {
+  max-height: 3em;
+  padding-top: 0;
+  padding-bottom: 0;
+  height: 2.6em;
   opacity: 1;
   pointer-events: all;
+}
+.action-bar-toggle {
+  flex-shrink: 0;
+  width: 2.2em;
+  height: 2.2em;
+  background: transparent;
+  border: none;
+  color: #aaf;
+  font-size: 0.75em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.35em;
+  transition: background 0.2s;
+  margin-left: 0.2em;
+}
+.action-bar-toggle:hover {
+  background: rgba(170, 170, 255, 0.15);
+}
+.action-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0.25em 0.3em;
+}
+.action-checkbox input[type="checkbox"] {
+  width: 1.1em;
+  height: 1.1em;
+  cursor: pointer;
+  accent-color: #aaf;
 }
 .action-btn {
   background: transparent;
@@ -655,5 +819,19 @@ export default {
 }
 .video-unavailable p {
   margin: 0;
+}
+.processing-banner {
+  position: fixed;
+  top: 1em;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 20, 40, 0.75);
+  backdrop-filter: blur(6px);
+  color: #aaf;
+  padding: 0.4em 1.2em;
+  border-radius: 2em;
+  font-size: 0.9em;
+  z-index: 300;
+  pointer-events: none;
 }
 </style>

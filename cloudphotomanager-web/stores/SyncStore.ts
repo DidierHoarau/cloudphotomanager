@@ -1,4 +1,3 @@
-import { Timeout } from "~~/services/Timeout";
 import { AuthService } from "~~/services/AuthService";
 import Config from "~~/services/Config";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
@@ -8,62 +7,150 @@ export const SyncStore = defineStore("SyncStore", {
   state: () => ({
     countTotal: 0,
     countBlocking: 0,
-    counts: [],
+    counts: [] as { type: string; count: number }[],
+    processingFileIds: [] as string[],
+    pendingFileIds: [] as string[],
+    queueItems: [] as any[],
+    monitoring: false,
+    wsConnected: false,
+    // Fallback polling state
     checkFrequencyMin: 800,
-    checkFrequency: 1000,
+    checkFrequency: 5000,
     checkFrequencyMax: 30000,
     checking: false,
-    monitoring: false,
     lastUpdate: new Date(),
+    _ws: null as WebSocket | null,
+    _reconnectTimeout: null as ReturnType<typeof setTimeout> | null,
+    _reconnectDelay: 1000,
   }),
+
+  getters: {
+    isFileProcessing:
+      (state) =>
+      (fileId: string): boolean => {
+        return (
+          state.processingFileIds.includes(fileId) ||
+          state.pendingFileIds.includes(fileId)
+        );
+      },
+  },
 
   actions: {
     async monitor() {
-      if (this.checking) {
+      if (this.monitoring) {
         return;
       }
-      this.checking = true;
-      this.checkFrequency = Math.min(this.checkFrequencyMax, this.checkFrequency + this.checkFrequencyMin);
-      await axios
-        .get(`${(await Config.get()).SERVER_URL}/sync/status`, await AuthService.getAuthHeader())
-        .then(async (res) => {
-          let count = 0;
-          for (const item of res.data.sync) {
-            count += item.count;
-            if (item.type === "blocking") {
-              this.countBlocking = item.count;
-            }
-          }
-          this.countTotal = count;
-          let latestUpdate = this.lastUpdate;
-          for (const recentEvent of res.data.recentEvents) {
-            if (new Date(recentEvent.date) <= this.lastUpdate) {
-              continue;
-            }
-            this.checkFrequency = this.checkFrequencyMin;
-            if (latestUpdate < new Date(recentEvent.date)) {
-              latestUpdate = new Date(recentEvent.date);
-              if (recentEvent.objectType === "folder") {
-                EventBus.emit(EventTypes.FOLDER_UPDATED, {
-                  folderId: recentEvent.objectId,
-                  accountId: recentEvent.accountId,
-                  action: recentEvent.action,
-                });
-              }
-            }
-          }
-          this.lastUpdate = latestUpdate;
-        })
-        .catch((err) => {
-          console.error(err);
-        });
-      setTimeout(() => {
-        this.checking = false;
-        this.monitor();
-      }, this.checkFrequency);
+      this.monitoring = true;
+      await this._connectWebSocket();
     },
+
+    async _connectWebSocket() {
+      const config = await Config.get();
+      // Build an absolute WS URL, handling relative SERVER_URL (e.g. "/api")
+      let serverUrl: string = config.SERVER_URL;
+      if (serverUrl.startsWith("/")) {
+        // Relative path: derive origin from window.location
+        const proto = window.location.protocol === "https:" ? "wss" : "ws";
+        serverUrl = `${proto}://${window.location.host}${serverUrl}`;
+      } else {
+        serverUrl = serverUrl
+          .replace(/^https:\/\//, "wss://")
+          .replace(/^http:\/\//, "ws://");
+      }
+
+      const authHeader = await AuthService.getAuthHeader();
+      const token =
+        authHeader?.headers?.Authorization?.replace("Bearer ", "") || "";
+
+      const fullWsUrl = `${serverUrl}/sync/ws${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+
+      let ws: WebSocket;
+      try {
+        ws = new WebSocket(fullWsUrl);
+      } catch {
+        this._scheduleReconnect();
+        return;
+      }
+      this._ws = ws;
+
+      ws.onopen = () => {
+        this.wsConnected = true;
+        this._reconnectDelay = 1000;
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "queue_update") {
+            this.processingFileIds = msg.processingFileIds || [];
+            this.counts = msg.counts || [];
+            this.queueItems = msg.items || [];
+            let total = 0;
+            for (const c of this.counts) {
+              total += c.count;
+            }
+            this.countTotal = total;
+          } else if (msg.type === "operation_complete") {
+            const completedIds = msg.fileIds || [];
+            if (completedIds.length > 0) {
+              this.pendingFileIds = this.pendingFileIds.filter(
+                (id) => !completedIds.includes(id),
+              );
+            }
+            EventBus.emit(EventTypes.OPERATION_COMPLETE, {
+              operationName: msg.operationName,
+              fileIds: msg.fileIds || [],
+              priority: msg.priority,
+            });
+            // Only show toast for interactive operations (priority 1)
+            if (msg.priority === 1) {
+              const opNames: Record<string, string> = {
+                fileDelete: "Delete complete",
+                folderMove: "Move complete",
+                fileRename: "Rename complete",
+              };
+              const text = opNames[msg.operationName] || "Operation complete";
+              EventBus.emit(EventTypes.ALERT_MESSAGE, { type: "info", text });
+            }
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      ws.onerror = () => {
+        this.wsConnected = false;
+      };
+
+      ws.onclose = () => {
+        this.wsConnected = false;
+        this._ws = null;
+        this._scheduleReconnect();
+      };
+    },
+
+    _scheduleReconnect() {
+      if (this._reconnectTimeout) {
+        clearTimeout(this._reconnectTimeout);
+      }
+      this._reconnectTimeout = setTimeout(() => {
+        this._reconnectTimeout = null;
+        this._connectWebSocket();
+      }, this._reconnectDelay);
+      // Exponential backoff capped at 30s
+      this._reconnectDelay = Math.min(30000, this._reconnectDelay * 2);
+    },
+
     markOperationInProgress() {
-      this.countBlocking++;
+      this.countTotal++;
+    },
+
+    markFilesAsPending(fileIds: string[]) {
+      for (const id of fileIds) {
+        if (!this.pendingFileIds.includes(id)) {
+          this.pendingFileIds.push(id);
+        }
+      }
     },
   },
 });

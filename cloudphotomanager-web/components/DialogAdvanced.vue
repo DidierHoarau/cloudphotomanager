@@ -2,13 +2,21 @@
   <dialog open>
     <article>
       <header>
-        <a href="#close" aria-label="Close" class="close" v-on:click="clickedClose()"></a>
+        <a
+          href="#close"
+          aria-label="Close"
+          class="close"
+          v-on:click="clickedClose()"
+        ></a>
         Advanced
       </header>
       <p>{{ files.length }} file(s) selected...</p>
       <legend>
         Outakes<br />
-        <small>"Outtakes" are photos that are classified as secondary int he album.</small>
+        <small
+          >"Outtakes" are photos that are classified as secondary int he
+          album.</small
+        >
       </legend>
       <button v-on:click="doActionSetOuttake()">Mark As Outtakes</button>
       <button v-on:click="doActionUnSetOuttake()">Un-Mark As Outtakes</button>
@@ -64,7 +72,7 @@ export default {
           .post(
             `${(await Config.get()).SERVER_URL}/accounts/${accountId}/files/batch/operations/fileCacheDelete`,
             { fileIdList },
-            await AuthService.getAuthHeader()
+            await AuthService.getAuthHeader(),
           )
           .then((res) => {
             this.$emit("onDone", { status: "invalidated" });
@@ -76,7 +84,6 @@ export default {
     async doActionSetOuttake() {
       this.loading = true;
       let accountId = "";
-      SyncStore().markOperationInProgress();
       const fileIdNames = [];
       for (const file of this.files) {
         if (file.filename.indexOf("-outtake") < 0) {
@@ -88,11 +95,13 @@ export default {
         }
       }
       if (fileIdNames.length > 0) {
+        SyncStore().markFilesAsPending(fileIdNames.map((f) => f.id));
+        SyncStore().markOperationInProgress();
         await axios
           .post(
             `${(await Config.get()).SERVER_URL}/accounts/${accountId}/files/batch/operations/fileRename`,
             { fileIdNames },
-            await AuthService.getAuthHeader()
+            await AuthService.getAuthHeader(),
           )
           .then((res) => {
             this.$emit("onDone", { status: "invalidated" });
@@ -104,26 +113,29 @@ export default {
     async doActionUnSetOuttake() {
       this.loading = true;
       let accountId = "";
-      SyncStore().markOperationInProgress();
       const fileIdNames = [];
       for (const file of this.files) {
-        if (file.filename.indexOf(`-outtake.${FileUtils.getExtention(file)}`) > 0) {
+        if (
+          file.filename.indexOf(`-outtake.${FileUtils.getExtention(file)}`) > 0
+        ) {
           accountId = file.accountId;
           fileIdNames.push({
             id: file.id,
             filename: file.filename.replace(
               `-outtake.${FileUtils.getExtention(file)}`,
-              `.${FileUtils.getExtention(file)}`
+              `.${FileUtils.getExtention(file)}`,
             ),
           });
         }
       }
       if (fileIdNames.length > 0) {
+        SyncStore().markFilesAsPending(fileIdNames.map((f) => f.id));
+        SyncStore().markOperationInProgress();
         await axios
           .post(
             `${(await Config.get()).SERVER_URL}/accounts/${accountId}/files/batch/operations/fileRename`,
             { fileIdNames },
-            await AuthService.getAuthHeader()
+            await AuthService.getAuthHeader(),
           )
           .then((res) => {
             this.$emit("onDone", { status: "invalidated" });
