@@ -7,6 +7,7 @@
     />
     <DialogFileInfo
       v-if="showFileInfo && file"
+      :key="file.id"
       :file="file"
       @onClose="showFileInfo = false"
       @onDuplicateDeleted="onDuplicateDeleted"
@@ -163,7 +164,6 @@ import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { FileUtils } from "~~/services/FileUtils";
 import * as Hammer from "hammerjs";
-import * as _ from "lodash";
 import { findIndex } from "lodash";
 
 export default {
@@ -256,17 +256,7 @@ export default {
         operationName === "fileDelete" &&
         affectedFileIds.includes(this.file.id)
       ) {
-        const removeIndex = this.files.findIndex((f) => f.id === this.file.id);
-        this.files = this.files.filter((f) => !affectedFileIds.includes(f.id));
-        if (this.files.length === 0) {
-          this.clickedClose();
-        } else {
-          this.position = Math.min(
-            removeIndex >= 0 ? removeIndex : this.position,
-            this.files.length - 1,
-          );
-          this.loadMedia();
-        }
+        this.removeFileAndAdvance(affectedFileIds);
       }
     };
     EventBus.on(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
@@ -357,6 +347,19 @@ export default {
     getType(file) {
       return FileUtils.getType(file);
     },
+    removeFileAndAdvance(fileIds) {
+      const removeIndex = this.files.findIndex((f) => fileIds.includes(f.id));
+      this.files = this.files.filter((f) => !fileIds.includes(f.id));
+      if (this.files.length === 0) {
+        this.clickedClose();
+      } else {
+        this.position = Math.min(
+          removeIndex >= 0 ? removeIndex : this.position,
+          this.files.length - 1,
+        );
+        this.loadMedia();
+      }
+    },
     async clickedDelete() {
       this.confirmDialogTitle = "Confirm Delete";
       this.confirmDialogMessage = `Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`;
@@ -373,18 +376,7 @@ export default {
           EventBus.emit(EventTypes.ALERT_MESSAGE, {
             text: "Delete queued \u2014 running in background",
           });
-          // Auto-advance: remove file locally and show next
-          const removeIndex = this.files.findIndex((f) => f.id === fileId);
-          this.files = this.files.filter((f) => f.id !== fileId);
-          if (this.files.length === 0) {
-            this.clickedClose();
-          } else {
-            this.position = Math.min(
-              removeIndex >= 0 ? removeIndex : this.position,
-              this.files.length - 1,
-            );
-            this.loadMedia();
-          }
+          this.removeFileAndAdvance([fileId]);
         } catch (err) {
           handleError(err);
         }
@@ -399,71 +391,46 @@ export default {
     },
     onOperationDone() {
       this.activeOperation = "";
-      // After move: advance past the moved file
       if (this.file) {
-        const fileId = this.file.id;
-        const removeIndex = this.files.findIndex((f) => f.id === fileId);
-        this.files = this.files.filter((f) => f.id !== fileId);
-        if (this.files.length === 0) {
-          this.clickedClose();
-        } else {
-          this.position = Math.min(
-            removeIndex >= 0 ? removeIndex : this.position,
-            this.files.length - 1,
-          );
-          this.loadMedia();
-        }
+        this.removeFileAndAdvance([this.file.id]);
       }
     },
-    previousMedia() {
-      if (this.files.length === 0 || this.position === 0) {
-        return;
-      }
-      // Find the previous supported file
-      let newPos = this.position - 1;
-      while (newPos >= 0 && this.getType(this.files[newPos]) === "unknown") {
-        newPos--;
-      }
-      if (newPos < 0) return;
-      const mediaDomElement = document.querySelector(".media-content");
-      mediaDomElement.classList.add("animate-media-out-right");
-      setTimeout(() => {
-        this.position = newPos;
-        this.loadMedia();
-        this.file = this.files[this.position];
-        mediaDomElement.classList.remove("animate-media-out-right");
-        mediaDomElement.classList.add("animate-media-in-left");
-      }, 300);
-      setTimeout(() => {
-        mediaDomElement.classList.remove("animate-media-in-left");
-        mediaDomElement.classList.remove("animate-media-in-right");
-      }, 700);
-    },
-    nextMedia() {
-      if (this.files.length === 0 || this.position === this.files.length - 1) {
-        return;
-      }
-      // Find the next supported file
-      let newPos = this.position + 1;
+    navigateMedia(direction) {
+      const isPrevious = direction === "previous";
+      if (this.files.length === 0) return;
+      if (isPrevious && this.position === 0) return;
+      if (!isPrevious && this.position === this.files.length - 1) return;
+      const step = isPrevious ? -1 : 1;
+      let newPos = this.position + step;
       while (
+        newPos >= 0 &&
         newPos < this.files.length &&
         this.getType(this.files[newPos]) === "unknown"
       ) {
-        newPos++;
+        newPos += step;
       }
-      if (newPos >= this.files.length) return;
-      const mediaDomElement = document.querySelector(".media-content");
-      mediaDomElement.classList.add("animate-media-out-left");
+      if (newPos < 0 || newPos >= this.files.length) return;
+      const mediaDomElement = this.$refs.mediaContainer?.querySelector(".media-content");
+      if (!mediaDomElement) return;
+      const outClass = isPrevious ? "animate-media-out-right" : "animate-media-out-left";
+      const inClass = isPrevious ? "animate-media-in-left" : "animate-media-in-right";
+      mediaDomElement.classList.add(outClass);
       setTimeout(() => {
         this.position = newPos;
         this.loadMedia();
-        mediaDomElement.classList.remove("animate-media-out-left");
-        mediaDomElement.classList.add("animate-media-in-right");
+        mediaDomElement.classList.remove(outClass);
+        mediaDomElement.classList.add(inClass);
       }, 300);
       setTimeout(() => {
-        mediaDomElement.classList.remove("animate-media-in-right");
         mediaDomElement.classList.remove("animate-media-in-left");
+        mediaDomElement.classList.remove("animate-media-in-right");
       }, 700);
+    },
+    previousMedia() {
+      this.navigateMedia("previous");
+    },
+    nextMedia() {
+      this.navigateMedia("next");
     },
     loadMedia(newRoute = false) {
       this.videoDelayedLoadingDone = false;
