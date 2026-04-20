@@ -23,7 +23,7 @@
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "apache-md5": "^1.1.8",
     "aws-sdk": "^2.1693.0",
-    "axios": "^1.15.0",
+    "axios": "^1.15.1",
     "bcrypt": "^6.0.0",
     "exif-reader": "^2.0.3",
     "fastify": "^5.8.5",
@@ -44,7 +44,7 @@
     "sharp": "^0.34.5",
     "better-sqlite3": "^12.9.0",
     "ts-node-dev": "^2.0.0",
-    "uuid": "^13.0.0"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@microsoft/microsoft-graph-types": "^2.43.1",
@@ -55,7 +55,7 @@
     "@types/md5": "^2.3.6",
     "@types/node": "^25.6.0",
     "@types/better-sqlite3": "^7.6.13",
-    "eslint": "^10.2.0",
+    "eslint": "^10.2.1",
     "jest": "^30.3.0",
     "prettier-plugin-organize-imports": "^4.3.0",
     "sinon": "^21.1.2",
