@@ -64,6 +64,7 @@ export default {
       folderFilter: "",
       selectedFolderId: null,
       _folderUpdatedHandler: null,
+      _folderCacheUpdatedHandler: null,
       _routeWatcherStop: null,
     };
   },
@@ -74,7 +75,9 @@ export default {
   },
   async created() {
     this._folderUpdatedHandler = () => FoldersStore().fetch();
+    this._folderCacheUpdatedHandler = () => FoldersStore().fetch();
     EventBus.on(EventTypes.FOLDER_UPDATED, this._folderUpdatedHandler);
+    EventBus.on(EventTypes.FOLDER_CACHE_UPDATED, this._folderCacheUpdatedHandler);
 
     await FoldersStore().fetch();
     const initialFolderId = useRoute().query.folderId;
@@ -95,6 +98,9 @@ export default {
   unmounted() {
     if (this._folderUpdatedHandler) {
       EventBus.off(EventTypes.FOLDER_UPDATED, this._folderUpdatedHandler);
+    }
+    if (this._folderCacheUpdatedHandler) {
+      EventBus.off(EventTypes.FOLDER_CACHE_UPDATED, this._folderCacheUpdatedHandler);
     }
     if (this._routeWatcherStop) {
       this._routeWatcherStop();

@@ -379,10 +379,17 @@ async function fileDeleteOperation(
         `Delete file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename}`,
         spanSubProcess,
       );
+      const folderId = file.folderId;
       await account.deleteFile(spanSubProcess, file);
-      const folder = await FolderDataGet(spanSubProcess, file.folderId);
+      const folder = await FolderDataGet(spanSubProcess, folderId);
       if (folder) {
-        await SyncInventorySyncFolder(account, folder);
+        SyncQueueQueueItem(
+          account.getAccountDefinition().id,
+          folder.id,
+          folder,
+          "SyncInventorySyncFolder",
+          SyncQueueItemPriority.INTERACTIVE,
+        );
       }
     }
   } catch (err) {
@@ -412,14 +419,26 @@ async function folderMoveOperation(
         initialFolderId,
       );
       if (initialFolder) {
-        await SyncInventorySyncFolder(account, initialFolder);
+        SyncQueueQueueItem(
+          account.getAccountDefinition().id,
+          initialFolder.id,
+          initialFolder,
+          "SyncInventorySyncFolder",
+          SyncQueueItemPriority.INTERACTIVE,
+        );
       }
       const targetFolder = await account.getFolderByPath(
         spanSubProcess,
         data.folderpath,
       );
       if (targetFolder) {
-        await SyncInventorySyncFolder(account, targetFolder);
+        SyncQueueQueueItem(
+          account.getAccountDefinition().id,
+          targetFolder.id,
+          targetFolder,
+          "SyncInventorySyncFolder",
+          SyncQueueItemPriority.INTERACTIVE,
+        );
       }
     }
   } catch (err) {
@@ -445,7 +464,13 @@ async function fileRenameOperation(
       await account.renameFile(spanSubProcess, file, data.filename);
       const folder = await FolderDataGet(spanSubProcess, file.folderId);
       if (folder) {
-        await SyncInventorySyncFolder(account, folder);
+        SyncQueueQueueItem(
+          account.getAccountDefinition().id,
+          folder.id,
+          folder,
+          "SyncInventorySyncFolder",
+          SyncQueueItemPriority.INTERACTIVE,
+        );
       }
     }
   } catch (err) {

@@ -90,6 +90,8 @@ export const SyncStore = defineStore("SyncStore", {
               total += c.count;
             }
             this.countTotal = total;
+          } else if (msg.type === "folder_cache_updated") {
+            EventBus.emit(EventTypes.FOLDER_CACHE_UPDATED);
           } else if (msg.type === "operation_complete") {
             const completedIds = msg.fileIds || [];
             if (completedIds.length > 0) {

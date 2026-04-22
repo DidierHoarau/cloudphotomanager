@@ -181,6 +181,7 @@ export default {
       _onFileUpdated: null,
       _onFolderSelected: null,
       _onOperationComplete: null,
+      _onFolderCacheUpdated: null,
       confirmMessage: "",
       _pendingDeleteFolderParentId: "",
     };
@@ -211,14 +212,16 @@ export default {
         message.folderId === this.currentFolderId
       ) {
         this.fetchFiles(message.accountId, message.folderId, true);
-        FoldersStore().fetch();
       }
     };
     this._onFileUpdated = () => {
-      FoldersStore().fetch();
+      // folder list refreshed by FOLDER_CACHE_UPDATED from server
     };
     this._onFolderSelected = (message) => {
       this.fetchFiles(message.accountId, message.folderId, true);
+    };
+    this._onFolderCacheUpdated = () => {
+      FoldersStore().fetch();
     };
     this._onOperationComplete = (message) => {
       if (!this.currentAccountId || !this.currentFolderId) return;
@@ -236,7 +239,6 @@ export default {
           (f) => !removedSet.has(f.id),
         );
         this.outtakesCount = this.files.filter((f) => f.isOuttake).length;
-        FoldersStore().fetch();
         return;
       }
 
@@ -246,9 +248,6 @@ export default {
         operationName === "SyncInventorySyncFolder"
       ) {
         this.fetchFilesSilent();
-        if (operationName === "SyncInventorySyncFolder") {
-          FoldersStore().fetch();
-        }
         return;
       }
 
@@ -269,6 +268,7 @@ export default {
     EventBus.on(EventTypes.FOLDER_UPDATED, this._onFolderUpdated);
     EventBus.on(EventTypes.FILE_UPDATED, this._onFileUpdated);
     EventBus.on(EventTypes.FOLDER_SELECTED, this._onFolderSelected);
+    EventBus.on(EventTypes.FOLDER_CACHE_UPDATED, this._onFolderCacheUpdated);
     EventBus.on(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
     if (
       useRoute().query.accountId &&
@@ -355,6 +355,7 @@ export default {
     EventBus.off(EventTypes.FOLDER_UPDATED, this._onFolderUpdated);
     EventBus.off(EventTypes.FILE_UPDATED, this._onFileUpdated);
     EventBus.off(EventTypes.FOLDER_SELECTED, this._onFolderSelected);
+    EventBus.off(EventTypes.FOLDER_CACHE_UPDATED, this._onFolderCacheUpdated);
     EventBus.off(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
   },
   methods: {
@@ -494,7 +495,6 @@ export default {
         .catch(handleError);
       this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
       EventBus.emit(EventTypes.FOLDER_UPDATED, {});
-      EventBus.emit(EventTypes.FILE_UPDATED, {});
     },
     onFileSelected(file) {
       const selectedIndex = findIndex(this.selectedFiles, { id: file.id });
@@ -633,7 +633,6 @@ export default {
             text: "Folder deleted",
           });
           this.onOperationDone({ status: "invalidated" });
-          FoldersStore().fetch();
           useRouter().push({
             path: "/gallery",
             query: {
