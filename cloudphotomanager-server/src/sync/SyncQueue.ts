@@ -9,7 +9,11 @@ import { PromisePool } from "../utils-std-ts/PromisePool";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
-import { FolderDataAdd, FolderDataGet, FolderDataGetParent } from "../folders/FolderData";
+import {
+  FolderDataAdd,
+  FolderDataGet,
+  FolderDataGetParent,
+} from "../folders/FolderData";
 import { SyncInventorySyncFolder } from "./SyncInventory";
 import {
   syncVideoFromFull,

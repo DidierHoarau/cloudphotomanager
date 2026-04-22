@@ -174,11 +174,10 @@ export async function FileDataUpdateInfo(
   file: File,
 ): Promise<void> {
   const span = OTelTracer().startSpan("FileDataUpdateInfo", context);
-  await SqlDbUtilsExecSQL(
-    span,
-    "UPDATE files SET info = ? WHERE id = ? ",
-    [JSON.stringify(file.info), file.id],
-  );
+  await SqlDbUtilsExecSQL(span, "UPDATE files SET info = ? WHERE id = ? ", [
+    JSON.stringify(file.info),
+    file.id,
+  ]);
   span.end();
 }
 
