@@ -77,7 +77,10 @@ export default {
     this._folderUpdatedHandler = () => FoldersStore().fetch();
     this._folderCacheUpdatedHandler = () => FoldersStore().fetch();
     EventBus.on(EventTypes.FOLDER_UPDATED, this._folderUpdatedHandler);
-    EventBus.on(EventTypes.FOLDER_CACHE_UPDATED, this._folderCacheUpdatedHandler);
+    EventBus.on(
+      EventTypes.FOLDER_CACHE_UPDATED,
+      this._folderCacheUpdatedHandler,
+    );
 
     await FoldersStore().fetch();
     const initialFolderId = useRoute().query.folderId;
@@ -100,7 +103,10 @@ export default {
       EventBus.off(EventTypes.FOLDER_UPDATED, this._folderUpdatedHandler);
     }
     if (this._folderCacheUpdatedHandler) {
-      EventBus.off(EventTypes.FOLDER_CACHE_UPDATED, this._folderCacheUpdatedHandler);
+      EventBus.off(
+        EventTypes.FOLDER_CACHE_UPDATED,
+        this._folderCacheUpdatedHandler,
+      );
     }
     if (this._routeWatcherStop) {
       this._routeWatcherStop();

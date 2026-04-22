@@ -13,6 +13,7 @@ import {
   FileDataGetFileTmpDir,
   FileDataListByFolder,
   FileDataListForAccount,
+  FileDataUpdateInfo,
   FileDataUpdateKeywords,
 } from "../files/FileData";
 import { Account } from "../model/Account";
@@ -308,11 +309,26 @@ export async function syncPhotoFromFull(account: Account, file: File) {
           );
           tmpFileName += "_raw.jpg";
         }
+        // Extract and store EXIF from the source file before rotating
+        try {
+          const srcMeta = await sharp(`${tmpDir}/${tmpFileName}`).metadata();
+          if (srcMeta && srcMeta.exif) {
+            file.info.exif = exifReader(srcMeta.exif);
+          }
+        } catch (_) {
+          logger.info(
+            `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`
+          );
+        }
+        await FileDataUpdateInfo(span, file);
+        // Auto-rotate pixels based on EXIF orientation tag, then strip it
         await sharp(`${tmpDir}/${tmpFileName}`)
+          .rotate()
           .withMetadata()
           .resize({ width: 300 })
           .toFile(`${cacheDir}/thumbnail.webp`);
         await sharp(`${tmpDir}/${tmpFileName}`)
+          .rotate()
           .withMetadata()
           .resize({ width: 2000 })
           .toFile(`${cacheDir}/preview.webp`);
@@ -418,6 +434,7 @@ export async function syncThumbnail(account: Account, file: File) {
       .downloadThumbnail(span, file, `${tmpDir}/tmp_tumbnail`, tmpFileName)
       .then(async () => {
         await sharp(`${tmpDir}/tmp_tumbnail/${tmpFileName}`)
+          .rotate()
           .withMetadata()
           .resize({ width: 300 })
           .toFile(`${cacheDir}/thumbnail.webp`);

@@ -20,7 +20,7 @@ import {
   SyncFileCacheCheckFile,
   SyncFileCacheRemoveFile,
 } from "./SyncFileCache";
-import { FileDataGet } from "../files/FileData";
+import { FileDataGet, FileDataUpdateKeywords } from "../files/FileData";
 
 const MAX_PARALLEL_SYNC = 3;
 const QUEUE_FILE_PATH = path.join(
@@ -523,6 +523,9 @@ async function fileCacheRebuildOperation(
         spanSubProcess,
       );
       await SyncFileCacheRemoveFile(spanSubProcess, account, file);
+      // Reset keywords so syncPhotoKeyWords is re-queued to re-extract EXIF
+      file.keywords = null;
+      await FileDataUpdateKeywords(spanSubProcess, file);
       SyncFileCacheCheckFile(spanSubProcess, account, file);
     }
   } catch (err) {
