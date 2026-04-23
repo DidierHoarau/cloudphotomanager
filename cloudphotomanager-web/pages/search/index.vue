@@ -53,7 +53,9 @@
     </div>
     <GalleryItemFocus
       v-if="displayFullScreen"
-      :inputFiles="{ files, position: positionFocus }"
+      :galleryFiles="files"
+      :initialPosition="positionFocus"
+      :selectedFiles="selectedFiles"
       class="gallery-item-focus"
       @onFileClosed="unFocusGalleryItem"
     />
@@ -86,6 +88,7 @@ export default {
       dateTo: null,
       selectedFiles: [],
       displayFullScreen: false,
+      positionFocus: 0,
     };
   },
   async created() {
@@ -112,13 +115,15 @@ export default {
               this.currentAccountId
             }/files/search`,
             { filters },
-            await AuthService.getAuthHeader()
+            await AuthService.getAuthHeader(),
           )
           .then((res) => {
             this.files = res.data.files;
-            this.loading = false;
           })
-          .catch(handleError);
+          .catch(handleError)
+          .finally(() => {
+            this.loading = false;
+          });
       } else {
         this.files = [];
       }
@@ -143,7 +148,6 @@ export default {
       }
     },
     focusGalleryItem(file) {
-      console.log(file);
       if (!file) {
         this.displayFullScreen = false;
         return;
