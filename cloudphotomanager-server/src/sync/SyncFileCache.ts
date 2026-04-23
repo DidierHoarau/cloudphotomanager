@@ -330,7 +330,7 @@ export async function syncPhotoFromFull(account: Account, file: File) {
         await sharp(`${tmpDir}/${tmpFileName}`)
           .rotate()
           .withMetadata()
-          .resize({ width: 2000 })
+          .resize({ width: 2000, height: 2000, fit: "inside" })
           .toFile(`${cacheDir}/preview.webp`);
       })
       .catch((err) => {

@@ -16,8 +16,8 @@ export async function AnalysisDataGetFileDuplicates(
   );
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    "SELECT * FROM files WHERE accountId = ? AND hash IN " +
-      " (SELECT hash FROM files WHERE id = ? AND accountId = ?) " +
+    "SELECT * FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' AND hash IN " +
+      " (SELECT hash FROM files WHERE id = ? AND accountId = ? AND hash IS NOT NULL AND hash != '') " +
       " ORDER BY hash ",
     [accountId, fileId, accountId],
   );
@@ -46,8 +46,8 @@ export async function AnalysisDataListAccountDuplicates(
     span,
     "SELECT * " +
       " FROM files " +
-      " WHERE accountId = ? AND hash IN " +
-      " ( SELECT hash FROM files WHERE accountId = ? GROUP BY hash HAVING count(*) > 1) " +
+      " WHERE accountId = ? AND hash IS NOT NULL AND hash != '' AND hash IN " +
+      " ( SELECT hash FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' GROUP BY hash HAVING count(*) > 1) " +
       " ORDER BY hash ",
     [accountId, accountId],
   );
