@@ -102,28 +102,4 @@ export default {
   min-width: 20em;
   height: 15em;
 }
-.file-preview img {
-  max-width: 100%;
-  height: auto;
-  max-height: 100%;
-}
-.file-preview .action {
-  font-size: 1.5em;
-  position: fixed;
-  right: 1em;
-  top: 1em;
-  color: #aaf;
-}
-.file-preview-operations {
-  font-size: 1.5em;
-  position: fixed;
-  bottom: 1em;
-  right: 1em;
-  color: #aaf;
-}
-.file-preview-operations button {
-  padding: 0.3em 0.7em;
-  font-size: 0.5em;
-  opacity: 0.5;
-}
 </style>

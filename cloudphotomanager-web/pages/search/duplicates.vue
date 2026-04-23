@@ -57,10 +57,10 @@
     <!-- Detail dialog -->
     <div
       v-if="selectedFile"
-      class="dup-dialog-overlay"
+      class="dialog-overlay"
       @click.self="clickedClose()"
     >
-      <article class="dup-dialog">
+      <article class="dialog-article">
         <header>
           <a
             href="#close"
@@ -70,7 +70,7 @@
           ></a>
           Duplicate Group
         </header>
-        <div class="dup-dialog-thumb">
+        <div class="dialog-thumbnail">
           <img
             :src="getThumbnailUrl(selectedFile)"
             onerror="
@@ -80,17 +80,17 @@
             alt="Thumbnail"
           />
         </div>
-        <table class="dup-info-table">
+        <table class="dialog-info-table">
           <tbody>
             <tr>
-              <td class="dup-info-label">Count</td>
+              <td class="dialog-info-label">Count</td>
               <td>{{ selectedFile.duplicates.files.length }} copies</td>
             </tr>
           </tbody>
         </table>
         <hr />
         <strong>Files in this group</strong>
-        <div class="dup-files-table">
+        <div class="dialog-files-table">
           <table>
             <thead>
               <tr>
@@ -103,9 +103,9 @@
               <tr v-for="dup in selectedFile.duplicates.files" :key="dup.id">
                 <td>{{ getFolderPath(dup.folderId) }}</td>
                 <td>{{ dup.filename }}</td>
-                <td class="dup-files-action-cell">
+                <td>
                   <button
-                    class="dup-delete-btn"
+                    class="dialog-delete-btn"
                     @click="deleteDuplicate(dup)"
                     title="Delete this file"
                   >
@@ -432,109 +432,8 @@ export default {
 }
 
 /* ── Detail dialog (matches DialogFileInfo style) ────────── */
-.dup-dialog-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-}
-.dup-dialog {
-  max-width: 90vw;
-  max-height: 85vh;
-  overflow-y: auto;
-  width: 30em;
-}
-.dup-dialog header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.dup-dialog header a.close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5em;
-  height: 1.5em;
-  cursor: pointer;
-  opacity: 0.6;
-  text-decoration: none;
-  flex-shrink: 0;
-}
-.dup-dialog header a.close::before {
-  content: "\00d7";
-  font-size: 1.5em;
-  line-height: 1;
-}
-.dup-dialog header a.close:hover {
-  opacity: 1;
-}
-.dup-dialog-thumb {
-  text-align: center;
-  margin-bottom: 0.75em;
-}
-.dup-dialog-thumb img {
-  max-width: 100%;
-  max-height: 12em;
-  object-fit: contain;
-  border-radius: 0.35em;
-}
-.dup-info-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.dup-info-table td {
-  padding: 0.3em 0;
-  vertical-align: top;
-  word-break: break-all;
-}
-.dup-info-label {
-  font-weight: 600;
-  white-space: nowrap;
-  padding-right: 1em;
-  width: 5em;
-}
-.dup-files-table {
-  max-width: 100%;
-  overflow-x: hidden;
-  margin-top: 0.5em;
-}
-.dup-files-table table {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: collapse;
-}
-.dup-files-table td,
-.dup-files-table th {
-  word-break: break-all;
-  overflow-wrap: anywhere;
-  padding: 0.3em 0.4em;
-  vertical-align: middle;
-}
-.dup-files-action-cell {
-  width: 2.5em;
-  text-align: center;
-  word-break: normal;
-}
-.dup-delete-btn {
-  background: transparent;
-  border: none;
-  color: #dc3545;
-  cursor: pointer;
-  padding: 0.2em 0.4em;
-  font-size: 0.9em;
-  border-radius: 0.25em;
-  transition: background 0.15s;
-}
-.dup-delete-btn:hover:not(:disabled) {
-  background: rgba(220, 53, 69, 0.15);
-}
-.dup-delete-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
+/* overlay, article, header, close, thumbnail, info-table,
+   files-table and delete-btn are all in assets/css/dialog.css */
 
 /* ── Infinite scroll sentinel ────────────────────────────── */
 .sentinel {

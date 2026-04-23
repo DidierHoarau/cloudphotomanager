@@ -2,13 +2,22 @@
   <dialog open>
     <article>
       <header>
-        <a href="#close" aria-label="Close" class="close" v-on:click="clickedClose()"></a>
+        <a
+          href="#close"
+          aria-label="Close"
+          class="close"
+          v-on:click="clickedClose()"
+        ></a>
         Selection
       </header>
       <fieldset>
         <legend>Per date:</legend>
         <label v-for="daySelection in daySelections" :key="daySelection.day"
-          ><input v-model="daySelection.selected" type="checkbox" @change="onDaySelected()" />{{ daySelection.day }} ({{
+          ><input
+            v-model="daySelection.selected"
+            type="checkbox"
+            @change="onDaySelected()"
+          />{{ daySelection.day }} ({{
             daySelection.files.length
           }}
           files)</label
@@ -80,34 +89,4 @@ export default {
 };
 </script>
 
-<style scoped>
-.dialog-folder-selection {
-  width: 100%;
-  min-width: 20em;
-  height: 15em;
-}
-.file-preview img {
-  max-width: 100%;
-  height: auto;
-  max-height: 100%;
-}
-.file-preview .action {
-  font-size: 1.5em;
-  position: fixed;
-  right: 1em;
-  top: 1em;
-  color: #aaf;
-}
-.file-preview-operations {
-  font-size: 1.5em;
-  position: fixed;
-  bottom: 1em;
-  right: 1em;
-  color: #aaf;
-}
-.file-preview-operations button {
-  padding: 0.3em 0.7em;
-  font-size: 0.5em;
-  opacity: 0.5;
-}
-</style>
+<style scoped></style>

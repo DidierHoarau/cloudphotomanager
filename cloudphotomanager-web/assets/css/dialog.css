@@ -1,0 +1,128 @@
+/*
+ * dialog.css — Shared styles for custom overlay dialogs.
+ *
+ * Used by components that cannot use native <dialog open> because they must
+ * coexist with other content on the page (e.g. DialogFileInfo, duplicates detail).
+ *
+ * Native <dialog open> components (DialogConfirm, DialogMove, etc.) rely on
+ * Pico CSS and do not need these rules.
+ */
+
+/* ── Overlay backdrop ─────────────────────────────────────── */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* ── Dialog article container ─────────────────────────────── */
+.dialog-article {
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  width: 30em;
+}
+
+/* ── Header with close button on the right ────────────────── */
+.dialog-article header {
+  display: flex;
+  align-items: center;
+}
+.dialog-article header a.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5em;
+  height: 1.5em;
+  cursor: pointer;
+  opacity: 0.6;
+  text-decoration: none;
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  order: 1;
+}
+.dialog-article header a.close::before {
+  content: "\00d7";
+  font-size: 1.5em;
+  line-height: 1;
+}
+.dialog-article header a.close:hover {
+  opacity: 1;
+}
+
+/* ── Thumbnail preview inside dialog ─────────────────────── */
+.dialog-thumbnail {
+  text-align: center;
+  margin-bottom: 0.75em;
+}
+.dialog-thumbnail img {
+  max-width: 100%;
+  max-height: 12em;
+  object-fit: contain;
+  border-radius: 0.35em;
+}
+
+/* ── Info key/value table ─────────────────────────────────── */
+.dialog-info-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.dialog-info-table td {
+  padding: 0.3em 0;
+  vertical-align: top;
+  word-break: break-all;
+}
+.dialog-info-label {
+  font-weight: 600;
+  white-space: nowrap;
+  padding-right: 1em;
+  width: 5em;
+}
+
+/* ── Inner files table (duplicates list, etc.) ────────────── */
+.dialog-files-table {
+  max-width: 100%;
+  overflow-x: hidden;
+  margin-top: 0.5em;
+}
+.dialog-files-table table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.dialog-files-table td,
+.dialog-files-table th {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  padding: 0.3em 0.4em;
+  vertical-align: middle;
+}
+.dialog-files-table th:last-child,
+.dialog-files-table td:last-child {
+  width: 2.5em;
+  text-align: center;
+  word-break: normal;
+}
+
+/* ── Danger (delete) action button ───────────────────────── */
+.dialog-delete-btn {
+  background: transparent;
+  border: none;
+  color: #dc3545;
+  cursor: pointer;
+  padding: 0.2em 0.4em;
+  font-size: 0.9em;
+  border-radius: 0.25em;
+  transition: background 0.15s;
+}
+.dialog-delete-btn:hover:not(:disabled) {
+  background: rgba(220, 53, 69, 0.15);
+}
+.dialog-delete-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
