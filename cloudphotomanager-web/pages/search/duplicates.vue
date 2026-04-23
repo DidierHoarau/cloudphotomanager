@@ -20,7 +20,7 @@
       <Loading v-if="loading" />
       <div v-else class="duplicate-card-grid">
         <div
-          v-for="file in filteredFiles"
+          v-for="file in pagedFiles"
           :key="file.id"
           class="duplicate-card"
         >
@@ -47,6 +47,44 @@
             </div>
           </div>
         </div>
+      </div>
+      <!-- Pagination controls -->
+      <div v-if="!loading && totalPages > 1" class="dup-pagination">
+        <button
+          class="dup-page-btn"
+          :disabled="currentPage === 0"
+          @click="currentPage = 0"
+          title="First page"
+        >
+          <i class="bi bi-chevron-double-left"></i>
+        </button>
+        <button
+          class="dup-page-btn"
+          :disabled="currentPage === 0"
+          @click="currentPage--"
+          title="Previous page"
+        >
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        <span class="dup-page-info"
+          >{{ currentPage + 1 }} / {{ totalPages }}</span
+        >
+        <button
+          class="dup-page-btn"
+          :disabled="currentPage >= totalPages - 1"
+          @click="currentPage++"
+          title="Next page"
+        >
+          <i class="bi bi-chevron-right"></i>
+        </button>
+        <button
+          class="dup-page-btn"
+          :disabled="currentPage >= totalPages - 1"
+          @click="currentPage = totalPages - 1"
+          title="Last page"
+        >
+          <i class="bi bi-chevron-double-right"></i>
+        </button>
       </div>
     </div>
 
@@ -144,6 +182,8 @@ export default {
       requestEtag: "",
       analysisFilter: "",
       activeFilter: "",
+      currentPage: 0,
+      pageSize: 60,
       selectedFiles: [],
       showConfirmDialog: false,
       confirmDialogTitle: "",
@@ -159,6 +199,13 @@ export default {
     await FoldersStore().fetch();
   },
   computed: {
+    totalPages() {
+      return Math.max(1, Math.ceil(this.filteredFiles.length / this.pageSize));
+    },
+    pagedFiles() {
+      const start = this.currentPage * this.pageSize;
+      return this.filteredFiles.slice(start, start + this.pageSize);
+    },
     folderMap() {
       const map = new Map();
       for (const folder of FoldersStore().folders) {
@@ -181,12 +228,18 @@ export default {
       return this._buildFileList(matched);
     },
   },
+  watch: {
+    activeFilter() {
+      this.currentPage = 0;
+    },
+  },
   methods: {
     async loadAccountDuplicate(accountId) {
       const requestEtag = new Date().toISOString();
       this.requestEtag = requestEtag;
       this.loading = true;
       this.analysis = [];
+      this.currentPage = 0;
       await axios
         .get(
           `${
@@ -450,5 +503,37 @@ export default {
 .dup-delete-btn:disabled {
   opacity: 0.3;
   cursor: default;
+}
+
+/* ── Pagination ──────────────────────────────────────────── */
+.dup-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  padding-top: 1em;
+}
+.dup-page-btn {
+  background: transparent;
+  border: 1px solid var(--pico-muted-border-color, #555);
+  color: inherit;
+  cursor: pointer;
+  padding: 0.3em 0.6em;
+  border-radius: 0.3em;
+  font-size: 0.9em;
+  line-height: 1;
+  transition: background 0.15s;
+}
+.dup-page-btn:hover:not(:disabled) {
+  background: var(--pico-primary-background, rgba(255, 255, 255, 0.08));
+}
+.dup-page-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.dup-page-info {
+  min-width: 5em;
+  text-align: center;
+  font-size: 0.9em;
 }
 </style>
