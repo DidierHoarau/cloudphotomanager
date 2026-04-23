@@ -4,33 +4,93 @@
       class="duplicate-gallery-layout-navigation"
       @onAccountSelected="onAccountSelected"
     />
-    <div>
-      <kbd v-if="files.length > 0">Set Found: {{ files.length }}</kbd>
+    <div class="duplicate-toolbar">
+      <input
+        v-model="analysisFilter"
+        type="search"
+        placeholder="Filter duplicates by filename or path…"
+        class="duplicate-filter-input"
+        @input="onSearchFilterChanged"
+      />
+      <kbd v-if="!loading && filteredFiles.length > 0"
+        >Set Found: {{ filteredFiles.length }}</kbd
+      >
     </div>
     <div class="analysis-item-list">
       <Loading v-if="loading" />
-      <Gallery
-        v-else
-        :files="files"
-        :enableSelection="false"
-        @focusGalleryItem="focusGalleryItem"
-        @onFileSelected="onFileSelected"
-        :selectedFiles="selectedFiles"
-      />
+      <template v-else>
+        <div class="duplicate-card-grid">
+          <div
+            v-for="file in visibleFiles"
+            :key="file.id"
+            class="duplicate-card"
+          >
+            <div class="duplicate-card-thumb" @click="focusGalleryItem(file)">
+              <img
+                :src="getThumbnailUrl(file)"
+                onerror="
+                  this.onerror = null;
+                  this.src = '/images/file-sync-in-progress.webp';
+                "
+                alt="thumbnail"
+              />
+              <span class="duplicate-card-badge"
+                >x{{ file.duplicates.files.length }}</span
+              >
+            </div>
+            <div class="duplicate-card-paths">
+              <div
+                v-for="dup in file.duplicates.files"
+                :key="dup.id"
+                class="duplicate-card-path"
+              >
+                {{ getFolderPath(dup.folderId) }}/{{ dup.filename }}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div ref="sentinel" class="sentinel"></div>
+        <Loading v-if="loadingMore" />
+      </template>
     </div>
-    <dialog v-if="selectedFile" open>
-      <article>
+
+    <!-- Detail dialog -->
+    <div
+      v-if="selectedFile"
+      class="dialog-overlay"
+      @click.self="clickedClose()"
+    >
+      <article class="dialog-article">
         <header>
           <a
             href="#close"
             aria-label="Close"
             class="close"
-            v-on:click="clickedClose()"
+            @click.prevent="clickedClose()"
           ></a>
-          Duplicate
+          Duplicate Group
         </header>
-        <MediaDisplay :file="selectedFile" />
-        <div class="duplicate-files-table">
+        <div class="dialog-thumbnail">
+          <img
+            :src="getThumbnailUrl(selectedFile)"
+            onerror="
+              this.onerror = null;
+              this.src = '/images/file-sync-in-progress.webp';
+            "
+            alt="Thumbnail"
+          />
+        </div>
+        <table class="dialog-info-table">
+          <tbody>
+            <tr>
+              <td class="dialog-info-label">Count</td>
+              <td>{{ selectedFile.duplicates.files.length }} copies</td>
+            </tr>
+          </tbody>
+        </table>
+        <hr />
+        <strong>Files in this group</strong>
+        <div class="dialog-files-table">
           <table>
             <thead>
               <tr>
@@ -40,15 +100,16 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="file in selectedFile.duplicates.files" :key="file.id">
-                <th scope="row">{{ getFolderPath(file.folderId) }}</th>
-                <td>{{ file.filename }}</td>
-                <td class="duplicate-files-actions">
+              <tr v-for="dup in selectedFile.duplicates.files" :key="dup.id">
+                <td>{{ getFolderPath(dup.folderId) }}</td>
+                <td>{{ dup.filename }}</td>
+                <td>
                   <button
-                    class="secondary outline"
-                    v-on:click="deleteDuplicate(file)"
+                    class="dialog-delete-btn"
+                    @click="deleteDuplicate(dup)"
+                    title="Delete this file"
                   >
-                    <i class="bi bi-trash-fill"></i> Delete
+                    <i class="bi bi-trash"></i>
                   </button>
                 </td>
               </tr>
@@ -56,7 +117,8 @@
           </table>
         </div>
       </article>
-    </dialog>
+    </div>
+
     <DialogConfirm
       v-if="showConfirmDialog"
       :title="confirmDialogTitle"
@@ -69,7 +131,7 @@
 
 <script>
 import axios from "axios";
-import { debounce, findIndex } from "lodash";
+import { findIndex, debounce } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
@@ -77,15 +139,19 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 export default {
   data() {
     return {
-      files: [],
-      analysisFiltered: [],
       analysis: [],
       menuOpened: true,
       serverUrl: "",
+      staticUrl: "",
       selectedFile: null,
       loading: false,
+      loadingMore: false,
       requestEtag: "",
       analysisFilter: "",
+      activeFilter: "",
+      visibleCount: 60,
+      pageSize: 60,
+      observer: null,
       selectedFiles: [],
       showConfirmDialog: false,
       confirmDialogTitle: "",
@@ -94,17 +160,72 @@ export default {
     };
   },
   async created() {
-    this.serverUrl = (await Config.get()).SERVER_URL;
+    const config = await Config.get();
+    this.serverUrl = config.SERVER_URL;
+    this.staticUrl = config.STATIC_URL;
     await AccountsStore().fetch();
     await FoldersStore().fetch();
   },
+  mounted() {
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          this.hasMore &&
+          !this.loadingMore &&
+          !this.loading
+        ) {
+          this.loadMore();
+        }
+      },
+      { threshold: 0.1 },
+    );
+    if (this.$refs.sentinel) {
+      this.observer.observe(this.$refs.sentinel);
+    }
+  },
+  updated() {
+    if (this.observer && this.$refs.sentinel) {
+      this.observer.observe(this.$refs.sentinel);
+    }
+  },
+  beforeUnmount() {
+    if (this.observer) {
+      this.observer.disconnect();
+    }
+  },
   computed: {
+    visibleFiles() {
+      return this.filteredFiles.slice(0, this.visibleCount);
+    },
+    hasMore() {
+      return this.visibleCount < this.filteredFiles.length;
+    },
     folderMap() {
       const map = new Map();
       for (const folder of FoldersStore().folders) {
         map.set(folder.id, folder.folderpath);
       }
       return map;
+    },
+    filteredFiles() {
+      if (!this.activeFilter) {
+        return this._buildFileList(this.analysis);
+      }
+      const q = this.activeFilter.toLowerCase();
+      const matched = this.analysis.filter((duplicate) => {
+        return duplicate.files.some(
+          (f) =>
+            f.filename.toLowerCase().includes(q) ||
+            (this.folderMap.get(f.folderId) || "").toLowerCase().includes(q),
+        );
+      });
+      return this._buildFileList(matched);
+    },
+  },
+  watch: {
+    activeFilter() {
+      this.visibleCount = this.pageSize;
     },
   },
   methods: {
@@ -113,6 +234,7 @@ export default {
       this.requestEtag = requestEtag;
       this.loading = true;
       this.analysis = [];
+      this.visibleCount = this.pageSize;
       await axios
         .get(
           `${
@@ -133,21 +255,36 @@ export default {
         .catch(handleError);
     },
     loadAccountDuplicateProcess() {
-      const newFiles = [];
-      for (const duplicate of this.analysis) {
-        if (duplicate.files.length < 2) {
-          continue;
-        }
+      // analysis is now the source of truth; filteredFiles is computed
+    },
+    _buildFileList(analysisList) {
+      const result = [];
+      for (const duplicate of analysisList) {
+        if (duplicate.files.length < 2) continue;
         const src = duplicate.files[0];
-        const fileReference = {
+        result.push({
           ...src,
           info: src.info ? { ...src.info } : src.info,
           filename: `(x${duplicate.files.length} duplicates) ${src.filename}`,
           duplicates: duplicate,
-        };
-        newFiles.push(fileReference);
+        });
       }
-      this.files = newFiles;
+      return result;
+    },
+    getThumbnailUrl(file) {
+      if (!file || !this.staticUrl) return "";
+      return (
+        this.staticUrl +
+        "/" +
+        file.accountId +
+        "/" +
+        file.id[0] +
+        "/" +
+        file.id[1] +
+        "/" +
+        file.id +
+        "/thumbnail.webp"
+      );
     },
     async onAccountSelected(account) {
       await this.loadAccountDuplicate(account.id);
@@ -184,31 +321,15 @@ export default {
             if (fileIndex >= 0) {
               duplicate.files.splice(fileIndex, 1);
             }
-            // Update files[] surgically: no full rebuild needed
-            const filesIndex = findIndex(
-              this.files,
-              (f) => f.duplicates === duplicate,
-            );
+            // filteredFiles is computed from this.analysis — reactivity handles re-render
             if (duplicate.files.length < 2) {
-              // No longer a duplicate group — remove from list
-              if (filesIndex >= 0) {
-                this.files.splice(filesIndex, 1);
-              }
-              // Also close dialog if it was showing this group
+              // No longer a duplicate group — close dialog if open for this group
               if (
                 this.selectedFile &&
                 this.selectedFile.duplicates === duplicate
               ) {
                 this.selectedFile = null;
               }
-            } else if (filesIndex >= 0) {
-              // Update count label in-place
-              const entry = this.files[filesIndex];
-              const baseName = entry.filename.replace(
-                /^\(x\d+ duplicates\) /,
-                "",
-              );
-              entry.filename = `(x${duplicate.files.length} duplicates) ${baseName}`;
             }
             EventBus.emit(EventTypes.FOLDER_UPDATED, {});
             EventBus.emit(EventTypes.FILE_UPDATED, {});
@@ -223,71 +344,100 @@ export default {
         this.confirmDialogCallback();
       }
     },
+    loadMore() {
+      if (!this.hasMore || this.loadingMore) return;
+      this.loadingMore = true;
+      // Use setTimeout to let the browser paint before extending the list
+      setTimeout(() => {
+        this.visibleCount = Math.min(
+          this.visibleCount + this.pageSize,
+          this.filteredFiles.length,
+        );
+        this.loadingMore = false;
+      }, 50);
+    },
     clickedClose() {
       this.selectedFile = null;
     },
-    onSearchFilterChanged: debounce(async function (e) {
-      if (!this.analysisFilter) {
-        this.analysisFiltered = this.analysis;
-        return;
-      }
-      this.analysisFiltered = [];
-      for (const analysis of this.analysis) {
-        let added = false;
-        for (const file of analysis.files) {
-          if (
-            !added &&
-            file.filename
-              .toLowerCase()
-              .indexOf(this.analysisFilter.toLowerCase()) >= 0
-          ) {
-            added = true;
-          }
-        }
-        for (const folder of analysis.folders) {
-          if (
-            !added &&
-            folder.folderpath
-              .toLowerCase()
-              .indexOf(this.analysisFilter.toLowerCase()) >= 0
-          ) {
-            added = true;
-          }
-        }
-        if (added) {
-          this.analysisFiltered.push(analysis);
-        }
-      }
-    }, 500),
+    onSearchFilterChanged: debounce(function () {
+      this.activeFilter = this.analysisFilter;
+    }, 2000),
   },
 };
 </script>
 
 <style scoped>
+/* ── Page layout ─────────────────────────────────────────── */
 .duplicate-gallery-layout {
   display: grid;
   grid-template-rows: auto auto 1fr;
   grid-template-columns: 1fr;
   gap: 1em;
 }
-.analysis-item {
-  margin-top: 1em;
-}
-.duplicate-files-actions {
-  padding-bottom: 0.3em;
-}
-.duplicate-files-actions button,
-.duplicate-files-actions kbd {
-  padding: 0.3em 0.7em;
-  font-size: 0.8em;
+
+/* ── Toolbar: count badge + filter input ─────────────────── */
+.duplicate-toolbar {
+  display: grid;
+  grid-template-columns: 3fr 1fr;
+  align-items: center;
+  gap: 0.75em;
 }
 
-.duplicate-files-actions kbd {
-  height: 2.2em;
+/* ── Duplicate card grid ─────────────────────────────────── */
+.duplicate-card-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11em, 1fr));
+  gap: 1em;
+  align-items: start;
+}
+.duplicate-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+  cursor: default;
+}
+.duplicate-card-thumb {
+  position: relative;
+  cursor: pointer;
+}
+.duplicate-card-thumb img {
+  width: 100%;
+  height: 8em;
+  object-fit: cover;
+  border-radius: 0.3em;
+  display: block;
+}
+.duplicate-card-badge {
+  position: absolute;
+  top: 0.3em;
+  right: 0.3em;
+  background: rgba(20, 20, 40, 0.75);
+  color: #aaf;
+  font-size: 0.7em;
+  padding: 0.15em 0.45em;
+  border-radius: 0.9em;
+  pointer-events: none;
+}
+.duplicate-card-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15em;
+}
+.duplicate-card-path {
+  font-size: 0.62em;
+  opacity: 0.65;
+  word-break: break-all;
+  line-height: 1.3;
 }
 
-.duplicate-files-table {
-  max-width: 100%;
-  overflow-x: auto;
+/* ── Detail dialog (matches DialogFileInfo style) ────────── */
+/* overlay, article, header, close, thumbnail, info-table,
+   files-table and delete-btn are all in assets/css/dialog.css */
+
+/* ── Infinite scroll sentinel ────────────────────────────── */
+.sentinel {
+  height: 1px;
+  width: 100%;
 }
 </style>

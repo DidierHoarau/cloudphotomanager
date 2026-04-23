@@ -169,6 +169,18 @@ export async function FileDataUpdateKeywords(
   span.end();
 }
 
+export async function FileDataUpdateInfo(
+  context: Span,
+  file: File,
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataUpdateInfo", context);
+  await SqlDbUtilsExecSQL(span, "UPDATE files SET info = ? WHERE id = ? ", [
+    JSON.stringify(file.info),
+    file.id,
+  ]);
+  span.end();
+}
+
 export async function FileDataDelete(context: Span, id: string): Promise<void> {
   const span = OTelTracer().startSpan("FileDataDelete", context);
   await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE id = ?", [id]);

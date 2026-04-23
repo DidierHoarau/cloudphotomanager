@@ -7,6 +7,7 @@ import {
 import {
   FolderDataAdd,
   FolderDataDeletePathRecursive,
+  FolderDataGetParent,
   FolderDataListSubFolders,
   FolderDataUpdate,
 } from "../folders/FolderData";
@@ -54,10 +55,13 @@ export async function SyncInventorySyncFolder(
     const cloudSubFolderIds = new Set(cloudSubFolders.map((f) => f.id));
     const cloudSubFileIds = new Set(cloudSubFiles.map((f) => f.id));
 
+    let folderStructureChanged = false;
+
     // New Folder
     for (const cloudSubFolder of cloudSubFolders) {
       if (!knownSubFolderIds.has(cloudSubFolder.id)) {
         updated = true;
+        folderStructureChanged = true;
         await FolderDataAdd(span, cloudSubFolder);
         SyncQueueQueueItem(
           account.getAccountDefinition().id,
@@ -83,6 +87,7 @@ export async function SyncInventorySyncFolder(
     for (const knownSubFolder of knownSubFolders) {
       if (!cloudSubFolderIds.has(knownSubFolder.id)) {
         updated = true;
+        folderStructureChanged = true;
         await FolderDataDeletePathRecursive(
           span,
           account.getAccountDefinition().id,
@@ -109,6 +114,21 @@ export async function SyncInventorySyncFolder(
     await FolderDataUpdate(span, knownFolder);
 
     await SyncFileCacheCheckFolder(span, account, knownFolder);
+
+    // If the folder structure changed, queue the parent to re-sync so it
+    // discovers new/deleted subfolders in its own listing
+    if (folderStructureChanged) {
+      const parentFolder = await FolderDataGetParent(span, knownFolder.id);
+      if (parentFolder) {
+        SyncQueueQueueItem(
+          account.getAccountDefinition().id,
+          parentFolder.id,
+          parentFolder,
+          "SyncInventorySyncFolder",
+          priority,
+        );
+      }
+    }
 
     if (updated) {
       SyncEventHistoryAdd({

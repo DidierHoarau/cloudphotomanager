@@ -13,6 +13,7 @@ import {
   FileDataGetFileTmpDir,
   FileDataListByFolder,
   FileDataListForAccount,
+  FileDataUpdateInfo,
   FileDataUpdateKeywords,
 } from "../files/FileData";
 import { Account } from "../model/Account";
@@ -41,13 +42,13 @@ export async function SyncFileCacheInit(context: Span, configIn: Config) {
 export async function SyncFileCacheCheckFolder(
   context: Span,
   account: Account,
-  folder: Folder
+  folder: Folder,
 ) {
   const span = OTelTracer().startSpan("SyncFileCacheCheckFolder", context);
   const files = await FileDataListByFolder(
     span,
     account.getAccountDefinition().id,
-    folder.id
+    folder.id,
   );
   for (const file of files) {
     SyncFileCacheCheckFile(span, account, file);
@@ -58,13 +59,13 @@ export async function SyncFileCacheCheckFolder(
 export async function SyncFileCacheRemoveFile(
   context: Span,
   account: Account,
-  file: File
+  file: File,
 ) {
   const span = OTelTracer().startSpan("SyncFileCacheRemoveFile", context);
   const cacheDir = await FileDataGetFileCacheDir(
     span,
     account.getAccountDefinition().id,
-    file.id
+    file.id,
   );
   await fs.rm(cacheDir, { recursive: true, force: true });
   span.end();
@@ -73,14 +74,14 @@ export async function SyncFileCacheRemoveFile(
 export async function SyncFileCacheCheckAsync(
   accountId: string,
   fileId: string,
-  priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL
+  priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL,
 ) {
   const span = OTelTracer().startSpan("SyncFileCacheCheckFileFromId");
   await SyncFileCacheCheckFile(
     span,
     await AccountFactoryGetAccountImplementation(accountId),
     await FileDataGet(span, fileId),
-    priority
+    priority,
   );
   span.end();
 }
@@ -89,13 +90,13 @@ export async function SyncFileCacheCheckFile(
   context: Span,
   account: Account,
   file: File,
-  priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL
+  priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL,
 ) {
   const span = OTelTracer().startSpan("SyncFileCacheCheckFile", context);
   const cacheDir = await FileDataGetFileCacheDir(
     span,
     account.getAccountDefinition().id,
-    file.id
+    file.id,
   );
   const isImage =
     File.getMediaType(file.filename) === FileMediaType.image ||
@@ -115,7 +116,7 @@ export async function SyncFileCacheCheckFile(
       file.id,
       file,
       "syncThumbnail",
-      priority
+      priority,
     );
   }
 
@@ -125,7 +126,7 @@ export async function SyncFileCacheCheckFile(
       file.id,
       file,
       "syncPhotoFromFull",
-      priority
+      priority,
     );
   }
 
@@ -135,7 +136,7 @@ export async function SyncFileCacheCheckFile(
       file.id,
       file,
       "syncPhotoKeyWords",
-      SyncQueueItemPriority.BATCH
+      SyncQueueItemPriority.BATCH,
     );
   }
 
@@ -145,7 +146,7 @@ export async function SyncFileCacheCheckFile(
       file.id,
       file,
       "syncVideoFromFull",
-      SyncQueueItemPriority.BATCH
+      SyncQueueItemPriority.BATCH,
     );
   }
 
@@ -155,7 +156,7 @@ export async function SyncFileCacheCheckFile(
       file.id,
       file,
       "syncThumbnailFromVideoPreview",
-      priority
+      priority,
     );
   }
 
@@ -166,7 +167,7 @@ export async function SyncFileCacheCleanUp(context: Span, account: Account) {
   const span = OTelTracer().startSpan("SyncFileCacheCleanUp", context);
   const accountFiles = await FileDataListForAccount(
     span,
-    account.getAccountDefinition().id
+    account.getAccountDefinition().id,
   );
   const accountCacheRoot = `${config.DATA_DIR}/cache/${account.getAccountDefinition().id}/`;
   if (!fs.existsSync(accountCacheRoot)) {
@@ -182,7 +183,7 @@ export async function SyncFileCacheCleanUp(context: Span, account: Account) {
     ) {
       logger.info(
         `Cleaning Cache: ${account.getAccountDefinition().id} ${targetFileId}`,
-        span
+        span,
       );
       await fs.remove(cacheFolder);
     }
@@ -194,7 +195,7 @@ export async function SyncFileCacheCleanUp(context: Span, account: Account) {
 
 async function getVideoWidthWithFfprobe(
   context: Span,
-  filePath: string
+  filePath: string,
 ): Promise<number | null> {
   const span = OTelTracer().startSpan("getVideoWidthWithFfprobe", context);
   try {
@@ -219,12 +220,12 @@ export async function syncVideoFromFull(account: Account, file: File) {
     const cacheDir = await FileDataGetFileCacheDir(
       span,
       account.getAccountDefinition().id,
-      file.id
+      file.id,
     );
     const tmpDir = await FileDataGetFileTmpDir(
       span,
       account.getAccountDefinition().id,
-      file.id
+      file.id,
     );
     await fs.ensureDir(cacheDir);
     await fs.remove(tmpDir);
@@ -232,7 +233,7 @@ export async function syncVideoFromFull(account: Account, file: File) {
     const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
     logger.info(
       `Caching video ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
-      span
+      span,
     );
     await account
       .downloadFile(span, file, tmpDir, tmpFileName)
@@ -240,7 +241,7 @@ export async function syncVideoFromFull(account: Account, file: File) {
         let targetWidth = config.VIDEO_PREVIEW_WIDTH;
         const width = await getVideoWidthWithFfprobe(
           span,
-          `${tmpDir}/${tmpFileName}`
+          `${tmpDir}/${tmpFileName}`,
         );
         if (width !== null) {
           if (width > config.VIDEO_PREVIEW_WIDTH) {
@@ -251,16 +252,16 @@ export async function syncVideoFromFull(account: Account, file: File) {
         }
         logger.info(
           await SystemCommand.execute(
-            `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}.mp4 ${targetWidth}`
+            `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}.mp4 ${targetWidth}`,
           ),
-          span
+          span,
         );
         if ((await fs.stat(`${tmpDir}/${tmpFileName}.mp4`)).size === 0) {
           throw new Error("Generated file empty");
         }
         await fs.move(
           `${tmpDir}/${tmpFileName}.mp4`,
-          `${cacheDir}/preview.mp4`
+          `${cacheDir}/preview.mp4`,
         );
       })
       .catch((err) => {
@@ -282,19 +283,19 @@ export async function syncPhotoFromFull(account: Account, file: File) {
     const cacheDir = await FileDataGetFileCacheDir(
       span,
       account.getAccountDefinition().id,
-      file.id
+      file.id,
     );
     const tmpDir = await FileDataGetFileTmpDir(
       span,
       account.getAccountDefinition().id,
-      file.id
+      file.id,
     );
     await fs.ensureDir(cacheDir);
     await fs.ensureDir(tmpDir);
     let tmpFileName = `tmp.${file.filename.split(".").pop()}`;
     logger.info(
       `Caching photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
-      span
+      span,
     );
     await account
       .downloadFile(span, file, tmpDir, tmpFileName)
@@ -302,19 +303,34 @@ export async function syncPhotoFromFull(account: Account, file: File) {
         if (File.getMediaType(file.filename) === FileMediaType.imageRaw) {
           logger.info(
             await SystemCommand.execute(
-              `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`
+              `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`,
             ),
-            span
+            span,
           );
           tmpFileName += "_raw.jpg";
         }
+        // Extract and store EXIF from the source file before rotating
+        try {
+          const srcMeta = await sharp(`${tmpDir}/${tmpFileName}`).metadata();
+          if (srcMeta && srcMeta.exif) {
+            file.info.exif = exifReader(srcMeta.exif);
+          }
+        } catch (_) {
+          logger.info(
+            `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
+          );
+        }
+        await FileDataUpdateInfo(span, file);
+        // Auto-rotate pixels based on EXIF orientation tag, then strip it
         await sharp(`${tmpDir}/${tmpFileName}`)
+          .rotate()
           .withMetadata()
           .resize({ width: 300 })
           .toFile(`${cacheDir}/thumbnail.webp`);
         await sharp(`${tmpDir}/${tmpFileName}`)
+          .rotate()
           .withMetadata()
-          .resize({ width: 2000 })
+          .resize({ width: 2000, height: 2000, fit: "inside" })
           .toFile(`${cacheDir}/preview.webp`);
       })
       .catch((err) => {
@@ -335,13 +351,13 @@ export async function syncPhotoKeyWords(account: Account, file: File) {
   const cacheDir = await FileDataGetFileCacheDir(
     span,
     account.getAccountDefinition().id,
-    file.id
+    file.id,
   );
   const tmpDir =
     (await FileDataGetFileTmpDir(
       span,
       account.getAccountDefinition().id,
-      file.id
+      file.id,
     )) + "_image_classification";
   const hasImagePreview = fs.existsSync(`${cacheDir}/preview.webp`);
   file.keywords = file.filename;
@@ -353,7 +369,7 @@ export async function syncPhotoKeyWords(account: Account, file: File) {
     await fs.ensureDir(tmpDir);
     const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
     logger.info(
-      `Generating Keywords for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`
+      `Generating Keywords for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
     );
     await sharp(`${cacheDir}/preview.webp`)
       .withMetadata()
@@ -363,7 +379,7 @@ export async function syncPhotoKeyWords(account: Account, file: File) {
           const metadata = await sharp(`${cacheDir}/preview.webp`).metadata();
           if (metadata && metadata.exif) {
             const exif = exifReader(
-              (await sharp(`${cacheDir}/preview.webp`).metadata()).exif
+              (await sharp(`${cacheDir}/preview.webp`).metadata()).exif,
             );
 
             file.info.exif = exif;
@@ -371,12 +387,12 @@ export async function syncPhotoKeyWords(account: Account, file: File) {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (err) {
           logger.info(
-            `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`
+            `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
           );
         }
         const classificationResults = await AnalysisImagesGetLabels(
           span,
-          `${tmpDir}/${tmpFileName}.jpeg`
+          `${tmpDir}/${tmpFileName}.jpeg`,
         );
         classificationResults.forEach((result) => {
           if (result.score > 0.5) {
@@ -400,24 +416,25 @@ export async function syncThumbnail(account: Account, file: File) {
     const cacheDir = await FileDataGetFileCacheDir(
       span,
       account.getAccountDefinition().id,
-      file.id
+      file.id,
     );
     const tmpDir = await FileDataGetFileTmpDir(
       span,
       account.getAccountDefinition().id,
-      file.id
+      file.id,
     );
     await fs.ensureDir(cacheDir);
     await fs.ensureDir(`${tmpDir}/tmp_tumbnail`);
     const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
     logger.info(
       `Caching thumbnail ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
-      span
+      span,
     );
     await account
       .downloadThumbnail(span, file, `${tmpDir}/tmp_tumbnail`, tmpFileName)
       .then(async () => {
         await sharp(`${tmpDir}/tmp_tumbnail/${tmpFileName}`)
+          .rotate()
           .withMetadata()
           .resize({ width: 300 })
           .toFile(`${cacheDir}/thumbnail.webp`);
@@ -437,29 +454,29 @@ export async function syncThumbnail(account: Account, file: File) {
 
 export async function syncThumbnailFromVideoPreview(
   account: Account,
-  file: File
+  file: File,
 ) {
   const span = OTelTracer().startSpan("syncThumbnailFromVideoPreview");
   try {
     const cacheDir = await FileDataGetFileCacheDir(
       span,
       account.getAccountDefinition().id,
-      file.id
+      file.id,
     );
     const tmpDir = await FileDataGetFileTmpDir(
       span,
       account.getAccountDefinition().id,
-      file.id
+      file.id,
     );
     await fs.ensureDir(cacheDir);
     await fs.remove(tmpDir);
     await fs.ensureDir(tmpDir);
     logger.info(
       `Generating video thumbnail ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
-      span
+      span,
     );
     await SystemCommand.execute(
-      `${config.TOOLS_DIR}/tools-video-generate-thumbnail.sh ${cacheDir}/preview.mp4 ${tmpDir}/thumbnail.jpg`
+      `${config.TOOLS_DIR}/tools-video-generate-thumbnail.sh ${cacheDir}/preview.mp4 ${tmpDir}/thumbnail.jpg`,
     )
       .then(async (output: string) => {
         logger.info(output, span);

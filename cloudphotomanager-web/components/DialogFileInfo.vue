@@ -8,8 +8,8 @@
         @onCancel="showConfirmDelete = false"
       />
     </div>
-    <div class="file-info-overlay" @click.self="clickedClose()">
-      <article class="file-info-dialog">
+    <div class="dialog-overlay" @click.self="clickedClose()">
+      <article class="dialog-article">
         <header>
           <a
             href="#close"
@@ -19,21 +19,24 @@
           ></a>
           File Info
         </header>
-        <div class="file-info-thumbnail">
+        <div class="dialog-thumbnail">
           <img
             :src="thumbnailUrl"
-            onerror="this.onerror=null;this.src='/images/file-sync-in-progress.webp';"
+            onerror="
+              this.onerror = null;
+              this.src = '/images/file-sync-in-progress.webp';
+            "
             alt="Thumbnail"
           />
         </div>
-        <table class="file-info-table">
+        <table class="dialog-info-table">
           <tbody>
             <tr>
-              <td class="file-info-label">Name</td>
+              <td class="dialog-info-label">Name</td>
               <td>{{ file.filename }}</td>
             </tr>
             <tr>
-              <td class="file-info-label">Location</td>
+              <td class="dialog-info-label">Location</td>
               <td>
                 <NuxtLink
                   :to="folderLink(file.accountId, file.folderId)"
@@ -44,11 +47,11 @@
               </td>
             </tr>
             <tr>
-              <td class="file-info-label">Date</td>
+              <td class="dialog-info-label">Date</td>
               <td>{{ formatDate(file.dateMedia || file.dateSync) }}</td>
             </tr>
             <tr>
-              <td class="file-info-label">Size</td>
+              <td class="dialog-info-label">Size</td>
               <td>{{ formatSize(file.info && file.info.size) }}</td>
             </tr>
           </tbody>
@@ -57,7 +60,7 @@
         <strong>Duplicates</strong>
         <Loading v-if="loadingDuplicates" />
         <p v-else-if="!duplicates"><small>No duplicates found.</small></p>
-        <div v-else class="duplicate-files-table">
+        <div v-else class="dialog-files-table">
           <table>
             <thead>
               <tr>
@@ -79,7 +82,7 @@
                 <td>{{ dup.filename }}</td>
                 <td v-if="isAdmin">
                   <button
-                    class="dup-delete-btn"
+                    class="dialog-delete-btn"
                     @click="clickedDeleteDuplicate(dup)"
                     :disabled="isDupProcessing(dup.id)"
                     title="Delete this duplicate"
@@ -232,69 +235,6 @@ export default {
 </script>
 
 <style scoped>
-.file-info-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-}
-.file-info-dialog {
-  max-width: 90vw;
-  max-height: 85vh;
-  overflow-y: auto;
-  width: 30em;
-}
-.file-info-thumbnail {
-  text-align: center;
-  margin-bottom: 0.75em;
-}
-.file-info-thumbnail img {
-  max-width: 100%;
-  max-height: 12em;
-  object-fit: contain;
-  border-radius: 0.35em;
-}
-.file-info-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.file-info-table td {
-  padding: 0.3em 0;
-  vertical-align: top;
-  word-break: break-all;
-}
-.file-info-label {
-  font-weight: 600;
-  white-space: nowrap;
-  padding-right: 1em;
-  width: 5em;
-}
-.duplicate-files-table {
-  max-width: 100%;
-  overflow-x: hidden;
-  margin-top: 0.5em;
-}
-.duplicate-files-table table {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: collapse;
-}
-.duplicate-files-table td,
-.duplicate-files-table th {
-  word-break: break-all;
-  overflow-wrap: anywhere;
-  padding: 0.3em 0.4em;
-  vertical-align: middle;
-}
-.duplicate-files-table th:last-child,
-.duplicate-files-table td:last-child {
-  width: 2.5em;
-  text-align: center;
-  word-break: normal;
-}
 .confirm-overlay {
   position: fixed;
   inset: 0;
@@ -303,22 +243,5 @@ export default {
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.5);
-}
-.dup-delete-btn {
-  background: transparent;
-  border: none;
-  color: #dc3545;
-  cursor: pointer;
-  padding: 0.2em 0.4em;
-  font-size: 0.9em;
-  border-radius: 0.25em;
-  transition: background 0.15s;
-}
-.dup-delete-btn:hover:not(:disabled) {
-  background: rgba(220, 53, 69, 0.15);
-}
-.dup-delete-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
 }
 </style>

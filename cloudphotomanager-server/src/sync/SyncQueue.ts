@@ -9,7 +9,11 @@ import { PromisePool } from "../utils-std-ts/PromisePool";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
-import { FolderDataGet } from "../folders/FolderData";
+import {
+  FolderDataAdd,
+  FolderDataGet,
+  FolderDataGetParent,
+} from "../folders/FolderData";
 import { SyncInventorySyncFolder } from "./SyncInventory";
 import {
   syncVideoFromFull,
@@ -20,7 +24,7 @@ import {
   SyncFileCacheCheckFile,
   SyncFileCacheRemoveFile,
 } from "./SyncFileCache";
-import { FileDataGet } from "../files/FileData";
+import { FileDataGet, FileDataUpdateKeywords } from "../files/FileData";
 
 const MAX_PARALLEL_SYNC = 3;
 const QUEUE_FILE_PATH = path.join(
@@ -379,10 +383,17 @@ async function fileDeleteOperation(
         `Delete file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename}`,
         spanSubProcess,
       );
+      const folderId = file.folderId;
       await account.deleteFile(spanSubProcess, file);
-      const folder = await FolderDataGet(spanSubProcess, file.folderId);
+      const folder = await FolderDataGet(spanSubProcess, folderId);
       if (folder) {
-        await SyncInventorySyncFolder(account, folder);
+        SyncQueueQueueItem(
+          account.getAccountDefinition().id,
+          folder.id,
+          folder,
+          "SyncInventorySyncFolder",
+          SyncQueueItemPriority.INTERACTIVE,
+        );
       }
     }
   } catch (err) {
@@ -407,19 +418,60 @@ async function folderMoveOperation(
         spanSubProcess,
       );
       await account.moveFile(spanSubProcess, file, data.folderpath);
+
+      // Re-sync the source folder
       const initialFolder = await FolderDataGet(
         spanSubProcess,
         initialFolderId,
       );
       if (initialFolder) {
-        await SyncInventorySyncFolder(account, initialFolder);
+        SyncQueueQueueItem(
+          account.getAccountDefinition().id,
+          initialFolder.id,
+          initialFolder,
+          "SyncInventorySyncFolder",
+          SyncQueueItemPriority.INTERACTIVE,
+        );
       }
-      const targetFolder = await account.getFolderByPath(
+
+      // Get (or create) the target folder in the local DB, then re-sync it
+      // and also queue a re-sync of its parent so the parent discovers the new child
+      const targetFolderCloud = await account.getFolderByPath(
         spanSubProcess,
         data.folderpath,
       );
-      if (targetFolder) {
-        await SyncInventorySyncFolder(account, targetFolder);
+      if (targetFolderCloud) {
+        let targetFolderDb = await FolderDataGet(
+          spanSubProcess,
+          targetFolderCloud.id,
+        );
+        if (!targetFolderDb) {
+          // New folder — persist it so SyncInventorySyncFolder can run on it
+          targetFolderCloud.dateSync = new Date(0);
+          await FolderDataAdd(spanSubProcess, targetFolderCloud);
+          targetFolderDb = targetFolderCloud;
+        }
+        SyncQueueQueueItem(
+          account.getAccountDefinition().id,
+          targetFolderDb.id,
+          targetFolderDb,
+          "SyncInventorySyncFolder",
+          SyncQueueItemPriority.INTERACTIVE,
+        );
+        // Queue the parent of the target folder so it picks up the new subfolder
+        const targetParent = await FolderDataGetParent(
+          spanSubProcess,
+          targetFolderDb.id,
+        );
+        if (targetParent) {
+          SyncQueueQueueItem(
+            account.getAccountDefinition().id,
+            targetParent.id,
+            targetParent,
+            "SyncInventorySyncFolder",
+            SyncQueueItemPriority.INTERACTIVE,
+          );
+        }
       }
     }
   } catch (err) {
@@ -445,7 +497,13 @@ async function fileRenameOperation(
       await account.renameFile(spanSubProcess, file, data.filename);
       const folder = await FolderDataGet(spanSubProcess, file.folderId);
       if (folder) {
-        await SyncInventorySyncFolder(account, folder);
+        SyncQueueQueueItem(
+          account.getAccountDefinition().id,
+          folder.id,
+          folder,
+          "SyncInventorySyncFolder",
+          SyncQueueItemPriority.INTERACTIVE,
+        );
       }
     }
   } catch (err) {
@@ -469,6 +527,9 @@ async function fileCacheRebuildOperation(
         spanSubProcess,
       );
       await SyncFileCacheRemoveFile(spanSubProcess, account, file);
+      // Reset keywords so syncPhotoKeyWords is re-queued to re-extract EXIF
+      file.keywords = null;
+      await FileDataUpdateKeywords(spanSubProcess, file);
       SyncFileCacheCheckFile(spanSubProcess, account, file);
     }
   } catch (err) {

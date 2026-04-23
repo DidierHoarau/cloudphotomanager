@@ -13,6 +13,11 @@ import { OTelTracer } from "../OTelContext";
 let cacheAccountsFolders: any[] = [];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let cacheAccountsFoldersCounts: any[] = [];
+let onCacheRefreshed: (() => void) | null = null;
+
+export function FolderDataRegisterOnCacheRefreshed(fn: () => void): void {
+  onCacheRefreshed = fn;
+}
 
 //
 export async function FolderDataInit(context: Span) {
@@ -211,7 +216,7 @@ export async function FolderDataDelete(
   const span = OTelTracer().startSpan("FolderDataDelete", context);
   await SqlDbUtilsExecSQL(
     span,
-    "DELETE FROM files WHERE accountId = ? AND id = ?",
+    "DELETE FROM folders WHERE accountId = ? AND id = ?",
     [accountId, id]
   );
   FolderDataCacheCounts();
@@ -325,10 +330,10 @@ export async function FolderDataRefreshCacheFolders(
   const newCache: any = {};
   const accounts = await AccountDataList(span);
   for (const account of accounts) {
-    newCache[account.id] = FolderDataListForAccount(span, account.id);
+    newCache[account.id] = await FolderDataListForAccount(span, account.id);
   }
   cacheAccountsFolders = newCache;
-  FolderDataRefreshCacheFoldersCounts(span);
+  await FolderDataRefreshCacheFoldersCounts(span);
   span.end();
 }
 
@@ -343,7 +348,7 @@ export async function FolderDataRefreshCacheFoldersCounts(
   const newCache: any = {};
   const accounts = await AccountDataList(span);
   for (const account of accounts) {
-    newCache[account.id] = FolderDataListCountsForAccount(span, account.id);
+    newCache[account.id] = await FolderDataListCountsForAccount(span, account.id);
   }
   cacheAccountsFoldersCounts = newCache;
   span.end();
@@ -394,8 +399,8 @@ export async function FolderDataGetCount(context: Span): Promise<number> {
 const FolderDataCacheCountsDebounced = debounce(async () => {
   const span = OTelTracer().startSpan("FolderDataCacheCounts");
   await FolderDataRefreshCacheFolders(span);
-  await FolderDataRefreshCacheFoldersCounts(span);
   span.end();
+  onCacheRefreshed?.();
 }, 500);
 
 function FolderDataCacheCounts() {

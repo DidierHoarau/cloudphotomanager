@@ -192,6 +192,7 @@ export default {
       file: null,
       files: [],
       position: 0,
+      navigating: false,
       videoDelayedLoadingDone: false,
       videoUnavailable: false,
       mediaLoading: true,
@@ -221,15 +222,22 @@ export default {
       this.files = newFiles;
       if (!currentId) {
         this.position = Math.min(this.position, newFiles.length - 1);
+        // Only reload if not already showing the right file
         this.loadMedia();
         return;
       }
       const newIndex = newFiles.findIndex((f) => f.id === currentId);
       if (newIndex >= 0) {
+        // Current file still exists — just keep position in sync, no reload
         this.position = newIndex;
       } else {
-        this.position = Math.min(this.position, newFiles.length - 1);
-        this.loadMedia();
+        // Current file was removed externally (e.g. parent re-fetched)
+        // Don't double-advance if removeFileAndAdvance already ran
+        if (!this._removedByOperation) {
+          this.position = Math.min(this.position, newFiles.length - 1);
+          this.loadMedia();
+        }
+        this._removedByOperation = false;
       }
     },
   },
@@ -252,10 +260,13 @@ export default {
       if (!this.file) return;
       const operationName = message?.operationName || "";
       const affectedFileIds = message?.fileIds || [];
+      // fileDelete: only act if the current file was NOT already removed
+      // optimistically (removeFileAndAdvance sets _removedByOperation)
       if (
         operationName === "fileDelete" &&
         affectedFileIds.includes(this.file.id)
       ) {
+        this._removedByOperation = true;
         this.removeFileAndAdvance(affectedFileIds);
       }
     };
@@ -348,8 +359,10 @@ export default {
       return FileUtils.getType(file);
     },
     removeFileAndAdvance(fileIds) {
-      const removeIndex = this.files.findIndex((f) => fileIds.includes(f.id));
-      this.files = this.files.filter((f) => !fileIds.includes(f.id));
+      const removeSet = new Set(fileIds);
+      const removeIndex = this.files.findIndex((f) => removeSet.has(f.id));
+      this.files = this.files.filter((f) => !removeSet.has(f.id));
+      this._removedByOperation = true;
       if (this.files.length === 0) {
         this.clickedClose();
       } else {
@@ -376,6 +389,9 @@ export default {
           EventBus.emit(EventTypes.ALERT_MESSAGE, {
             text: "Delete queued \u2014 running in background",
           });
+          // Advance immediately (optimistic). Mark so the galleryFiles watcher
+          // and the OPERATION_COMPLETE listener don't double-advance.
+          this._removedByOperation = true;
           this.removeFileAndAdvance([fileId]);
         } catch (err) {
           handleError(err);
@@ -392,10 +408,13 @@ export default {
     onOperationDone() {
       this.activeOperation = "";
       if (this.file) {
+        // Mark so the galleryFiles watcher doesn't double-advance
+        this._removedByOperation = true;
         this.removeFileAndAdvance([this.file.id]);
       }
     },
     navigateMedia(direction) {
+      if (this.navigating) return;
       const isPrevious = direction === "previous";
       if (this.files.length === 0) return;
       if (isPrevious && this.position === 0) return;
@@ -412,7 +431,13 @@ export default {
       if (newPos < 0 || newPos >= this.files.length) return;
       const mediaDomElement =
         this.$refs.mediaContainer?.querySelector(".media-content");
-      if (!mediaDomElement) return;
+      if (!mediaDomElement) {
+        // No animation possible, navigate immediately
+        this.position = newPos;
+        this.loadMedia();
+        return;
+      }
+      this.navigating = true;
       const outClass = isPrevious
         ? "animate-media-out-right"
         : "animate-media-out-left";
@@ -429,6 +454,7 @@ export default {
       setTimeout(() => {
         mediaDomElement.classList.remove("animate-media-in-left");
         mediaDomElement.classList.remove("animate-media-in-right");
+        this.navigating = false;
       }, 700);
     },
     previousMedia() {

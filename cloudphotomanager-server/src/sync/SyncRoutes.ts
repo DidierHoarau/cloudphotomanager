@@ -8,6 +8,7 @@ import {
   SyncQueueGetQueue,
   SyncQueueRegisterBroadcast,
 } from "./SyncQueue";
+import { FolderDataRegisterOnCacheRefreshed } from "../folders/FolderData";
 
 const wsClients = new Set<WebSocket>();
 
@@ -29,6 +30,10 @@ export class SyncRoutes {
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     // Register the broadcast function for queue events
     SyncQueueRegisterBroadcast(broadcastToClients);
+    // Notify clients when folder cache is refreshed
+    FolderDataRegisterOnCacheRefreshed(() =>
+      broadcastToClients({ type: "folder_cache_updated" })
+    );
 
     //
     fastify.get("/status", async (req, res) => {

@@ -2,17 +2,35 @@
   <dialog open>
     <article>
       <header>
-        <a href="#close" aria-label="Close" class="close" v-on:click="clickedClose()"></a>
+        <a
+          href="#close"
+          aria-label="Close"
+          class="close"
+          v-on:click="clickedClose()"
+        ></a>
         Folder Permissions
       </header>
       <label>Add Folder Permission</label>
-      <FolderList class="dialog-folder-selection" @onFolderSelected="onFolderSelected" />
+      <FolderList
+        class="dialog-folder-selection"
+        @onFolderSelected="onFolderSelected"
+      />
       <input id="name" v-model="selectedFolderpath" type="text" />
       <label for="recursive">
-        <input type="checkbox" id="recursive" name="recursive" v-model="isRecursive" />
+        <input
+          type="checkbox"
+          id="recursive"
+          name="recursive"
+          v-model="isRecursive"
+        />
         Recursive
       </label>
-      <button :disabled="loading || selectedFolderpath === ''" v-on:click="doAction()">Add</button>
+      <button
+        :disabled="loading || selectedFolderpath === ''"
+        v-on:click="doAction()"
+      >
+        Add
+      </button>
     </article>
   </dialog>
 </template>
@@ -55,24 +73,32 @@ export default {
     async doAction() {
       this.loading = true;
       await axios
-        .get(`${(await Config.get()).SERVER_URL}/users/${this.userId}/permissions`, await AuthService.getAuthHeader())
+        .get(
+          `${(await Config.get()).SERVER_URL}/users/${this.userId}/permissions`,
+          await AuthService.getAuthHeader(),
+        )
         .then(async (res) => {
           const permissions = res.data;
           if (!permissions.info.folders) {
             permissions.info.folders = [];
           }
-          const folderPermission = find(permissions.folders, { folderId: this.selectedFolder.id });
+          const folderPermission = find(permissions.folders, {
+            folderId: this.selectedFolder.id,
+          });
           if (!folderPermission) {
             let scope = "ro";
             if (this.isRecursive) {
               scope = "ro_recursive";
             }
-            permissions.info.folders.push({ folderId: this.selectedFolder.id, scope });
+            permissions.info.folders.push({
+              folderId: this.selectedFolder.id,
+              scope,
+            });
           }
           await axios.put(
             `${(await Config.get()).SERVER_URL}/users/${this.userId}/permissions`,
             permissions,
-            await AuthService.getAuthHeader()
+            await AuthService.getAuthHeader(),
           );
           this.$emit("onDone", { status: "invalidated" });
         })
@@ -88,29 +114,5 @@ export default {
   width: 100%;
   min-width: 20em;
   height: 15em;
-}
-.file-preview img {
-  max-width: 100%;
-  height: auto;
-  max-height: 100%;
-}
-.file-preview .action {
-  font-size: 1.5em;
-  position: fixed;
-  right: 1em;
-  top: 1em;
-  color: #aaf;
-}
-.file-preview-operations {
-  font-size: 1.5em;
-  position: fixed;
-  bottom: 1em;
-  right: 1em;
-  color: #aaf;
-}
-.file-preview-operations button {
-  padding: 0.3em 0.7em;
-  font-size: 0.5em;
-  opacity: 0.5;
 }
 </style>
