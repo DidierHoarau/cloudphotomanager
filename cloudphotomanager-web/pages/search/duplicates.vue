@@ -18,74 +18,40 @@
     </div>
     <div class="analysis-item-list">
       <Loading v-if="loading" />
-      <div v-else class="duplicate-card-grid">
-        <div
-          v-for="file in pagedFiles"
-          :key="file.id"
-          class="duplicate-card"
-        >
-          <div class="duplicate-card-thumb" @click="focusGalleryItem(file)">
-            <img
-              :src="getThumbnailUrl(file)"
-              onerror="
-                this.onerror = null;
-                this.src = '/images/file-sync-in-progress.webp';
-              "
-              alt="thumbnail"
-            />
-            <span class="duplicate-card-badge"
-              >x{{ file.duplicates.files.length }}</span
-            >
-          </div>
-          <div class="duplicate-card-paths">
-            <div
-              v-for="dup in file.duplicates.files"
-              :key="dup.id"
-              class="duplicate-card-path"
-            >
-              {{ getFolderPath(dup.folderId) }}/{{ dup.filename }}
+      <template v-else>
+        <div class="duplicate-card-grid">
+          <div
+            v-for="file in visibleFiles"
+            :key="file.id"
+            class="duplicate-card"
+          >
+            <div class="duplicate-card-thumb" @click="focusGalleryItem(file)">
+              <img
+                :src="getThumbnailUrl(file)"
+                onerror="
+                  this.onerror = null;
+                  this.src = '/images/file-sync-in-progress.webp';
+                "
+                alt="thumbnail"
+              />
+              <span class="duplicate-card-badge"
+                >x{{ file.duplicates.files.length }}</span
+              >
+            </div>
+            <div class="duplicate-card-paths">
+              <div
+                v-for="dup in file.duplicates.files"
+                :key="dup.id"
+                class="duplicate-card-path"
+              >
+                {{ getFolderPath(dup.folderId) }}/{{ dup.filename }}
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <!-- Pagination controls -->
-      <div v-if="!loading && totalPages > 1" class="dup-pagination">
-        <button
-          class="dup-page-btn"
-          :disabled="currentPage === 0"
-          @click="currentPage = 0"
-          title="First page"
-        >
-          <i class="bi bi-chevron-double-left"></i>
-        </button>
-        <button
-          class="dup-page-btn"
-          :disabled="currentPage === 0"
-          @click="currentPage--"
-          title="Previous page"
-        >
-          <i class="bi bi-chevron-left"></i>
-        </button>
-        <span class="dup-page-info"
-          >{{ currentPage + 1 }} / {{ totalPages }}</span
-        >
-        <button
-          class="dup-page-btn"
-          :disabled="currentPage >= totalPages - 1"
-          @click="currentPage++"
-          title="Next page"
-        >
-          <i class="bi bi-chevron-right"></i>
-        </button>
-        <button
-          class="dup-page-btn"
-          :disabled="currentPage >= totalPages - 1"
-          @click="currentPage = totalPages - 1"
-          title="Last page"
-        >
-          <i class="bi bi-chevron-double-right"></i>
-        </button>
-      </div>
+        <div ref="sentinel" class="sentinel"></div>
+        <Loading v-if="loadingMore" />
+      </template>
     </div>
 
     <!-- Detail dialog -->
@@ -179,11 +145,13 @@ export default {
       staticUrl: "",
       selectedFile: null,
       loading: false,
+      loadingMore: false,
       requestEtag: "",
       analysisFilter: "",
       activeFilter: "",
-      currentPage: 0,
+      visibleCount: 60,
       pageSize: 60,
+      observer: null,
       selectedFiles: [],
       showConfirmDialog: false,
       confirmDialogTitle: "",
@@ -198,13 +166,40 @@ export default {
     await AccountsStore().fetch();
     await FoldersStore().fetch();
   },
+  mounted() {
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          this.hasMore &&
+          !this.loadingMore &&
+          !this.loading
+        ) {
+          this.loadMore();
+        }
+      },
+      { threshold: 0.1 },
+    );
+    if (this.$refs.sentinel) {
+      this.observer.observe(this.$refs.sentinel);
+    }
+  },
+  updated() {
+    if (this.observer && this.$refs.sentinel) {
+      this.observer.observe(this.$refs.sentinel);
+    }
+  },
+  beforeUnmount() {
+    if (this.observer) {
+      this.observer.disconnect();
+    }
+  },
   computed: {
-    totalPages() {
-      return Math.max(1, Math.ceil(this.filteredFiles.length / this.pageSize));
+    visibleFiles() {
+      return this.filteredFiles.slice(0, this.visibleCount);
     },
-    pagedFiles() {
-      const start = this.currentPage * this.pageSize;
-      return this.filteredFiles.slice(start, start + this.pageSize);
+    hasMore() {
+      return this.visibleCount < this.filteredFiles.length;
     },
     folderMap() {
       const map = new Map();
@@ -230,7 +225,7 @@ export default {
   },
   watch: {
     activeFilter() {
-      this.currentPage = 0;
+      this.visibleCount = this.pageSize;
     },
   },
   methods: {
@@ -239,7 +234,7 @@ export default {
       this.requestEtag = requestEtag;
       this.loading = true;
       this.analysis = [];
-      this.currentPage = 0;
+      this.visibleCount = this.pageSize;
       await axios
         .get(
           `${
@@ -348,6 +343,18 @@ export default {
       if (this.confirmDialogCallback) {
         this.confirmDialogCallback();
       }
+    },
+    loadMore() {
+      if (!this.hasMore || this.loadingMore) return;
+      this.loadingMore = true;
+      // Use setTimeout to let the browser paint before extending the list
+      setTimeout(() => {
+        this.visibleCount = Math.min(
+          this.visibleCount + this.pageSize,
+          this.filteredFiles.length,
+        );
+        this.loadingMore = false;
+      }, 50);
     },
     clickedClose() {
       this.selectedFile = null;
@@ -505,35 +512,9 @@ export default {
   cursor: default;
 }
 
-/* ── Pagination ──────────────────────────────────────────── */
-.dup-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4em;
-  padding-top: 1em;
-}
-.dup-page-btn {
-  background: transparent;
-  border: 1px solid var(--pico-muted-border-color, #555);
-  color: inherit;
-  cursor: pointer;
-  padding: 0.3em 0.6em;
-  border-radius: 0.3em;
-  font-size: 0.9em;
-  line-height: 1;
-  transition: background 0.15s;
-}
-.dup-page-btn:hover:not(:disabled) {
-  background: var(--pico-primary-background, rgba(255, 255, 255, 0.08));
-}
-.dup-page-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-.dup-page-info {
-  min-width: 5em;
-  text-align: center;
-  font-size: 0.9em;
+/* ── Infinite scroll sentinel ────────────────────────────── */
+.sentinel {
+  height: 1px;
+  width: 100%;
 }
 </style>
