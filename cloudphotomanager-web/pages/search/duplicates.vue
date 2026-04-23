@@ -447,6 +447,30 @@ export default {
   overflow-y: auto;
   width: 30em;
 }
+.dup-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dup-dialog header a.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5em;
+  height: 1.5em;
+  cursor: pointer;
+  opacity: 0.6;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.dup-dialog header a.close::before {
+  content: "\00d7";
+  font-size: 1.5em;
+  line-height: 1;
+}
+.dup-dialog header a.close:hover {
+  opacity: 1;
+}
 .dup-dialog-thumb {
   text-align: center;
   margin-bottom: 0.75em;
