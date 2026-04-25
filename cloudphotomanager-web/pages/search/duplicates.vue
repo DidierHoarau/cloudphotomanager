@@ -34,7 +34,7 @@
                 "
                 alt="thumbnail"
               />
-              <span class="duplicate-card-badge"
+              <span class="gallery-duplicate-badge"
                 >x{{ file.duplicates.files.length }}</span
               >
             </div>
@@ -407,17 +407,6 @@ export default {
   object-fit: cover;
   border-radius: 0.3em;
   display: block;
-}
-.duplicate-card-badge {
-  position: absolute;
-  top: 0.3em;
-  right: 0.3em;
-  background: rgba(20, 20, 40, 0.75);
-  color: #aaf;
-  font-size: 0.7em;
-  padding: 0.15em 0.45em;
-  border-radius: 0.9em;
-  pointer-events: none;
 }
 .duplicate-card-paths {
   display: flex;

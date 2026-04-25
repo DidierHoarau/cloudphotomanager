@@ -7,6 +7,7 @@
       :file="file"
       :enableSelection="enableSelection"
       :selectedFiles="selectedFiles"
+      :duplicateCount="duplicateCounts[file.id] || 0"
       @onFileSelected="onFileSelected"
       @focusGalleryItem="focusGalleryItem"
     />
@@ -30,6 +31,11 @@ export default {
       type: Boolean,
       required: false,
       default: () => true,
+    },
+    duplicateCounts: {
+      type: Object,
+      required: false,
+      default: () => ({}),
     },
   },
   methods: {

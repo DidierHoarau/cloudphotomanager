@@ -34,6 +34,43 @@ export async function AnalysisDataGetFileDuplicates(
   return result;
 }
 
+export async function AnalysisDataGetFilesDuplicateCounts(
+  context: Span,
+  accountId: string,
+  fileIds: string[],
+): Promise<Record<string, number>> {
+  const span = OTelTracer().startSpan(
+    "AnalysisData_getFilesDuplicateCounts",
+    context,
+  );
+  const result: Record<string, number> = {};
+  if (!fileIds || fileIds.length === 0) {
+    span.end();
+    return result;
+  }
+  const placeholders = fileIds.map(() => "?").join(", ");
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT f.id AS id, " +
+      "       (SELECT COUNT(*) FROM files f2 " +
+      "          WHERE f2.accountId = f.accountId AND f2.hash = f.hash) AS count " +
+      "  FROM files f " +
+      " WHERE f.accountId = ? " +
+      "   AND f.hash IS NOT NULL " +
+      "   AND f.hash != '' " +
+      `   AND f.id IN (${placeholders})`,
+    [accountId, ...fileIds],
+  );
+  for (const row of rawData) {
+    const count = Number(row.count);
+    if (count >= 2) {
+      result[row.id] = count;
+    }
+  }
+  span.end();
+  return result;
+}
+
 export async function AnalysisDataListAccountDuplicates(
   context: Span,
   accountId: string,
