@@ -94,25 +94,45 @@
       </div>
     </div>
     <div id="media-container" ref="mediaContainer">
+      <img
+        v-if="
+          file &&
+          getType(file) !== 'unknown' &&
+          thumbnailBackdropVisible &&
+          (mediaLoading || imageUnavailable || videoUnavailable)
+        "
+        class="media-thumb-backdrop"
+        :src="getThumbnailSource(file)"
+        fetchpriority="low"
+        decoding="async"
+        alt=""
+        @error="onThumbnailBackdropError"
+      />
       <Loading v-if="mediaLoading" class="media-loading" />
       <div v-if="isCurrentFileProcessing" class="processing-banner">
         <i class="bi bi-hourglass-split"></i>&nbsp; Operation in progress...
       </div>
-      <img
-        class="media-content"
-        v-if="file && getType(file) == 'image'"
-        :src="getImageSource(file)"
-        ref="zoomableImage"
-        :style="imageTransformStyle"
-        :class="{ 'media-hidden': mediaLoading }"
-        @load="onMediaLoaded"
-        @error="onMediaLoaded"
-        @wheel.prevent="onImageWheel"
-        @mousedown="onImageMouseDown"
-        @mousemove="onImageMouseMove"
-        @mouseup="onImageMouseUp"
-        @mouseleave="onImageMouseUp"
-      />
+      <template v-if="file && getType(file) == 'image'">
+        <img
+          class="media-content"
+          v-if="!imageUnavailable"
+          :src="getImageSource(file)"
+          ref="zoomableImage"
+          :style="imageTransformStyle"
+          :class="{ 'media-hidden': mediaLoading }"
+          @load="onMediaLoaded"
+          @error="onImageError"
+          @wheel.prevent="onImageWheel"
+          @mousedown="onImageMouseDown"
+          @mousemove="onImageMouseMove"
+          @mouseup="onImageMouseUp"
+          @mouseleave="onImageMouseUp"
+        />
+        <div v-else class="media-unavailable">
+          <i class="bi bi-cloud-arrow-down"></i>
+          <p>Image not yet available &mdash; still synchronizing</p>
+        </div>
+      </template>
       <template
         v-if="file && videoDelayedLoadingDone && getType(file) == 'video'"
       >
@@ -130,9 +150,9 @@
             @error="onVideoError"
           />
         </video>
-        <div v-else class="video-unavailable">
+        <div v-else class="media-unavailable">
           <i class="bi bi-camera-video-off"></i>
-          <p>Video not yet available</p>
+          <p>Video not yet available &mdash; still synchronizing</p>
         </div>
       </template>
     </div>
@@ -163,6 +183,7 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { FileUtils } from "~~/services/FileUtils";
+import { MediaUrls } from "~~/services/MediaUrls";
 import * as Hammer from "hammerjs";
 import { findIndex } from "lodash";
 
@@ -195,6 +216,8 @@ export default {
       navigating: false,
       videoDelayedLoadingDone: false,
       videoUnavailable: false,
+      imageUnavailable: false,
+      thumbnailBackdropVisible: true,
       mediaLoading: true,
       imageScale: 1,
       imageRotation: 0,
@@ -466,6 +489,8 @@ export default {
     loadMedia(newRoute = false) {
       this.videoDelayedLoadingDone = false;
       this.videoUnavailable = false;
+      this.imageUnavailable = false;
+      this.thumbnailBackdropVisible = true;
       this.mediaLoading = true;
       this.imageScale = 1;
       this.imageRotation = 0;
@@ -497,39 +522,27 @@ export default {
       img.src = this.getImageSource(file);
     },
     getImageSource(file) {
-      return (
-        this.staticUrl +
-        "/" +
-        file.accountId +
-        "/" +
-        file.id[0] +
-        "/" +
-        file.id[1] +
-        "/" +
-        file.id +
-        "/preview.webp"
-      );
+      return MediaUrls.imagePreviewFromBase(this.staticUrl, file);
     },
     getVideoSource(file) {
-      return (
-        this.staticUrl +
-        "/" +
-        file.accountId +
-        "/" +
-        file.id[0] +
-        "/" +
-        file.id[1] +
-        "/" +
-        file.id +
-        "/preview.mp4"
-      );
+      return MediaUrls.videoPreviewFromBase(this.staticUrl, file);
+    },
+    getThumbnailSource(file) {
+      return MediaUrls.thumbnailFromBase(this.staticUrl, file);
     },
     onMediaLoaded() {
+      this.mediaLoading = false;
+    },
+    onImageError() {
+      this.imageUnavailable = true;
       this.mediaLoading = false;
     },
     onVideoError() {
       this.videoUnavailable = true;
       this.mediaLoading = false;
+    },
+    onThumbnailBackdropError() {
+      this.thumbnailBackdropVisible = false;
     },
     onImageWheel(event) {
       const delta = event.deltaY > 0 ? -0.15 : 0.15;
@@ -828,7 +841,11 @@ export default {
 .media-hidden {
   visibility: hidden;
 }
-.video-unavailable {
+.media-content {
+  position: relative;
+  z-index: 2;
+}
+.media-unavailable {
   grid-column: 2;
   grid-row: 2;
   display: flex;
@@ -837,14 +854,32 @@ export default {
   justify-content: center;
   gap: 0.75em;
   color: #aaf;
-  opacity: 0.7;
-  font-size: 1.2em;
+  opacity: 0.75;
+  font-size: 1.1em;
+  text-align: center;
+  padding: 1em;
+  position: relative;
+  z-index: 2;
 }
-.video-unavailable i {
+.media-unavailable i {
   font-size: 3em;
 }
-.video-unavailable p {
+.media-unavailable p {
   margin: 0;
+}
+.media-thumb-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: contain;
+  filter: blur(16px) brightness(0.7);
+  opacity: 0.55;
+  z-index: 1;
+  pointer-events: none;
+  user-select: none;
 }
 .processing-banner {
   position: fixed;
