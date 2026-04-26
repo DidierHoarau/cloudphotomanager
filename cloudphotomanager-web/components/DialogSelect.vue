@@ -13,6 +13,9 @@
       <div class="dialog-standard-body">
         <div class="select-mode">
           <label>
+            <input v-model="selectionMode" type="radio" value="basic" /> Basic
+          </label>
+          <label>
             <input v-model="selectionMode" type="radio" value="date" /> By date
           </label>
           <label>
@@ -23,6 +26,18 @@
             Known duplicates
           </label>
         </div>
+
+        <fieldset v-if="selectionMode === 'basic'">
+          <legend>Basic</legend>
+          <div class="basic-actions">
+            <button class="secondary outline" v-on:click="doActionUnSelectAll()">
+              Unselect All
+            </button>
+            <button class="secondary" v-on:click="doActionSelectAll()">
+              Select All
+            </button>
+          </div>
+        </fieldset>
 
         <fieldset v-if="selectionMode === 'date'">
           <legend>By date</legend>
@@ -94,36 +109,19 @@
           <p v-if="duplicateSelections.length === 0" class="helper-text">
             No known duplicates in this folder.
           </p>
-          <label
-            v-for="duplicateSelection in duplicateSelections"
-            v-else
-            :key="duplicateSelection.file.id"
-            class="duplicate-row"
-          >
+          <label v-else>
             <input
-              v-model="duplicateSelection.selected"
+              v-model="allDuplicatesSelected"
               type="checkbox"
-              @change="onDuplicatesSelected()"
+              @change="onAllDuplicatesSelected()"
             />
-            <span class="duplicate-row-text"
-              >{{ duplicateSelection.file.filename }}
-            </span>
-            <small class="duplicate-row-meta">
-              {{ formatDate(duplicateSelection.file.dateMedia) }} -
-              {{ duplicateSelection.duplicateCount }} copies
-            </small>
+            Select all which known duplicate
           </label>
         </fieldset>
       </div>
 
       <footer class="dialog-standard-footer">
-        <button class="secondary outline" v-on:click="doActionUnSelectAll()">
-          Unselect All
-        </button>
-        <button class="secondary" v-on:click="doActionSelectAll()">
-          Select All
-        </button>
-        <button v-on:click="doAction()">Done</button>
+        <button v-on:click="doAction()">OK ({{ selectedFiles.length }} selected)</button>
       </footer>
     </article>
   </dialog>
@@ -145,12 +143,13 @@ export default {
   },
   data() {
     return {
-      selectionMode: "date",
+      selectionMode: "basic",
       daySelections: [],
       monthSelections: [],
       yearSelections: [],
       typeSelections: [],
       duplicateSelections: [],
+      allDuplicatesSelected: false,
     };
   },
   async created() {
@@ -315,6 +314,12 @@ export default {
       }
       this.setSelectedFiles(selected);
     },
+    onAllDuplicatesSelected() {
+      for (const dup of this.duplicateSelections) {
+        dup.selected = this.allDuplicatesSelected;
+      }
+      this.onDuplicatesSelected();
+    },
     onDuplicatesSelected() {
       const selected = this.duplicateSelections
         .filter((selection) => selection.selected)
@@ -354,6 +359,9 @@ export default {
           duplicateSelection.file.id,
         );
       }
+      this.allDuplicatesSelected =
+        this.duplicateSelections.length > 0 &&
+        this.duplicateSelections.every((d) => d.selected);
       this.syncDateShortcutsFromDays();
     },
     async doAction() {
@@ -406,20 +414,9 @@ small {
   opacity: 0.8;
 }
 
-.duplicate-row {
+.basic-actions {
   display: flex;
-  align-items: center;
-  gap: 0.45em;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.duplicate-row-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.duplicate-row-meta {
-  flex-shrink: 0;
+  gap: 0.75em;
+  flex-wrap: wrap;
 }
 </style>
