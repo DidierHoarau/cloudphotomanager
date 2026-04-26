@@ -5,8 +5,9 @@
     </div>
     <template v-else>
       <img
-        v-show="status === 'ready'"
+        v-if="thumbnailUrl"
         class="media-thumb-img"
+        :class="{ 'media-thumb-img-hidden': status !== 'ready' }"
         :src="thumbnailUrl"
         loading="lazy"
         decoding="async"
@@ -15,15 +16,17 @@
         @error="onError"
       />
       <div
-        v-if="status === 'loading'"
-        class="media-thumb-placeholder media-thumb-skeleton"
-      ></div>
-      <div
-        v-else-if="status === 'missing'"
-        class="media-thumb-placeholder media-thumb-missing"
+        v-if="status !== 'ready'"
+        class="media-thumb-placeholder"
+        :class="{
+          'media-thumb-skeleton': status === 'loading',
+          'media-thumb-missing': status === 'missing',
+        }"
       >
-        <i class="bi bi-cloud-arrow-down"></i>
-        <span>Syncing</span>
+        <template v-if="status === 'missing'">
+          <i class="bi bi-cloud-arrow-down"></i>
+          <span>Syncing</span>
+        </template>
       </div>
       <i
         v-if="type === 'video' && status === 'ready'"
@@ -103,18 +106,25 @@ export default {
   position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: stretch;
-  justify-content: stretch;
+  display: block;
   cursor: pointer;
+  overflow: hidden;
 }
 .media-thumb-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: opacity 0.2s ease;
+}
+.media-thumb-img-hidden {
+  opacity: 0;
 }
 .media-thumb-placeholder {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: flex;
