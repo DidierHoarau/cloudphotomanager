@@ -868,15 +868,11 @@ export default {
   margin: 0;
 }
 .media-thumb-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  width: 100% !important;
-  height: 100% !important;
-  max-width: none !important;
-  max-height: none !important;
-  object-fit: contain;
-  filter: blur(16px) brightness(0.7);
-  opacity: 0.55;
+  object-fit: cover;
+  filter: blur(18px) brightness(0.65);
+  opacity: 0.6;
   z-index: 1;
   pointer-events: none;
   user-select: none;
