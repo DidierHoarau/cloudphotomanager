@@ -538,7 +538,7 @@ export async function SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews(
   accountId: string,
 ) {
   const BATCH_MAX_QUEUE_SIZE = 20;
-  const BATCH_WAIT_MS = 5000;
+  const BATCH_WAIT_MS = 60_000;
   const span = OTelTracer().startSpan(
     "SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews",
     context,
