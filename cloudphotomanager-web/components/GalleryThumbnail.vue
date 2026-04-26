@@ -35,10 +35,9 @@
       <div v-if="isProcessing" class="processing-overlay">
         <i class="bi bi-hourglass-split processing-icon"></i>
       </div>
-      <span
-        v-if="duplicateCount > 1"
-        class="gallery-duplicate-badge"
-      >x{{ duplicateCount }}</span>
+      <span v-if="duplicateCount > 1" class="gallery-duplicate-badge"
+        >x{{ duplicateCount }}</span
+      >
     </div>
     <div v-if="enableSelection && !isProcessing" class="gallery-file-selected">
       <input

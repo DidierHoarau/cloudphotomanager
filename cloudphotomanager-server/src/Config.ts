@@ -34,6 +34,7 @@ export class Config implements ConfigOTelInterface {
   public DATABASE_ASYNC_WRITE = false;
   public VIDEO_PREVIEW_WIDTH = 900;
   public IMAGE_CLASSIFICATION_ENABLED = true;
+  public CACHE_REBUILD_FREQUENCY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
   constructor() {
     let version = "1";
@@ -89,5 +90,6 @@ export class Config implements ConfigOTelInterface {
     setIfSet("DATABASE_ASYNC_WRITE");
     setIfSet("VIDEO_PREVIEW_WIDTH");
     setIfSet("IMAGE_CLASSIFICATION_ENABLED");
+    setIfSet("CACHE_REBUILD_FREQUENCY");
   }
 }

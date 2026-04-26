@@ -17,7 +17,10 @@ import { AccountDefinition } from "../model/AccountDefinition";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { TimeoutWait } from "../utils-std-ts/Timeout";
 import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
-import { SyncFileCacheCleanUp } from "./SyncFileCache";
+import {
+  SyncFileCacheCleanUp,
+  SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews,
+} from "./SyncFileCache";
 import { SyncQueueGetCounts, SyncQueueQueueItem } from "./SyncQueue";
 import { OTelLogger, OTelMeter, OTelTracer } from "../OTelContext";
 
@@ -27,6 +30,7 @@ let config: Config;
 
 const OUTDATED_AGE = 7 * 24 * 3600 * 1000;
 let SOURCE_FETCH_FREQUENCY_DYNAMIC = 30 * 60 * 1000;
+let lastCacheRebuildCheck = 0;
 
 export async function SchedulerInit(context: Span, configIn: Config) {
   const span = OTelTracer().startSpan("Scheduler_init", context);
@@ -142,6 +146,29 @@ async function SchedulerStartSchedule() {
         logger.error("Error Synchronizing Account", err, span);
       });
     }
+
+    // Check if it's time to run the daily cache rebuild check
+    const now = Date.now();
+    if (now - lastCacheRebuildCheck >= config.CACHE_REBUILD_FREQUENCY) {
+      logger.info(
+        `Running daily check for missing thumbnails and previews`,
+        span,
+      );
+      for (const accountDefinition of accountDefinitions) {
+        await SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews(
+          span,
+          accountDefinition.id,
+        ).catch((err) => {
+          logger.error(
+            `Error running daily cache rebuild check for account ${accountDefinition.name}`,
+            err,
+            span,
+          );
+        });
+      }
+      lastCacheRebuildCheck = now;
+    }
+
     const lastUpdates = await SyncEventHistoryGetRecent();
     if (
       lastUpdates.length === 0 ||

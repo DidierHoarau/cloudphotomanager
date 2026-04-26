@@ -13,6 +13,7 @@ import {
   FileDataGetFileTmpDir,
   FileDataListByFolder,
   FileDataListForAccount,
+  FileDataListForAccountPaginated,
   FileDataUpdateInfo,
   FileDataUpdateKeywords,
 } from "../files/FileData";
@@ -529,4 +530,68 @@ function countSlashesInPath(folderPath: string) {
     }
   }
   return count;
+}
+
+export async function SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews(
+  context: Span,
+  accountId: string,
+) {
+  const span = OTelTracer().startSpan(
+    "SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews",
+    context,
+  );
+  
+  logger.info(
+    `Starting daily check for files missing thumbnails or previews for account ${accountId}`,
+    span,
+  );
+
+  const pageSize = 100;
+  let page = 0;
+  let totalQueued = 0;
+
+  while (true) {
+    const { files, total } = await FileDataListForAccountPaginated(
+      span,
+      accountId,
+      page,
+      pageSize,
+    );
+
+    if (files.length === 0) {
+      break;
+    }
+
+    for (const file of files) {
+      try {
+        // Check each file and queue if missing thumbnail or preview
+        const account = await AccountFactoryGetAccountImplementation(accountId);
+        await SyncFileCacheCheckFile(
+          span,
+          account,
+          file,
+          SyncQueueItemPriority.BATCH,
+        );
+        totalQueued++;
+      } catch (error) {
+        logger.error(
+          `Error checking file ${file.id} for missing thumbnail/preview`,
+          error,
+          span,
+        );
+      }
+    }
+
+    page++;
+    if (page * pageSize >= total) {
+      break;
+    }
+  }
+
+  logger.info(
+    `Daily check completed for account ${accountId}: ${totalQueued} files queued for synchronization`,
+    span,
+  );
+  
+  span.end();
 }
