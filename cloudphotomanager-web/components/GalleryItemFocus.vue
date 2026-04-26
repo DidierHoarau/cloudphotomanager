@@ -52,44 +52,66 @@
         <button class="action-btn" @click="clickedClose()" title="Close">
           <i class="bi bi-x-lg"></i>
         </button>
-        <button
-          class="action-bar-toggle"
-          @click="actionBarExpanded = !actionBarExpanded"
+        <template
+          v-if="
+            authenticationStore.isAdmin || (file && getType(file) == 'image')
+          "
         >
-          <i
-            :class="
-              actionBarExpanded ? 'bi bi-chevron-down' : 'bi bi-chevron-up'
-            "
-          ></i>
-        </button>
-      </div>
-      <div class="action-bar-extra" :class="{ expanded: actionBarExpanded }">
-        <button
-          class="action-btn"
-          v-if="file && getType(file) == 'image'"
-          @click="rotateImage()"
-          title="Rotate"
-        >
-          <i class="bi bi-arrow-clockwise"></i>
-        </button>
-        <template v-if="authenticationStore.isAdmin">
           <div class="action-bar-divider"></div>
-          <button
-            class="action-btn"
-            @click="clickedMove()"
-            title="Move"
-            :disabled="isCurrentFileProcessing"
-          >
-            <i class="bi bi-arrows-move"></i>
-          </button>
-          <button
-            class="action-btn action-btn-danger"
-            @click="clickedDelete()"
-            title="Delete"
-            :disabled="isCurrentFileProcessing"
-          >
-            <i class="bi bi-trash-fill"></i>
-          </button>
+          <div class="action-menu" ref="actionMenu">
+            <button
+              class="action-menu-trigger"
+              @click="toggleActionsMenu"
+              :disabled="isCurrentFileProcessing"
+              :aria-expanded="actionsMenuOpen"
+              aria-label="More actions"
+              title="More actions"
+            >
+              <i
+                class="bi"
+                :class="actionsMenuOpen ? 'bi-chevron-up' : 'bi-chevron-down'"
+              ></i>
+            </button>
+            <div v-if="actionsMenuOpen" class="action-menu-list">
+              <button
+                v-if="authenticationStore.isAdmin"
+                class="action-menu-item"
+                @click="onActionClicked('move')"
+              >
+                Move
+              </button>
+              <button
+                v-if="authenticationStore.isAdmin"
+                class="action-menu-item action-menu-item-danger"
+                @click="onActionClicked('delete')"
+              >
+                Delete
+              </button>
+              <button
+                v-if="file && getType(file) == 'image'"
+                class="action-menu-item"
+                @click="onActionClicked('rotate')"
+              >
+                Rotate
+              </button>
+              <button
+                v-if="authenticationStore.isAdmin"
+                class="action-menu-item"
+                @click="onActionClicked('toggle-outtake')"
+              >
+                {{
+                  isCurrentFileOuttake ? "Unmark as outtake" : "Mark as outtake"
+                }}
+              </button>
+              <button
+                v-if="authenticationStore.isAdmin"
+                class="action-menu-item"
+                @click="onActionClicked('rebuild-cache')"
+              >
+                Rebuild cache
+              </button>
+            </div>
+          </div>
         </template>
       </div>
     </div>
@@ -208,7 +230,7 @@ export default {
       serverUrl: "",
       staticUrl: "",
       activeOperation: "",
-      actionBarExpanded: false,
+      actionsMenuOpen: false,
       showFileInfo: false,
       file: null,
       files: [],
@@ -275,9 +297,17 @@ export default {
     this._onKeyDown = (event) => {
       if (event.key === "ArrowRight") this.nextMedia();
       else if (event.key === "ArrowLeft") this.previousMedia();
-      else if (event.key === "Escape") this.clickedClose();
+      else if (event.key === "Escape") {
+        if (this.actionsMenuOpen) {
+          this.closeActionsMenu();
+        } else {
+          this.clickedClose();
+        }
+      }
     };
+    this._onGlobalClick = (event) => this.onGlobalClick(event);
     window.addEventListener("keydown", this._onKeyDown);
+    window.addEventListener("click", this._onGlobalClick);
 
     this._onOperationComplete = (message) => {
       if (!this.file) return;
@@ -363,16 +393,98 @@ export default {
   },
   unmounted() {
     window.removeEventListener("keydown", this._onKeyDown);
+    window.removeEventListener("click", this._onGlobalClick);
     if (this._onOperationComplete) {
       EventBus.off(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
     }
   },
   methods: {
+    toggleActionsMenu() {
+      if (this.isCurrentFileProcessing) return;
+      this.actionsMenuOpen = !this.actionsMenuOpen;
+    },
+    closeActionsMenu() {
+      this.actionsMenuOpen = false;
+    },
+    onGlobalClick(event) {
+      if (!this.actionsMenuOpen) return;
+      const menuRef = this.$refs.actionMenu;
+      const menuElement = Array.isArray(menuRef) ? menuRef[0] : menuRef;
+      if (menuElement && !menuElement.contains(event.target)) {
+        this.closeActionsMenu();
+      }
+    },
     clickedClose() {
       this.$emit("onFileClosed", {});
     },
     clickedMove() {
       this.activeOperation = "move";
+    },
+    async doActionRebuildCache() {
+      if (!this.file) return;
+      try {
+        SyncStore().markFilesAsPending([this.file.id]);
+        SyncStore().markOperationInProgress();
+        await axios.post(
+          `${this.serverUrl}/accounts/${this.file.accountId}/files/batch/operations/fileCacheDelete`,
+          { fileIdList: [this.file.id] },
+          await AuthService.getAuthHeader(),
+        );
+        EventBus.emit(EventTypes.ALERT_MESSAGE, {
+          text: "Rebuild cache queued",
+        });
+      } catch (err) {
+        handleError(err);
+      }
+    },
+    async doActionToggleOuttake() {
+      if (!this.file) return;
+      const ext = FileUtils.getExtention(this.file);
+      const isOuttake = this.isCurrentFileOuttake;
+      const filename = isOuttake
+        ? this.file.filename.replace(`-outtake.${ext}`, `.${ext}`)
+        : `${FileUtils.getWithoutExtention(this.file)}-outtake.${ext}`;
+      try {
+        SyncStore().markFilesAsPending([this.file.id]);
+        SyncStore().markOperationInProgress();
+        await axios.post(
+          `${this.serverUrl}/accounts/${this.file.accountId}/files/batch/operations/fileRename`,
+          {
+            fileIdNames: [{ id: this.file.id, filename }],
+          },
+          await AuthService.getAuthHeader(),
+        );
+        EventBus.emit(EventTypes.ALERT_MESSAGE, {
+          text: isOuttake
+            ? "File unmarked as outtake"
+            : "File marked as outtake",
+        });
+      } catch (err) {
+        handleError(err);
+      }
+    },
+    async onActionClicked(action) {
+      this.closeActionsMenu();
+      if (!action) return;
+      if (action === "move") {
+        this.clickedMove();
+        return;
+      }
+      if (action === "delete") {
+        await this.clickedDelete();
+        return;
+      }
+      if (action === "rotate") {
+        this.rotateImage();
+        return;
+      }
+      if (action === "toggle-outtake") {
+        await this.doActionToggleOuttake();
+        return;
+      }
+      if (action === "rebuild-cache") {
+        await this.doActionRebuildCache();
+      }
     },
     onDuplicateDeleted(fileId) {
       // If the deleted duplicate is in our files list, remove it
@@ -615,6 +727,11 @@ export default {
       if (!this.file) return false;
       return findIndex(this.selectedFiles, { id: this.file.id }) >= 0;
     },
+    isCurrentFileOuttake() {
+      if (!this.file || !this.file.filename) return false;
+      const ext = FileUtils.getExtention(this.file);
+      return this.file.filename.includes(`-outtake.${ext}`);
+    },
   },
 };
 </script>
@@ -651,9 +768,8 @@ export default {
   left: 0;
   z-index: 200;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   align-items: flex-start;
-  gap: 0.3em;
 }
 .action-bar-main {
   display: flex;
@@ -666,53 +782,62 @@ export default {
   border-top-right-radius: 0.5em;
   border-bottom-right-radius: 0.5em;
 }
-.action-bar-extra {
-  display: flex;
-  align-items: center;
-  gap: 0.2em;
-  height: 2.6em;
-  padding: 0 0.6em;
-  background: rgba(20, 20, 40, 0.45);
-  backdrop-filter: blur(6px);
-  border-top-right-radius: 0.5em;
-  border-bottom-right-radius: 0.5em;
-  overflow: hidden;
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  opacity: 0;
-  transition:
-    max-height 0.3s ease,
-    opacity 0.2s ease,
-    padding 0.3s ease;
-  pointer-events: none;
+.action-menu {
+  position: relative;
 }
-.action-bar-extra.expanded {
-  max-height: 3em;
-  padding-top: 0;
-  padding-bottom: 0;
-  height: 2.6em;
-  opacity: 1;
-  pointer-events: all;
-}
-.action-bar-toggle {
-  flex-shrink: 0;
+.action-menu-trigger {
   width: 2.2em;
   height: 2.2em;
   background: transparent;
-  border: none;
+  border: 1px solid rgba(170, 170, 255, 0.25);
+  border-radius: 0.35em;
   color: #aaf;
-  font-size: 0.75em;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.35em;
-  transition: background 0.2s;
-  margin-left: 0.2em;
+  gap: 0.05em;
 }
-.action-bar-toggle:hover {
+.action-menu-trigger:hover:not(:disabled) {
   background: rgba(170, 170, 255, 0.15);
+}
+.action-menu-trigger:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.action-menu-list {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.4em);
+  min-width: 12em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  padding: 0.35em;
+  border-radius: 0.4em;
+  border: 1px solid rgba(170, 170, 255, 0.25);
+  background: rgba(20, 20, 40, 0.95);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0.3em 1.2em rgba(0, 0, 0, 0.35);
+}
+.action-menu-item {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 0.3em;
+  color: #aaf;
+  font-size: 0.85em;
+  padding: 0.35em 0.45em;
+  cursor: pointer;
+}
+.action-menu-item:hover {
+  background: rgba(170, 170, 255, 0.15);
+  color: #fff;
+}
+.action-menu-item-danger:hover {
+  background: rgba(255, 80, 80, 0.2);
+  color: #f88;
 }
 .action-checkbox {
   display: flex;
@@ -861,7 +986,11 @@ export default {
 .media-thumb-backdrop {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
   object-fit: cover;
+  object-position: center;
   filter: blur(18px) brightness(0.65);
   opacity: 0.6;
   z-index: 1;

@@ -1,6 +1,6 @@
 <template>
   <dialog open>
-    <article>
+    <article class="dialog-standard">
       <header>
         <a
           href="#close"
@@ -10,18 +10,20 @@
         ></a>
         Advanced
       </header>
-      <p>{{ files.length }} file(s) selected...</p>
-      <legend>
-        Outakes<br />
-        <small
-          >"Outtakes" are photos that are classified as secondary int he
-          album.</small
-        >
-      </legend>
-      <button v-on:click="doActionSetOuttake()">Mark As Outtakes</button>
-      <button v-on:click="doActionUnSetOuttake()">Un-Mark As Outtakes</button>
-      <legend>Rebuild Cache</legend>
-      <button v-on:click="doActionRebuildCache()">Rebuild Cache</button>
+      <div class="dialog-standard-body">
+        <p>{{ files.length }} file(s) selected...</p>
+        <legend>
+          Outakes<br />
+          <small
+            >"Outtakes" are photos that are classified as secondary int he
+            album.</small
+          >
+        </legend>
+        <button v-on:click="doActionSetOuttake()">Mark As Outtakes</button>
+        <button v-on:click="doActionUnSetOuttake()">Un-Mark As Outtakes</button>
+        <legend>Rebuild Cache</legend>
+        <button v-on:click="doActionRebuildCache()">Rebuild Cache</button>
+      </div>
     </article>
   </dialog>
 </template>

@@ -116,6 +116,7 @@
       v-if="activeOperation == 'select'"
       :selectedFiles="selectedFiles"
       :files="files"
+      :duplicateCounts="duplicateCounts"
       @onDone="onDialogClosed"
     />
     <DialogAdvanced
@@ -454,6 +455,7 @@ export default {
       ) {
         this.currentAccountId = accountId;
         this.currentFolderId = folderId;
+        this.selectedFiles = [];
         this.files = [];
         this.duplicateCounts = {};
         this.currentPage = 0;

@@ -126,3 +126,41 @@
   opacity: 0.3;
   cursor: default;
 }
+
+/* ── Standard native dialog layout ────────────────────────── */
+.dialog-standard {
+  display: flex;
+  flex-direction: column;
+  width: min(60em, 92vw);
+  max-height: 85vh;
+  margin: 0;
+  padding: 0;
+}
+
+.dialog-standard > header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0;
+}
+
+.dialog-standard-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.dialog-standard-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  justify-content: flex-end;
+  margin: 0;
+  padding: 1rem;
+  border-top: 1px solid rgba(127, 127, 127, 0.25);
+  background: var(--pico-card-background-color);
+}
