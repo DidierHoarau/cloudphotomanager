@@ -107,6 +107,14 @@ export function SyncQueueGetCounts(): any[] {
   ];
 }
 
+export function SyncQueueGetBatchWaitingCount(): number {
+  return queue.filter(
+    (item) =>
+      item.priority === SyncQueueItemPriority.BATCH &&
+      item.status === SyncQueueItemStatus.WAITING,
+  ).length;
+}
+
 export function SyncQueueGetProcessingFileIds(): string[] {
   const ids: string[] = [];
   for (const item of queue) {

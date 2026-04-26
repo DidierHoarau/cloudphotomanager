@@ -43,7 +43,7 @@ export async function SchedulerInit(context: Span, configIn: Config) {
       observableResult.observe(stats.nbFiles, { type: "files" });
       observableResult.observe(stats.nbFolders, { type: "folders" });
     },
-    { description: "Number of files" }
+    { description: "Number of files" },
   );
   OTelMeter().createObservableGauge(
     "photos.queue.counts",
@@ -53,18 +53,18 @@ export async function SchedulerInit(context: Span, configIn: Config) {
         observableResult.observe(syncCount.count, { type: syncCount.type });
       });
     },
-    { description: "Size of the queue" }
+    { description: "Size of the queue" },
   );
   span.end();
 }
 
 export async function SchedulerStartAccountSync(
   context: Span,
-  accountDefinition: AccountDefinition
+  accountDefinition: AccountDefinition,
 ) {
   const span = OTelTracer().startSpan("Scheduler_startAccountSync", context);
   const account = await AccountFactoryGetAccountImplementation(
-    accountDefinition.id
+    accountDefinition.id,
   );
 
   // Clean File without folders
@@ -81,7 +81,7 @@ export async function SchedulerStartAccountSync(
       rootFolderCloud.id,
       rootFolderCloud,
       "SyncInventorySyncFolder",
-      SyncQueueItemPriority.NORMAL
+      SyncQueueItemPriority.NORMAL,
     );
   }
 
@@ -103,7 +103,7 @@ export async function SchedulerStartAccountSync(
   for (const folder of await FolderDataGetOlderThan(
     span,
     accountId,
-    new Date(new Date().getTime() - OUTDATED_AGE)
+    new Date(new Date().getTime() - OUTDATED_AGE),
   )) {
     foldersToSync.set(folder.id, { folder });
   }
@@ -120,7 +120,7 @@ export async function SchedulerStartAccountSync(
       folder.id,
       folder,
       "SyncInventorySyncFolder",
-      SyncQueueItemPriority.NORMAL
+      SyncQueueItemPriority.NORMAL,
     );
   }
 
@@ -178,14 +178,14 @@ async function SchedulerStartSchedule() {
       SOURCE_FETCH_FREQUENCY_DYNAMIC = Math.min(
         SOURCE_FETCH_FREQUENCY_DYNAMIC + config.SOURCE_FETCH_FREQUENCY,
         config.SOURCE_FETCH_FREQUENCY *
-          config.SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR
+          config.SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR,
       );
     } else {
       SOURCE_FETCH_FREQUENCY_DYNAMIC = config.SOURCE_FETCH_FREQUENCY;
     }
     logger.info(
       `Next Sync in ${SOURCE_FETCH_FREQUENCY_DYNAMIC / 60000} minutes`,
-      span
+      span,
     );
     await SchedulerUpdateStats(span);
     span.end();

@@ -26,6 +26,7 @@ import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SystemCommand } from "../SystemCommand";
 import { SyncQueueQueueItem } from "./SyncQueue";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
+import { SyncQueueGetBatchWaitingCount } from "./SyncQueue";
 
 const logger = OTelLogger().createModuleLogger("SyncFileCache");
 let config: Config;
@@ -536,21 +537,29 @@ export async function SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews(
   context: Span,
   accountId: string,
 ) {
+  const BATCH_MAX_QUEUE_SIZE = 20;
+  const BATCH_WAIT_MS = 5000;
   const span = OTelTracer().startSpan(
     "SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews",
     context,
   );
-  
+
   logger.info(
     `Starting daily check for files missing thumbnails or previews for account ${accountId}`,
     span,
   );
 
-  const pageSize = 100;
+  const pageSize = 20;
   let page = 0;
   let totalQueued = 0;
+  const account = await AccountFactoryGetAccountImplementation(accountId);
 
   while (true) {
+    // Wait until the batch queue has drained below the threshold before adding more
+    while (SyncQueueGetBatchWaitingCount() >= BATCH_MAX_QUEUE_SIZE) {
+      await new Promise((resolve) => setTimeout(resolve, BATCH_WAIT_MS));
+    }
+
     const { files, total } = await FileDataListForAccountPaginated(
       span,
       accountId,
@@ -564,8 +573,6 @@ export async function SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews(
 
     for (const file of files) {
       try {
-        // Check each file and queue if missing thumbnail or preview
-        const account = await AccountFactoryGetAccountImplementation(accountId);
         await SyncFileCacheCheckFile(
           span,
           account,
@@ -589,9 +596,9 @@ export async function SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews(
   }
 
   logger.info(
-    `Daily check completed for account ${accountId}: ${totalQueued} files queued for synchronization`,
+    `Daily check completed for account ${accountId}: ${totalQueued} files checked for synchronization`,
     span,
   );
-  
+
   span.end();
 }

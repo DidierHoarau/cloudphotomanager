@@ -290,7 +290,10 @@ export async function FileDataListForAccountPaginated(
   page: number,
   pageSize: number,
 ): Promise<{ files: File[]; total: number }> {
-  const span = OTelTracer().startSpan("FileDataListForAccountPaginated", context);
+  const span = OTelTracer().startSpan(
+    "FileDataListForAccountPaginated",
+    context,
+  );
   const offset = page * pageSize;
   const countRaw = await SqlDbUtilsQuerySQL(
     span,
