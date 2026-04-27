@@ -16,21 +16,24 @@
             <input v-model="selectionMode" type="radio" value="basic" /> Basic
           </label>
           <label>
-            <input v-model="selectionMode" type="radio" value="date" /> By date
+            <input v-model="selectionMode" type="radio" value="date" /> Dates
           </label>
           <label>
-            <input v-model="selectionMode" type="radio" value="type" /> By type
+            <input v-model="selectionMode" type="radio" value="type" /> Type
           </label>
           <label>
             <input v-model="selectionMode" type="radio" value="duplicates" />
-            Known duplicates
+            Duplicates
           </label>
         </div>
 
         <fieldset v-if="selectionMode === 'basic'">
           <legend>Basic</legend>
           <div class="basic-actions">
-            <button class="secondary outline" v-on:click="doActionUnSelectAll()">
+            <button
+              class="secondary outline"
+              v-on:click="doActionUnSelectAll()"
+            >
               Unselect All
             </button>
             <button class="secondary" v-on:click="doActionSelectAll()">
@@ -121,7 +124,9 @@
       </div>
 
       <footer class="dialog-standard-footer">
-        <button v-on:click="doAction()">OK ({{ selectedFiles.length }} selected)</button>
+        <button v-on:click="doAction()">
+          OK ({{ selectedFiles.length }} selected)
+        </button>
       </footer>
     </article>
   </dialog>

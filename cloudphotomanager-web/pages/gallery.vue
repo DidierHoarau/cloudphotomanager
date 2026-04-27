@@ -13,9 +13,6 @@
       </div>
     </div>
     <div class="gallery-files-actions">
-      <button class="secondary outline" v-on:click="clickedRefresh()">
-        <i class="bi bi-arrow-clockwise"></i> Refresh
-      </button>
       <button
         v-if="files.length > 0 && authenticationStore.isAdmin"
         class="secondary outline"

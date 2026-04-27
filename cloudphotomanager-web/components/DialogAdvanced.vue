@@ -22,13 +22,13 @@
             >
           </legend>
           <div class="outtakes-buttons">
-            <button 
+            <button
               class="outtakes-btn outtakes-mark"
               v-on:click="doActionSetOuttake()"
             >
               Mark As Outtakes
             </button>
-            <button 
+            <button
               class="outtakes-btn outtakes-unmark"
               v-on:click="doActionUnSetOuttake()"
             >
