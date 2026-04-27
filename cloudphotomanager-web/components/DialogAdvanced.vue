@@ -12,17 +12,34 @@
       </header>
       <div class="dialog-standard-body">
         <p>{{ files.length }} file(s) selected...</p>
-        <legend>
-          Outakes<br />
-          <small
-            >"Outtakes" are photos that are classified as secondary int he
-            album.</small
-          >
-        </legend>
-        <button v-on:click="doActionSetOuttake()">Mark As Outtakes</button>
-        <button v-on:click="doActionUnSetOuttake()">Un-Mark As Outtakes</button>
-        <legend>Rebuild Cache</legend>
-        <button v-on:click="doActionRebuildCache()">Rebuild Cache</button>
+        <fieldset class="outtakes-section">
+          <legend>
+            Outtakes
+            <br />
+            <small
+              >"Outtakes" are photos that are classified as secondary in the
+              album.</small
+            >
+          </legend>
+          <div class="outtakes-buttons">
+            <button 
+              class="outtakes-btn outtakes-mark"
+              v-on:click="doActionSetOuttake()"
+            >
+              Mark As Outtakes
+            </button>
+            <button 
+              class="outtakes-btn outtakes-unmark"
+              v-on:click="doActionUnSetOuttake()"
+            >
+              Un-Mark As Outtakes
+            </button>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Rebuild Cache</legend>
+          <button v-on:click="doActionRebuildCache()">Rebuild Cache</button>
+        </fieldset>
       </div>
     </article>
   </dialog>
@@ -153,5 +170,42 @@ export default {
 <style scoped>
 small {
   opacity: 50%;
+}
+
+fieldset {
+  border: none;
+  padding: 0.5em 0;
+}
+
+.outtakes-section {
+  margin-bottom: 1em;
+}
+
+.outtakes-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5em;
+  margin-top: 0.5em;
+}
+
+.outtakes-btn {
+  padding: 0.4em 0.6em;
+  font-size: 0.9em;
+  border: 1px solid currentColor;
+  border-radius: 0.3em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.outtakes-mark {
+  background-color: var(--form-element-checked-background-color);
+}
+
+.outtakes-unmark {
+  background-color: var(--form-element-background-color);
+}
+
+.outtakes-btn:hover {
+  opacity: 0.8;
 }
 </style>

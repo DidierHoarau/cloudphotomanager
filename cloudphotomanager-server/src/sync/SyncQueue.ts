@@ -14,7 +14,10 @@ import {
   FolderDataGet,
   FolderDataGetParent,
 } from "../folders/FolderData";
-import { SyncInventorySyncFolder } from "./SyncInventory";
+import {
+  SyncInventorySyncFolder,
+  SyncInventorySyncFolderRecursive,
+} from "./SyncInventory";
 import {
   syncVideoFromFull,
   syncPhotoFromFull,
@@ -54,6 +57,10 @@ export async function SyncQueueInit(context: Span): Promise<void> {
 
   // Register all sync functions
   SyncQueueRegisterFunction("SyncInventorySyncFolder", SyncInventorySyncFolder);
+  SyncQueueRegisterFunction(
+    "SyncInventorySyncFolderRecursive",
+    SyncInventorySyncFolderRecursive,
+  );
   SyncQueueRegisterFunction("syncVideoFromFull", syncVideoFromFull);
   SyncQueueRegisterFunction("syncPhotoFromFull", syncPhotoFromFull);
   SyncQueueRegisterFunction("syncPhotoKeyWords", syncPhotoKeyWords);

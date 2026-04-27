@@ -166,6 +166,34 @@ export class FolderRoutes {
       return res.status(200).send({});
     });
 
+    fastify.put<{
+      Params: {
+        accountId: string;
+        folderId: string;
+      };
+    }>("/:folderId/deep-sync", async (req, res) => {
+      const span = OTelRequestSpan(req);
+      const userSession = await AuthGetUserSession(req);
+      if (!userSession.isAuthenticated) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const folder = await FolderDataGet(span, req.params.folderId);
+      if (!folder) {
+        return res.status(200).send({});
+      }
+      const account = await AccountFactoryGetAccountImplementation(
+        req.params.accountId,
+      );
+      SyncQueueQueueItem(
+        account.getAccountDefinition().id,
+        folder.id,
+        folder,
+        "SyncInventorySyncFolderRecursive",
+        SyncQueueItemPriority.INTERACTIVE,
+      );
+      return res.status(200).send({});
+    });
+
     fastify.delete<{
       Params: {
         accountId: string;

@@ -53,22 +53,21 @@
         <i class="bi bi-arrows-move"></i> Move...
       </button>
       <button
-        v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
+        v-if="authenticationStore.isAdmin"
         class="secondary outline"
-        v-on:click="clickedAdvanced()"
+        v-on:click="clickedMore()"
       >
         <i class="bi bi-three-dots"></i> More...
       </button>
       <button class="secondary outline" v-on:click="clickedOptions()">
         <i class="bi bi-sliders"></i> Options...
       </button>
-      <span class="option-outtakes" v-if="outtakesCount > 0">
-        <label>
-          <input v-model="showOutakes" type="checkbox" /> OutTakes ({{
-            outtakesCount
-          }})
-        </label></span
-      >
+    </div>
+    <div class="gallery-outtakes-section" v-if="outtakesCount > 0">
+      <label class="outtakes-checkbox">
+        <input v-model="showOutakes" type="checkbox" />
+        <span>OutTakes ({{ outtakesCount }})</span>
+      </label>
     </div>
     <div class="gallery-file-list">
       <Loading v-if="loading" />
@@ -124,6 +123,11 @@
       :selectedFiles="selectedFiles"
       :files="selectedFiles"
       @onDone="onDialogClosed"
+    />
+    <DialogFolderActions
+      v-if="activeOperation == 'folder-actions'"
+      :folder="folder"
+      @onDone="onFolderActionsDone"
     />
     <DialogGalleryOptions
       v-if="activeOperation == 'options'"
@@ -594,14 +598,24 @@ export default {
       this.selectedFiles = [];
       this.activeOperation = "";
     },
+    onFolderActionsDone(result) {
+      this.activeOperation = "";
+      if (result && result.action === "deep-refresh") {
+        this.executeDeepRefresh();
+      }
+    },
     clickedMove() {
       this.activeOperation = "move";
     },
     clickedSelect() {
       this.activeOperation = "select";
     },
-    clickedAdvanced() {
-      this.activeOperation = "advanced";
+    clickedMore() {
+      if (this.selectedFiles.length > 0) {
+        this.activeOperation = "advanced";
+      } else {
+        this.activeOperation = "folder-actions";
+      }
     },
     clickedOptions() {
       this.activeOperation = "options";
@@ -663,6 +677,25 @@ export default {
       ).id;
       this.activeOperation = "confirm-delete-folder";
     },
+    async executeDeepRefresh() {
+      SyncStore().markOperationInProgress();
+      await axios
+        .put(
+          `${(await Config.get()).SERVER_URL}/accounts/${
+            this.currentAccountId
+          }/folders/${this.currentFolderId}/deep-sync`,
+          {},
+          await AuthService.getAuthHeader(),
+        )
+        .then(() => {
+          EventBus.emit(EventTypes.ALERT_MESSAGE, {
+            text: "Deep refresh queued — running in background",
+          });
+        })
+        .catch(handleError);
+      this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
+      EventBus.emit(EventTypes.FOLDER_UPDATED, {});
+    },
     async executeDeleteFolder() {
       this.activeOperation = "";
       const parentFolderId = this._pendingDeleteFolderParentId;
@@ -721,7 +754,7 @@ export default {
   }
   .gallery-layout {
     display: grid;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto 1fr;
     grid-template-columns: auto 1fr 1fr;
     column-gap: 1em;
     overflow: hidden;
@@ -732,9 +765,15 @@ export default {
     grid-column-start: 2;
     grid-column-end: span 2;
   }
+  .gallery-outtakes-section {
+    grid-row: 2;
+    grid-column-start: 2;
+    grid-column-end: span 2;
+    padding-top: 0;
+  }
   .gallery-file-list {
     overflow: auto;
-    grid-row: 2;
+    grid-row: 3;
     grid-column-start: 2;
     grid-column-end: span 2;
   }
@@ -749,7 +788,7 @@ export default {
     overflow: auto;
     height: auto;
     grid-row-start: 1;
-    grid-row-end: span 2;
+    grid-row-end: span 3;
     grid-column: 1;
   }
   .gallery-layout-actions-menu-toggle {
@@ -763,7 +802,7 @@ export default {
 @media (max-width: 900px) {
   .gallery-layout {
     display: grid;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto auto auto 1fr;
     grid-template-columns: 1fr;
     column-gap: 1em;
     overflow: hidden;
@@ -810,9 +849,13 @@ export default {
     grid-row: 2;
     grid-column: 1;
   }
+  .gallery-outtakes-section {
+    grid-row: 3;
+    grid-column: 1;
+  }
   .gallery-file-list {
     overflow: auto;
-    grid-row: 3;
+    grid-row: 4;
     grid-column: 1;
   }
   .gallery-folders {
@@ -873,17 +916,29 @@ export default {
   margin-right: 1em;
 }
 
-.option-outtakes {
-  opacity: 30%;
+.gallery-outtakes-section {
+  display: flex;
+  align-items: center;
+  padding: 0.5em 0.5em;
   font-size: 0.8em;
+  opacity: 0.85;
 }
-.option-outtakes input {
-  height: 1em;
+
+.outtakes-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  cursor: pointer;
+  user-select: none;
+}
+
+.outtakes-checkbox input[type="checkbox"] {
+  cursor: pointer;
   width: 1em;
+  height: 1em;
+  margin: 0;
 }
-.option-outtakes label {
-  display: inline;
-}
+
 .sentinel {
   height: 1px;
   width: 100%;
