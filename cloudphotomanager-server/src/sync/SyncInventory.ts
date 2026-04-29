@@ -152,37 +152,3 @@ export async function SyncInventorySyncFolder(
 
   span.end();
 }
-
-export async function SyncInventorySyncFolderRecursive(
-  account: Account,
-  knownFolder: Folder,
-  priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL,
-): Promise<void> {
-  const span = OTelTracer().startSpan("SyncInventorySyncFolderRecursive");
-  try {
-    logger.info(
-      `Deep sync folder: ${account.getAccountDefinition().id}: ${knownFolder.folderpath}`,
-      span,
-    );
-
-    // Sync the current folder first
-    await SyncInventorySyncFolder(account, knownFolder, priority);
-
-    // Get all subfolders and recursively sync them
-    const allSubFolders = await FolderDataListSubFolders(span, knownFolder);
-    for (const subFolder of allSubFolders) {
-      await SyncInventorySyncFolderRecursive(account, subFolder, priority);
-    }
-  } catch (errSync: unknown) {
-    const message =
-      errSync instanceof Error ? errSync.message : String(errSync);
-    span.setStatus({ code: 2, message });
-    if (errSync instanceof Error) {
-      span.recordException(errSync);
-    }
-    span.end();
-    throw errSync;
-  }
-
-  span.end();
-}

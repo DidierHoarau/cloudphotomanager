@@ -1,4 +1,5 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
+import * as cron from "node-cron";
 import { AccountDataList } from "../accounts/AccountData";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { Config } from "../Config";
@@ -12,6 +13,7 @@ import {
   FolderDataGetNewstUpdate,
   FolderDataGetOlderThan,
   FolderDataGetOldestSync,
+  FolderDataListForAccount,
 } from "../folders/FolderData";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
@@ -31,7 +33,6 @@ let config: Config;
 const OUTDATED_AGE = 7 * 24 * 3600 * 1000;
 const FOLDERS_SYNC_SAMPLE_SIZE = 10;
 let SOURCE_FETCH_FREQUENCY_DYNAMIC = 30 * 60 * 1000;
-let lastCacheRebuildCheck = 0;
 
 export async function SchedulerInit(context: Span, configIn: Config) {
   const span = OTelTracer().startSpan("Scheduler_init", context);
@@ -42,7 +43,6 @@ export async function SchedulerInit(context: Span, configIn: Config) {
     logger.error("Failed to initialize scheduler stats", err, span);
   });
 
-  SchedulerStartSchedule();
   OTelMeter().createObservableGauge(
     "photos.files.counts",
     (observableResult) => {
@@ -61,6 +61,33 @@ export async function SchedulerInit(context: Span, configIn: Config) {
     },
     { description: "Size of the queue" },
   );
+
+  // Periodically refresh metric stats so gauges stay current between sync cycles.
+  cron.schedule(config.CRON_METRIC_REFRESH, async () => {
+    const cronSpan = OTelTracer().startSpan("SchedulerCronMetricRefresh");
+    try {
+      await SchedulerUpdateStats(cronSpan);
+    } catch (err) {
+      logger.error("Cron CRON_METRIC_REFRESH error", err, cronSpan);
+    } finally {
+      cronSpan.end();
+    }
+  });
+
+  // Daily deep scan: refresh all folders, clean the cache and queue missing
+  // thumbnails/previews.
+  cron.schedule(config.CRON_SCAN_DEEP, async () => {
+    const cronSpan = OTelTracer().startSpan("SchedulerCronScanDeep");
+    try {
+      await SchedulerRunDeepScan(cronSpan);
+    } catch (err) {
+      logger.error("Cron CRON_SCAN_DEEP error", err, cronSpan);
+    } finally {
+      cronSpan.end();
+    }
+  });
+
+  SchedulerStartSchedule();
   span.end();
 }
 
@@ -103,8 +130,6 @@ export async function SchedulerStartAccountSync(
     );
   }
 
-  await SyncFileCacheCleanUp(span, account);
-
   span.end();
 }
 
@@ -127,28 +152,6 @@ async function SchedulerStartSchedule() {
             logger.error("Error Synchronizing Account", err, span);
           },
         );
-      }
-
-      // Check if it's time to run the daily cache rebuild check
-      const now = Date.now();
-      if (now - lastCacheRebuildCheck >= config.CACHE_REBUILD_FREQUENCY) {
-        logger.info(
-          `Running daily check for missing thumbnails and previews`,
-          span,
-        );
-        for (const accountDefinition of accountDefinitions) {
-          await SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews(
-            span,
-            accountDefinition.id,
-          ).catch((err) => {
-            logger.error(
-              `Error running daily cache rebuild check for account ${accountDefinition.name}`,
-              err,
-              span,
-            );
-          });
-        }
-        lastCacheRebuildCheck = now;
       }
 
       const lastUpdates = await SyncEventHistoryGetRecent();
@@ -178,6 +181,50 @@ async function SchedulerStartSchedule() {
 
     await TimeoutWait(SOURCE_FETCH_FREQUENCY_DYNAMIC);
   }
+}
+
+async function SchedulerRunDeepScan(context: Span) {
+  const span = OTelTracer().startSpan("SchedulerRunDeepScan", context);
+  const accountDefinitions = await AccountDataList(span);
+  for (const accountDefinition of accountDefinitions) {
+    logger.info(`Deep scan for account ${accountDefinition.name}`, span);
+    try {
+      const account = await AccountFactoryGetAccountImplementation(
+        accountDefinition.id,
+      );
+
+      // Clear the on-disk cache of stale entries
+      await SyncFileCacheCleanUp(span, account);
+
+      // Queue a sync for every known folder (deep scan)
+      const folders = await FolderDataListForAccount(
+        span,
+        accountDefinition.id,
+      );
+      for (const folder of folders) {
+        SyncQueueQueueItem(
+          accountDefinition.id,
+          folder.id,
+          folder,
+          "SyncInventorySyncFolder",
+          SyncQueueItemPriority.NORMAL,
+        );
+      }
+
+      // Queue regeneration for any missing thumbnails and previews
+      await SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews(
+        span,
+        accountDefinition.id,
+      );
+    } catch (err) {
+      logger.error(
+        `Error running deep scan for account ${accountDefinition.name}`,
+        err,
+        span,
+      );
+    }
+  }
+  span.end();
 }
 
 async function SchedulerUpdateStats(context: Span) {

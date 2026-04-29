@@ -3,7 +3,6 @@ import { FastifyInstance } from "fastify";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { FileDataListByFolder } from "../files/FileData";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { SyncInventorySyncFolder } from "../sync/SyncInventory";
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
 import { UserPermissionCheckFilterFoldersForUser } from "../users/UserPermissionCheck";
@@ -184,13 +183,26 @@ export class FolderRoutes {
       const account = await AccountFactoryGetAccountImplementation(
         req.params.accountId,
       );
-      SyncQueueQueueItem(
-        account.getAccountDefinition().id,
-        folder.id,
-        folder,
-        "SyncInventorySyncFolderRecursive",
-        SyncQueueItemPriority.INTERACTIVE,
+      const allFolders = await FolderDataListForAccount(
+        span,
+        req.params.accountId,
       );
+      const prefix = folder.folderpath === "/" ? "/" : `${folder.folderpath}/`;
+      const foldersToSync = allFolders.filter(
+        (f) =>
+          f.id === folder.id ||
+          f.folderpath === folder.folderpath ||
+          f.folderpath.startsWith(prefix),
+      );
+      for (const subFolder of foldersToSync) {
+        SyncQueueQueueItem(
+          account.getAccountDefinition().id,
+          subFolder.id,
+          subFolder,
+          "SyncInventorySyncFolder",
+          SyncQueueItemPriority.INTERACTIVE,
+        );
+      }
       return res.status(200).send({});
     });
 
