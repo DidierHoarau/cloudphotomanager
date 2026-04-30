@@ -30,41 +30,51 @@ export async function SyncInventorySyncFolder(
 ): Promise<void> {
   const span = OTelTracer().startSpan("SyncInventorySyncFolder");
   try {
-    logger.info(
-      `Sync folder: ${account.getAccountDefinition().id}: ${knownFolder.folderpath}`,
-      span,
-    );
+    const accountId = account.getAccountDefinition().id;
+    logger.info(`Sync folder: ${accountId}: ${knownFolder.folderpath}`, span);
 
+    // Downstream listings depend on the resolved cloud root.
     const cloudFolder = await account.getFolder(span, knownFolder);
-    const cloudSubFolders = await account.listFoldersInFolder(
-      span,
-      cloudFolder,
-    );
-    const cloudSubFiles = await account.listFilesInFolder(span, cloudFolder);
-    const knownSubFiles = await FileDataListByFolder(
-      span,
-      account.getAccountDefinition().id,
-      knownFolder.id,
-    );
-    const knownSubFolders = await FolderDataListSubFolders(span, knownFolder);
+
+    // Run independent cloud listings and DB reads in parallel.
+    const [cloudSubFolders, cloudSubFiles, knownSubFilesFull, knownSubFolders] =
+      await Promise.all([
+        account.listFoldersInFolder(span, cloudFolder),
+        account.listFilesInFolder(span, cloudFolder),
+        FileDataListByFolder(span, accountId, knownFolder.id),
+        FolderDataListSubFolders(span, knownFolder),
+      ]);
+
+    // Build compact ID sets for O(1) membership tests.
+    const knownSubFolderIds = new Set<string>();
+    for (const f of knownSubFolders) knownSubFolderIds.add(f.id);
+    const cloudSubFolderIds = new Set<string>();
+    for (const f of cloudSubFolders) cloudSubFolderIds.add(f.id);
+    const knownSubFileIds = new Set<string>();
+    for (const f of knownSubFilesFull) knownSubFileIds.add(f.id);
+    const cloudSubFileIds = new Set<string>();
+    for (const f of cloudSubFiles) cloudSubFileIds.add(f.id);
+
+    // Precompute IDs of known files to delete, then release the full known
+    // file objects. They hold parsed info/metadata JSON and are otherwise
+    // unused from here on, so this is the biggest memory win of the sync.
+    const fileIdsToDelete: string[] = [];
+    for (const f of knownSubFilesFull) {
+      if (!cloudSubFileIds.has(f.id)) fileIdsToDelete.push(f.id);
+    }
+    knownSubFilesFull.length = 0;
+
     let updated = false;
-
-    // Build lookup maps for O(1) access
-    const knownSubFolderIds = new Set(knownSubFolders.map((f) => f.id));
-    const knownSubFileIds = new Set(knownSubFiles.map((f) => f.id));
-    const cloudSubFolderIds = new Set(cloudSubFolders.map((f) => f.id));
-    const cloudSubFileIds = new Set(cloudSubFiles.map((f) => f.id));
-
     let folderStructureChanged = false;
 
-    // New Folder
+    // New folders: persist and queue each for its own sync.
     for (const cloudSubFolder of cloudSubFolders) {
       if (!knownSubFolderIds.has(cloudSubFolder.id)) {
         updated = true;
         folderStructureChanged = true;
         await FolderDataAdd(span, cloudSubFolder);
         SyncQueueQueueItem(
-          account.getAccountDefinition().id,
+          accountId,
           cloudSubFolder.id,
           cloudSubFolder,
           "SyncInventorySyncFolder",
@@ -72,56 +82,62 @@ export async function SyncInventorySyncFolder(
         );
       }
     }
+    cloudSubFolders.length = 0;
+    knownSubFolderIds.clear();
 
-    // New Files
-    const newFiles = cloudSubFiles.filter((f) => !knownSubFileIds.has(f.id));
-    if (newFiles.length > 0) {
-      updated = true;
-      for (const cloudSubFile of newFiles) {
-        cloudSubFile.folderId = knownFolder.id;
-        await FileDataAdd(span, cloudSubFile);
-      }
-    }
-
-    // Deleted Folders
+    // Deleted folders: recursive DB cleanup.
     for (const knownSubFolder of knownSubFolders) {
       if (!cloudSubFolderIds.has(knownSubFolder.id)) {
         updated = true;
         folderStructureChanged = true;
         await FolderDataDeletePathRecursive(
           span,
-          account.getAccountDefinition().id,
+          accountId,
           knownSubFolder.folderpath,
         );
       }
     }
+    knownSubFolders.length = 0;
+    cloudSubFolderIds.clear();
 
-    // Deleted Files
-    const deletedFiles = knownSubFiles.filter(
-      (f) => !cloudSubFileIds.has(f.id),
-    );
-    if (deletedFiles.length > 0) {
-      updated = true;
-      for (const knownSubFile of deletedFiles) {
-        await FileDataDelete(span, knownSubFile.id);
+    // New files.
+    for (const cloudSubFile of cloudSubFiles) {
+      if (!knownSubFileIds.has(cloudSubFile.id)) {
+        updated = true;
+        cloudSubFile.folderId = knownFolder.id;
+        await FileDataAdd(span, cloudSubFile);
       }
     }
+    knownSubFileIds.clear();
+    cloudSubFileIds.clear();
 
-    // Update folder
+    // Deleted files (uses precomputed ID list, not the freed File objects).
+    if (fileIdsToDelete.length > 0) {
+      updated = true;
+      for (const id of fileIdsToDelete) {
+        await FileDataDelete(span, id);
+      }
+      fileIdsToDelete.length = 0;
+    }
+
+    // Update folder metadata.
     knownFolder.dateSync = new Date();
     knownFolder.dateUpdated = cloudFolder.dateUpdated;
     knownFolder.info = cloudFolder.info;
     await FolderDataUpdate(span, knownFolder);
 
+    // SyncFileCacheCheckFolder reloads files from DB; drop the cloud files
+    // array first to avoid keeping two full copies in memory simultaneously.
+    cloudSubFiles.length = 0;
     await SyncFileCacheCheckFolder(span, account, knownFolder);
 
     // If the folder structure changed, queue the parent to re-sync so it
-    // discovers new/deleted subfolders in its own listing
+    // discovers new/deleted subfolders in its own listing.
     if (folderStructureChanged) {
       const parentFolder = await FolderDataGetParent(span, knownFolder.id);
       if (parentFolder) {
         SyncQueueQueueItem(
-          account.getAccountDefinition().id,
+          accountId,
           parentFolder.id,
           parentFolder,
           "SyncInventorySyncFolder",
@@ -134,7 +150,7 @@ export async function SyncInventorySyncFolder(
       SyncEventHistoryAdd({
         objectType: SyncEventObjectTypes.FOLDER,
         objectId: knownFolder.id,
-        accountId: account.getAccountDefinition().id,
+        accountId,
         date: new Date(),
         action: SyncEventActions.UPDATED,
       });
@@ -146,9 +162,8 @@ export async function SyncInventorySyncFolder(
     if (errSync instanceof Error) {
       span.recordException(errSync);
     }
-    span.end();
     throw errSync;
+  } finally {
+    span.end();
   }
-
-  span.end();
 }

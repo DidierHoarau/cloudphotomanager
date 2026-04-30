@@ -8,6 +8,7 @@ import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
 import { UserPermissionCheckFilterFoldersForUser } from "../users/UserPermissionCheck";
 import {
   FolderDataDelete,
+  FolderDataDeletePathRecursive,
   FolderDataGet,
   FolderDataGetParent,
   FolderDataListCountsForAccount,
@@ -239,6 +240,57 @@ export class FolderRoutes {
         SyncQueueItemPriority.INTERACTIVE,
       );
       return res.status(202).send({});
+    });
+
+    fastify.put<{
+      Params: {
+        accountId: string;
+        folderId: string;
+      };
+      Body: {
+        newName: string;
+      };
+    }>("/:folderId/operations/rename", async (req, res) => {
+      const span = OTelRequestSpan(req);
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const newName = (req.body?.newName || "").trim();
+      if (!newName) {
+        return res.status(400).send({ error: "Missing parameter: newName" });
+      }
+      if (newName.includes("/") || newName === "." || newName === "..") {
+        return res.status(400).send({ error: "Invalid folder name" });
+      }
+      const folder = await FolderDataGet(span, req.params.folderId);
+      if (!folder) {
+        return res.status(404).send({ error: "Folder not found" });
+      }
+      if (folder.folderpath === "/") {
+        return res.status(403).send({ error: "Can not rename root folder" });
+      }
+      const folderParent = await FolderDataGetParent(span, folder.id);
+      if (!folderParent) {
+        return res.status(404).send({ error: "Parent folder not found" });
+      }
+      const account = await AccountFactoryGetAccountImplementation(
+        req.params.accountId,
+      );
+      await account.renameFolder(span, folder, newName);
+      await FolderDataDeletePathRecursive(
+        span,
+        account.getAccountDefinition().id,
+        folder.folderpath,
+      );
+      SyncQueueQueueItem(
+        req.params.accountId,
+        folderParent.id,
+        folderParent,
+        "SyncInventorySyncFolder",
+        SyncQueueItemPriority.INTERACTIVE,
+      );
+      return res.status(202).send({ parentFolderId: folderParent.id });
     });
   }
 }

@@ -44,7 +44,7 @@ export class AwsS3Account implements Account {
       context,
       this,
       await this.getS3Client(),
-      file
+      file,
     );
   }
 
@@ -53,7 +53,7 @@ export class AwsS3Account implements Account {
       context,
       this,
       await this.getS3Client(),
-      folder
+      folder,
     );
   }
 
@@ -62,7 +62,7 @@ export class AwsS3Account implements Account {
       context,
       this,
       await this.getS3Client(),
-      folder
+      folder,
     );
   }
 
@@ -71,21 +71,21 @@ export class AwsS3Account implements Account {
       context,
       this,
       await this.getS3Client(),
-      folderpath
+      folderpath,
     );
   }
 
   async moveFile(
     context: Span,
     file: File,
-    folderpathDestination: string
+    folderpathDestination: string,
   ): Promise<void> {
     await AwsS3AccountFileOperationsMoveFile(
       context,
       this,
       await this.getS3Client(),
       file,
-      folderpathDestination
+      folderpathDestination,
     );
   }
 
@@ -94,7 +94,7 @@ export class AwsS3Account implements Account {
       context,
       this,
       await this.getS3Client(),
-      folder
+      folder,
     );
   }
 
@@ -106,7 +106,7 @@ export class AwsS3Account implements Account {
     context: Span,
     file: File,
     destinationFolderpath: string,
-    destinationFilename: string
+    destinationFilename: string,
   ): Promise<void> {
     await AwsS3AccountFileOperationsDownloadFile(
       context,
@@ -114,7 +114,7 @@ export class AwsS3Account implements Account {
       await this.getS3Client(),
       file,
       destinationFolderpath,
-      destinationFilename
+      destinationFilename,
     );
   }
 
@@ -140,7 +140,7 @@ export class AwsS3Account implements Account {
       this,
       await this.getS3Client(),
       file,
-      filename
+      filename,
     );
   }
 
@@ -166,7 +166,7 @@ export class AwsS3Account implements Account {
     context: Span,
     file: File,
     folder: string,
-    filename: string
+    filename: string,
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }
@@ -175,7 +175,7 @@ export class AwsS3Account implements Account {
     context: Span,
     file: File,
     folder: string,
-    filename: string
+    filename: string,
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }
@@ -185,6 +185,10 @@ export class AwsS3Account implements Account {
   }
 
   deleteFolder(context: Span, folder: Folder): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  renameFolder(context: Span, folder: Folder, newName: string): Promise<void> {
     throw new Error("Method not implemented.");
   }
 }

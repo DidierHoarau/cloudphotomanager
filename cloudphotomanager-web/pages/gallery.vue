@@ -599,6 +599,8 @@ export default {
       this.activeOperation = "";
       if (result && result.action === "deep-refresh") {
         this.executeDeepRefresh();
+      } else if (result && result.action === "rename" && result.newName) {
+        this.executeRenameFolder(result.newName);
       }
     },
     clickedMove() {
@@ -692,6 +694,40 @@ export default {
         .catch(handleError);
       this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
       EventBus.emit(EventTypes.FOLDER_UPDATED, {});
+    },
+    async executeRenameFolder(newName) {
+      if (!this.folder || !this.folder.id) return;
+      const parentFolder = FoldersStore().getParentFolder(this.folder);
+      const parentFolderId = parentFolder ? parentFolder.id : null;
+      this.loading = true;
+      SyncStore().markOperationInProgress();
+      await axios
+        .put(
+          `${(await Config.get()).SERVER_URL}/accounts/${
+            this.folder.accountId
+          }/folders/${this.folder.id}/operations/rename`,
+          { newName },
+          await AuthService.getAuthHeader(),
+        )
+        .then(() => {
+          EventBus.emit(EventTypes.ALERT_MESSAGE, {
+            text: "Folder rename queued — running in background",
+          });
+          this.onOperationDone({ status: "invalidated" });
+          if (parentFolderId) {
+            useRouter().push({
+              path: "/gallery",
+              query: {
+                accountId: this.folder.accountId,
+                folderId: parentFolderId,
+              },
+            });
+          }
+        })
+        .catch(handleError)
+        .finally(() => {
+          this.loading = false;
+        });
     },
     async executeDeleteFolder() {
       this.activeOperation = "";
