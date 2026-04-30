@@ -242,7 +242,8 @@ export function SyncQueueGetQueue(): any[] {
     OTelTracer().startSpan("SyncQueueGetQueue"),
     "SELECT id, accountId, functionName, priority, status, data, fileIds " +
       "FROM sync_queue " +
-      "ORDER BY status DESC, priority ASC, dateCreated ASC LIMIT ?",
+      "ORDER BY CASE WHEN status = 'ACTIVE' THEN 0 ELSE 1 END, " +
+      "priority ASC, dateCreated ASC LIMIT ?",
     [QUEUE_ITEMS_BROADCAST_LIMIT],
   );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

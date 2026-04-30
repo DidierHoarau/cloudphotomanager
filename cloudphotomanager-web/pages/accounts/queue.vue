@@ -98,13 +98,17 @@ export default {
       const rawItems = SyncStore().wsConnected
         ? SyncStore().queueItems
         : this.httpItems;
-      return rawItems.map((item) => {
+      const mapped = rawItems.map((item) => {
         const account = find(accounts, { id: item.accountId });
         return {
           ...item,
           accountName: account ? account.name : item.accountId,
         };
       });
+      // Always show ACTIVE items on top, then WAITING, preserving server order within each group
+      const active = mapped.filter((i) => i.status === "ACTIVE");
+      const others = mapped.filter((i) => i.status !== "ACTIVE");
+      return [...active, ...others];
     },
     displayCounts() {
       if (SyncStore().wsConnected) {
