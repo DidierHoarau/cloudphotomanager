@@ -13,6 +13,7 @@ import {
   FileDataGetFileTmpDir,
   FileDataListByFolder,
   FileDataListForAccount,
+  FileDataListForAccountPaginated,
   FileDataUpdateInfo,
   FileDataUpdateKeywords,
 } from "../files/FileData";
@@ -25,6 +26,7 @@ import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SystemCommand } from "../SystemCommand";
 import { SyncQueueQueueItem } from "./SyncQueue";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
+import { SyncQueueGetBatchWaitingCount } from "./SyncQueue";
 
 const logger = OTelLogger().createModuleLogger("SyncFileCache");
 let config: Config;
@@ -114,9 +116,10 @@ export async function SyncFileCacheCheckFile(
     await SyncQueueQueueItem(
       account.getAccountDefinition().id,
       file.id,
-      file,
+      { fileId: file.id },
       "syncThumbnail",
       priority,
+      [file.id],
     );
   }
 
@@ -124,9 +127,10 @@ export async function SyncFileCacheCheckFile(
     await SyncQueueQueueItem(
       account.getAccountDefinition().id,
       file.id,
-      file,
+      { fileId: file.id },
       "syncPhotoFromFull",
       priority,
+      [file.id],
     );
   }
 
@@ -134,9 +138,10 @@ export async function SyncFileCacheCheckFile(
     await SyncQueueQueueItem(
       account.getAccountDefinition().id,
       file.id,
-      file,
+      { fileId: file.id },
       "syncPhotoKeyWords",
       SyncQueueItemPriority.BATCH,
+      [file.id],
     );
   }
 
@@ -144,9 +149,10 @@ export async function SyncFileCacheCheckFile(
     await SyncQueueQueueItem(
       account.getAccountDefinition().id,
       file.id,
-      file,
+      { fileId: file.id },
       "syncVideoFromFull",
       SyncQueueItemPriority.BATCH,
+      [file.id],
     );
   }
 
@@ -154,9 +160,10 @@ export async function SyncFileCacheCheckFile(
     await SyncQueueQueueItem(
       account.getAccountDefinition().id,
       file.id,
-      file,
+      { fileId: file.id },
       "syncThumbnailFromVideoPreview",
       priority,
+      [file.id],
     );
   }
 
@@ -529,4 +536,74 @@ function countSlashesInPath(folderPath: string) {
     }
   }
   return count;
+}
+
+export async function SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews(
+  context: Span,
+  accountId: string,
+) {
+  const BATCH_MAX_QUEUE_SIZE = 20;
+  const BATCH_WAIT_MS = 60_000;
+  const span = OTelTracer().startSpan(
+    "SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews",
+    context,
+  );
+
+  logger.info(
+    `Starting daily check for files missing thumbnails or previews for account ${accountId}`,
+    span,
+  );
+
+  const pageSize = 20;
+  let page = 0;
+  let totalQueued = 0;
+  const account = await AccountFactoryGetAccountImplementation(accountId);
+
+  while (true) {
+    // Wait until the batch queue has drained below the threshold before adding more
+    while (SyncQueueGetBatchWaitingCount() >= BATCH_MAX_QUEUE_SIZE) {
+      await new Promise((resolve) => setTimeout(resolve, BATCH_WAIT_MS));
+    }
+
+    const { files, total } = await FileDataListForAccountPaginated(
+      span,
+      accountId,
+      page,
+      pageSize,
+    );
+
+    if (files.length === 0) {
+      break;
+    }
+
+    for (const file of files) {
+      try {
+        await SyncFileCacheCheckFile(
+          span,
+          account,
+          file,
+          SyncQueueItemPriority.BATCH,
+        );
+        totalQueued++;
+      } catch (error) {
+        logger.error(
+          `Error checking file ${file.id} for missing thumbnail/preview`,
+          error,
+          span,
+        );
+      }
+    }
+
+    page++;
+    if (page * pageSize >= total) {
+      break;
+    }
+  }
+
+  logger.info(
+    `Daily check completed for account ${accountId}: ${totalQueued} files checked for synchronization`,
+    span,
+  );
+
+  span.end();
 }

@@ -25,18 +25,12 @@
             :key="file.id"
             class="duplicate-card"
           >
-            <div class="duplicate-card-thumb" @click="focusGalleryItem(file)">
-              <img
-                :src="getThumbnailUrl(file)"
-                onerror="
-                  this.onerror = null;
-                  this.src = '/images/file-sync-in-progress.webp';
-                "
-                alt="thumbnail"
+            <div class="duplicate-card-thumb">
+              <LazyMediaThumbnail
+                :file="file"
+                :duplicateCount="file.duplicates.files.length"
+                @click="focusGalleryItem(file)"
               />
-              <span class="duplicate-card-badge"
-                >x{{ file.duplicates.files.length }}</span
-              >
             </div>
             <div class="duplicate-card-paths">
               <div
@@ -71,14 +65,7 @@
           Duplicate Group
         </header>
         <div class="dialog-thumbnail">
-          <img
-            :src="getThumbnailUrl(selectedFile)"
-            onerror="
-              this.onerror = null;
-              this.src = '/images/file-sync-in-progress.webp';
-            "
-            alt="Thumbnail"
-          />
+          <LazyMediaThumbnail :file="selectedFile" />
         </div>
         <table class="dialog-info-table">
           <tbody>
@@ -142,7 +129,6 @@ export default {
       analysis: [],
       menuOpened: true,
       serverUrl: "",
-      staticUrl: "",
       selectedFile: null,
       loading: false,
       loadingMore: false,
@@ -162,7 +148,6 @@ export default {
   async created() {
     const config = await Config.get();
     this.serverUrl = config.SERVER_URL;
-    this.staticUrl = config.STATIC_URL;
     await AccountsStore().fetch();
     await FoldersStore().fetch();
   },
@@ -270,21 +255,6 @@ export default {
         });
       }
       return result;
-    },
-    getThumbnailUrl(file) {
-      if (!file || !this.staticUrl) return "";
-      return (
-        this.staticUrl +
-        "/" +
-        file.accountId +
-        "/" +
-        file.id[0] +
-        "/" +
-        file.id[1] +
-        "/" +
-        file.id +
-        "/thumbnail.webp"
-      );
     },
     async onAccountSelected(account) {
       await this.loadAccountDuplicate(account.id);
@@ -400,24 +370,9 @@ export default {
 .duplicate-card-thumb {
   position: relative;
   cursor: pointer;
-}
-.duplicate-card-thumb img {
-  width: 100%;
   height: 8em;
-  object-fit: cover;
   border-radius: 0.3em;
-  display: block;
-}
-.duplicate-card-badge {
-  position: absolute;
-  top: 0.3em;
-  right: 0.3em;
-  background: rgba(20, 20, 40, 0.75);
-  color: #aaf;
-  font-size: 0.7em;
-  padding: 0.15em 0.45em;
-  border-radius: 0.9em;
-  pointer-events: none;
+  overflow: hidden;
 }
 .duplicate-card-paths {
   display: flex;

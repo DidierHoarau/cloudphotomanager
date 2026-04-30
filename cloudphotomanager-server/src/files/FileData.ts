@@ -284,6 +284,36 @@ export async function FileDataDeleteNoFolder(
   span.end();
 }
 
+export async function FileDataListForAccountPaginated(
+  context: Span,
+  accountId: string,
+  page: number,
+  pageSize: number,
+): Promise<{ files: File[]; total: number }> {
+  const span = OTelTracer().startSpan(
+    "FileDataListForAccountPaginated",
+    context,
+  );
+  const offset = page * pageSize;
+  const countRaw = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT COUNT(*) as count FROM files WHERE accountId = ?",
+    [accountId],
+  );
+  const total = countRaw.length > 0 ? countRaw[0].count : 0;
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT * FROM files WHERE accountId = ? LIMIT ? OFFSET ?",
+    [accountId, pageSize, offset],
+  );
+  const files: File[] = [];
+  rawData.forEach((fileRaw: any) => {
+    files.push(fromRaw(fileRaw));
+  });
+  span.end();
+  return { files, total };
+}
+
 // Private Funciton
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

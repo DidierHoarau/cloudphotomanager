@@ -1,6 +1,6 @@
 <template>
   <dialog open>
-    <article>
+    <article class="dialog-standard">
       <header>
         <a
           href="#close"
@@ -10,20 +10,24 @@
         ></a>
         Move File
       </header>
-      <label>Destination Folder</label>
-      <FolderList
-        v-if="accountId"
-        class="dialog-folder-selection"
-        :accountId="accountId"
-        @onFolderSelected="onFolderSelected"
-      />
-      <input id="name" v-model="selectedFolderpath" type="text" />
-      <button
-        :disabled="loading || selectedFolderpath === ''"
-        v-on:click="doAction()"
-      >
-        Move
-      </button>
+      <div class="dialog-standard-body">
+        <label>Destination Folder</label>
+        <FolderList
+          v-if="accountId"
+          class="dialog-folder-selection"
+          :accountId="accountId"
+          @onFolderSelected="onFolderSelected"
+        />
+        <input id="name" v-model="selectedFolderpath" type="text" />
+      </div>
+      <footer class="dialog-standard-footer">
+        <button
+          :disabled="loading || selectedFolderpath === ''"
+          v-on:click="doAction()"
+        >
+          Move
+        </button>
+      </footer>
     </article>
   </dialog>
 </template>

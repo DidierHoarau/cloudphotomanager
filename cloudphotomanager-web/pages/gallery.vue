@@ -13,9 +13,6 @@
       </div>
     </div>
     <div class="gallery-files-actions">
-      <button class="secondary outline" v-on:click="clickedRefresh()">
-        <i class="bi bi-arrow-clockwise"></i> Refresh
-      </button>
       <button
         v-if="files.length > 0 && authenticationStore.isAdmin"
         class="secondary outline"
@@ -53,28 +50,28 @@
         <i class="bi bi-arrows-move"></i> Move...
       </button>
       <button
-        v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
+        v-if="authenticationStore.isAdmin"
         class="secondary outline"
-        v-on:click="clickedAdvanced()"
+        v-on:click="clickedMore()"
       >
         <i class="bi bi-three-dots"></i> More...
       </button>
       <button class="secondary outline" v-on:click="clickedOptions()">
         <i class="bi bi-sliders"></i> Options...
       </button>
-      <span class="option-outtakes" v-if="outtakesCount > 0">
-        <label>
-          <input v-model="showOutakes" type="checkbox" /> OutTakes ({{
-            outtakesCount
-          }})
-        </label></span
-      >
+    </div>
+    <div class="gallery-outtakes-section" v-if="outtakesCount > 0">
+      <label class="outtakes-checkbox">
+        <input v-model="showOutakes" type="checkbox" />
+        <span>OutTakes ({{ outtakesCount }})</span>
+      </label>
     </div>
     <div class="gallery-file-list">
       <Loading v-if="loading" />
       <template v-else>
         <Gallery
           :files="filterOuttakes(files)"
+          :duplicateCounts="duplicateCounts"
           @focusGalleryItem="focusGalleryItem"
           @onFileSelected="onFileSelected"
           :selectedFiles="selectedFiles"
@@ -115,6 +112,7 @@
       v-if="activeOperation == 'select'"
       :selectedFiles="selectedFiles"
       :files="files"
+      :duplicateCounts="duplicateCounts"
       @onDone="onDialogClosed"
     />
     <DialogAdvanced
@@ -122,6 +120,11 @@
       :selectedFiles="selectedFiles"
       :files="selectedFiles"
       @onDone="onDialogClosed"
+    />
+    <DialogFolderActions
+      v-if="activeOperation == 'folder-actions'"
+      :folder="folder"
+      @onDone="onFolderActionsDone"
     />
     <DialogGalleryOptions
       v-if="activeOperation == 'options'"
@@ -142,6 +145,7 @@ import axios from "axios";
 import { find, findIndex, filter } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
+import { DuplicateCountService } from "~~/services/DuplicateCountService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import { FileUtils } from "~~/services/FileUtils";
 
@@ -177,6 +181,7 @@ export default {
       hasMore: false,
       loadingMore: false,
       observer: null,
+      duplicateCounts: {},
       _onFolderUpdated: null,
       _onFileUpdated: null,
       _onFolderSelected: null,
@@ -239,6 +244,17 @@ export default {
           (f) => !removedSet.has(f.id),
         );
         this.outtakesCount = this.files.filter((f) => f.isOuttake).length;
+        DuplicateCountService.invalidate(
+          this.currentAccountId,
+          affectedFileIds,
+        );
+        this.duplicateCounts = Object.fromEntries(
+          Object.entries(this.duplicateCounts).filter(
+            ([id]) => !removedSet.has(id),
+          ),
+        );
+        // Counts for remaining files may have dropped — refresh them.
+        this.refreshDuplicateCounts(this.files.map((f) => f.id));
         return;
       }
 
@@ -365,6 +381,72 @@ export default {
       }
       return files;
     },
+    _markOuttakes(files) {
+      let count = 0;
+      for (const file of files) {
+        file.isOuttake = file.filename.indexOf("-outtake.") > 0;
+        if (file.isOuttake) count++;
+      }
+      return count;
+    },
+    async _requestFilesPage({ accountId, folderId, page, pageSize }) {
+      const serverUrl = (await Config.get()).SERVER_URL;
+      const params = new URLSearchParams({
+        includeSubFolders: String(this.includeSubFolders),
+        sortOrder: this.sortOrder,
+        page: String(page),
+        pageSize: String(pageSize),
+      });
+      const res = await axios.get(
+        `${serverUrl}/accounts/${accountId}/folders/${folderId}/files-recursive?${params}`,
+        await AuthService.getAuthHeader(),
+      );
+      return {
+        files: res.data.files || [],
+        total: res.data.total || 0,
+      };
+    },
+    scheduleDuplicateCountLoad(newFiles) {
+      if (!this.currentAccountId || !newFiles || newFiles.length === 0) {
+        return;
+      }
+      const accountId = this.currentAccountId;
+      const idsToFetch = [];
+      const cached = {};
+      for (const file of newFiles) {
+        const cachedCount = DuplicateCountService.getCached(accountId, file.id);
+        if (cachedCount === undefined) {
+          idsToFetch.push(file.id);
+        } else if (cachedCount >= 2) {
+          cached[file.id] = cachedCount;
+        }
+      }
+      if (Object.keys(cached).length > 0) {
+        this.duplicateCounts = { ...this.duplicateCounts, ...cached };
+      }
+      if (idsToFetch.length === 0) {
+        return;
+      }
+      DuplicateCountService.request(accountId, idsToFetch).then((counts) => {
+        if (this.currentAccountId !== accountId) return;
+        if (!counts || Object.keys(counts).length === 0) return;
+        this.duplicateCounts = { ...this.duplicateCounts, ...counts };
+      });
+    },
+    refreshDuplicateCounts(fileIds) {
+      if (!this.currentAccountId || !fileIds || fileIds.length === 0) return;
+      DuplicateCountService.invalidate(this.currentAccountId, fileIds);
+      const accountId = this.currentAccountId;
+      DuplicateCountService.request(accountId, fileIds).then((counts) => {
+        if (this.currentAccountId !== accountId) return;
+        // Remove ids that no longer have duplicates, then merge new counts.
+        const next = { ...this.duplicateCounts };
+        for (const id of fileIds) {
+          if (!(id in counts)) delete next[id];
+        }
+        this.duplicateCounts = { ...next, ...counts };
+      });
+    },
     async fetchFiles(accountId, folderId, forceLoading = false) {
       const requestEtag = new Date().toISOString();
       if (
@@ -374,46 +456,34 @@ export default {
       ) {
         this.currentAccountId = accountId;
         this.currentFolderId = folderId;
+        this.selectedFiles = [];
         this.files = [];
+        this.duplicateCounts = {};
         this.currentPage = 0;
         this.hasMore = false;
         this.loading = true;
       }
       this.requestEtag = requestEtag;
-      const serverUrl = (await Config.get()).SERVER_URL;
-      const params = new URLSearchParams({
-        includeSubFolders: String(this.includeSubFolders),
-        sortOrder: this.sortOrder,
-        page: "0",
-        pageSize: String(this.pageSize),
-      });
-      await axios
-        .get(
-          `${serverUrl}/accounts/${accountId}/folders/${folderId}/files-recursive?${params}`,
-          await AuthService.getAuthHeader(),
-        )
-        .then((res) => {
-          this.outtakesCount = 0;
-          if (this.requestEtag === requestEtag) {
-            const newFiles = res.data.files || [];
-            for (const file of newFiles) {
-              file.isOuttake = false;
-              if (file.filename.indexOf("-outtake.") > 0) {
-                file.isOuttake = true;
-                this.outtakesCount++;
-              }
-            }
-            this.files = newFiles;
-            this.currentPage = 0;
-            this.hasMore =
-              res.data.total > (this.currentPage + 1) * this.pageSize;
-          }
-        })
-        .catch(handleError)
-        .finally(() => {
-          this.requestEtag = "";
-          this.loading = false;
+      try {
+        const { files: newFiles, total } = await this._requestFilesPage({
+          accountId,
+          folderId,
+          page: 0,
+          pageSize: this.pageSize,
         });
+        if (this.requestEtag === requestEtag) {
+          this.outtakesCount = this._markOuttakes(newFiles);
+          this.files = newFiles;
+          this.currentPage = 0;
+          this.hasMore = total > (this.currentPage + 1) * this.pageSize;
+          this.scheduleDuplicateCountLoad(newFiles);
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        this.requestEtag = "";
+        this.loading = false;
+      }
       this.folder = find(FoldersStore().folders, { id: folderId }) || {};
     },
     async loadMoreFiles() {
@@ -422,63 +492,41 @@ export default {
       }
       this.loadingMore = true;
       const nextPage = this.currentPage + 1;
-      const serverUrl = (await Config.get()).SERVER_URL;
-      const params = new URLSearchParams({
-        includeSubFolders: String(this.includeSubFolders),
-        sortOrder: this.sortOrder,
-        page: String(nextPage),
-        pageSize: String(this.pageSize),
-      });
-      await axios
-        .get(
-          `${serverUrl}/accounts/${this.currentAccountId}/folders/${this.currentFolderId}/files-recursive?${params}`,
-          await AuthService.getAuthHeader(),
-        )
-        .then((res) => {
-          const newFiles = res.data.files || [];
-          for (const file of newFiles) {
-            file.isOuttake = false;
-            if (file.filename.indexOf("-outtake.") > 0) {
-              file.isOuttake = true;
-              this.outtakesCount++;
-            }
-          }
-          this.files = [...this.files, ...newFiles];
-          this.currentPage = nextPage;
-          this.hasMore = res.data.total > (nextPage + 1) * this.pageSize;
-        })
-        .catch(handleError)
-        .finally(() => {
-          this.loadingMore = false;
+      try {
+        const { files: newFiles, total } = await this._requestFilesPage({
+          accountId: this.currentAccountId,
+          folderId: this.currentFolderId,
+          page: nextPage,
+          pageSize: this.pageSize,
         });
+        this.outtakesCount += this._markOuttakes(newFiles);
+        this.files = [...this.files, ...newFiles];
+        this.currentPage = nextPage;
+        this.hasMore = total > (nextPage + 1) * this.pageSize;
+        this.scheduleDuplicateCountLoad(newFiles);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        this.loadingMore = false;
+      }
     },
     async fetchFilesSilent() {
       if (!this.currentAccountId || !this.currentFolderId) return;
-      const serverUrl = (await Config.get()).SERVER_URL;
       const totalToFetch = Math.max(
         this.pageSize,
         (this.currentPage + 1) * this.pageSize,
       );
-      const params = new URLSearchParams({
-        includeSubFolders: String(this.includeSubFolders),
-        sortOrder: this.sortOrder,
-        page: "0",
-        pageSize: String(totalToFetch),
-      });
       try {
-        const res = await axios.get(
-          `${serverUrl}/accounts/${this.currentAccountId}/folders/${this.currentFolderId}/files-recursive?${params}`,
-          await AuthService.getAuthHeader(),
-        );
-        const newFiles = res.data.files || [];
-        let outtakesCount = 0;
-        for (const file of newFiles) {
-          file.isOuttake = file.filename.indexOf("-outtake.") > 0;
-          if (file.isOuttake) outtakesCount++;
-        }
+        const { files: newFiles, total } = await this._requestFilesPage({
+          accountId: this.currentAccountId,
+          folderId: this.currentFolderId,
+          page: 0,
+          pageSize: totalToFetch,
+        });
+        this.outtakesCount = this._markOuttakes(newFiles);
         this.files = newFiles;
-        this.outtakesCount = outtakesCount;
-        this.hasMore = res.data.total > totalToFetch;
+        this.hasMore = total > totalToFetch;
+        this.scheduleDuplicateCountLoad(newFiles);
       } catch (err) {
         handleError(err);
       }
@@ -547,14 +595,26 @@ export default {
       this.selectedFiles = [];
       this.activeOperation = "";
     },
+    onFolderActionsDone(result) {
+      this.activeOperation = "";
+      if (result && result.action === "deep-refresh") {
+        this.executeDeepRefresh();
+      } else if (result && result.action === "rename" && result.newName) {
+        this.executeRenameFolder(result.newName);
+      }
+    },
     clickedMove() {
       this.activeOperation = "move";
     },
     clickedSelect() {
       this.activeOperation = "select";
     },
-    clickedAdvanced() {
-      this.activeOperation = "advanced";
+    clickedMore() {
+      if (this.selectedFiles.length > 0) {
+        this.activeOperation = "advanced";
+      } else {
+        this.activeOperation = "folder-actions";
+      }
     },
     clickedOptions() {
       this.activeOperation = "options";
@@ -616,6 +676,59 @@ export default {
       ).id;
       this.activeOperation = "confirm-delete-folder";
     },
+    async executeDeepRefresh() {
+      SyncStore().markOperationInProgress();
+      await axios
+        .put(
+          `${(await Config.get()).SERVER_URL}/accounts/${
+            this.currentAccountId
+          }/folders/${this.currentFolderId}/deep-sync`,
+          {},
+          await AuthService.getAuthHeader(),
+        )
+        .then(() => {
+          EventBus.emit(EventTypes.ALERT_MESSAGE, {
+            text: "Deep refresh queued — running in background",
+          });
+        })
+        .catch(handleError);
+      this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
+      EventBus.emit(EventTypes.FOLDER_UPDATED, {});
+    },
+    async executeRenameFolder(newName) {
+      if (!this.folder || !this.folder.id) return;
+      const parentFolder = FoldersStore().getParentFolder(this.folder);
+      const parentFolderId = parentFolder ? parentFolder.id : null;
+      this.loading = true;
+      SyncStore().markOperationInProgress();
+      await axios
+        .put(
+          `${(await Config.get()).SERVER_URL}/accounts/${
+            this.folder.accountId
+          }/folders/${this.folder.id}/operations/rename`,
+          { newName },
+          await AuthService.getAuthHeader(),
+        )
+        .then(() => {
+          EventBus.emit(EventTypes.ALERT_MESSAGE, {
+            text: "Folder rename queued — running in background",
+          });
+          this.onOperationDone({ status: "invalidated" });
+          if (parentFolderId) {
+            useRouter().push({
+              path: "/gallery",
+              query: {
+                accountId: this.folder.accountId,
+                folderId: parentFolderId,
+              },
+            });
+          }
+        })
+        .catch(handleError)
+        .finally(() => {
+          this.loading = false;
+        });
+    },
     async executeDeleteFolder() {
       this.activeOperation = "";
       const parentFolderId = this._pendingDeleteFolderParentId;
@@ -674,7 +787,7 @@ export default {
   }
   .gallery-layout {
     display: grid;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto 1fr;
     grid-template-columns: auto 1fr 1fr;
     column-gap: 1em;
     overflow: hidden;
@@ -685,9 +798,15 @@ export default {
     grid-column-start: 2;
     grid-column-end: span 2;
   }
+  .gallery-outtakes-section {
+    grid-row: 2;
+    grid-column-start: 2;
+    grid-column-end: span 2;
+    padding-top: 0;
+  }
   .gallery-file-list {
     overflow: auto;
-    grid-row: 2;
+    grid-row: 3;
     grid-column-start: 2;
     grid-column-end: span 2;
   }
@@ -702,7 +821,7 @@ export default {
     overflow: auto;
     height: auto;
     grid-row-start: 1;
-    grid-row-end: span 2;
+    grid-row-end: span 3;
     grid-column: 1;
   }
   .gallery-layout-actions-menu-toggle {
@@ -716,7 +835,7 @@ export default {
 @media (max-width: 900px) {
   .gallery-layout {
     display: grid;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto auto auto 1fr;
     grid-template-columns: 1fr;
     column-gap: 1em;
     overflow: hidden;
@@ -763,9 +882,13 @@ export default {
     grid-row: 2;
     grid-column: 1;
   }
+  .gallery-outtakes-section {
+    grid-row: 3;
+    grid-column: 1;
+  }
   .gallery-file-list {
     overflow: auto;
-    grid-row: 3;
+    grid-row: 4;
     grid-column: 1;
   }
   .gallery-folders {
@@ -826,17 +949,29 @@ export default {
   margin-right: 1em;
 }
 
-.option-outtakes {
-  opacity: 30%;
+.gallery-outtakes-section {
+  display: flex;
+  align-items: center;
+  padding: 0.5em 0.5em;
   font-size: 0.8em;
+  opacity: 0.85;
 }
-.option-outtakes input {
-  height: 1em;
+
+.outtakes-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  cursor: pointer;
+  user-select: none;
+}
+
+.outtakes-checkbox input[type="checkbox"] {
+  cursor: pointer;
   width: 1em;
+  height: 1em;
+  margin: 0;
 }
-.option-outtakes label {
-  display: inline;
-}
+
 .sentinel {
   height: 1px;
   width: 100%;

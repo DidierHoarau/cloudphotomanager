@@ -11,6 +11,8 @@ export const SyncStore = defineStore("SyncStore", {
     processingFileIds: [] as string[],
     pendingFileIds: [] as string[],
     queueItems: [] as any[],
+    queueTotalItems: 0,
+    queueTruncated: false,
     monitoring: false,
     wsConnected: false,
     // Fallback polling state
@@ -90,6 +92,9 @@ export const SyncStore = defineStore("SyncStore", {
               total += c.count;
             }
             this.countTotal = total;
+            this.queueTotalItems =
+              typeof msg.totalItems === "number" ? msg.totalItems : total;
+            this.queueTruncated = !!msg.truncated;
           } else if (msg.type === "folder_cache_updated") {
             EventBus.emit(EventTypes.FOLDER_CACHE_UPDATED);
           } else if (msg.type === "operation_complete") {
