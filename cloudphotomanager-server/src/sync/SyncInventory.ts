@@ -76,7 +76,7 @@ export async function SyncInventorySyncFolder(
         SyncQueueQueueItem(
           accountId,
           cloudSubFolder.id,
-          cloudSubFolder,
+          { folderId: cloudSubFolder.id },
           "SyncInventorySyncFolder",
           priority,
         );
@@ -139,7 +139,7 @@ export async function SyncInventorySyncFolder(
         SyncQueueQueueItem(
           accountId,
           parentFolder.id,
-          parentFolder,
+          { folderId: parentFolder.id },
           "SyncInventorySyncFolder",
           priority,
         );

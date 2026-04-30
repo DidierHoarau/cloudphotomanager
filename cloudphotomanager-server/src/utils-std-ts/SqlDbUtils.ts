@@ -36,7 +36,7 @@ export async function SqlDbUtilsInit(
       if (dbVersionInitFile > dbVersionApplied) {
         logger.info(`Loading init file: ${initFile}`, span);
         SqlDbUtilsExecSQLFile(span, `${SQL_DIR}/${initFile}`);
-        SqlDbUtilsQuerySQL(
+        SqlDbUtilsExecSQL(
           span,
           "INSERT INTO metadata (type, value, dateCreated) VALUES ('db_version',?,?)",
           [dbVersionInitFile, new Date().toISOString()],

@@ -116,9 +116,10 @@ export async function SyncFileCacheCheckFile(
     await SyncQueueQueueItem(
       account.getAccountDefinition().id,
       file.id,
-      file,
+      { fileId: file.id },
       "syncThumbnail",
       priority,
+      [file.id],
     );
   }
 
@@ -126,9 +127,10 @@ export async function SyncFileCacheCheckFile(
     await SyncQueueQueueItem(
       account.getAccountDefinition().id,
       file.id,
-      file,
+      { fileId: file.id },
       "syncPhotoFromFull",
       priority,
+      [file.id],
     );
   }
 
@@ -136,9 +138,10 @@ export async function SyncFileCacheCheckFile(
     await SyncQueueQueueItem(
       account.getAccountDefinition().id,
       file.id,
-      file,
+      { fileId: file.id },
       "syncPhotoKeyWords",
       SyncQueueItemPriority.BATCH,
+      [file.id],
     );
   }
 
@@ -146,9 +149,10 @@ export async function SyncFileCacheCheckFile(
     await SyncQueueQueueItem(
       account.getAccountDefinition().id,
       file.id,
-      file,
+      { fileId: file.id },
       "syncVideoFromFull",
       SyncQueueItemPriority.BATCH,
+      [file.id],
     );
   }
 
@@ -156,9 +160,10 @@ export async function SyncFileCacheCheckFile(
     await SyncQueueQueueItem(
       account.getAccountDefinition().id,
       file.id,
-      file,
+      { fileId: file.id },
       "syncThumbnailFromVideoPreview",
       priority,
+      [file.id],
     );
   }
 

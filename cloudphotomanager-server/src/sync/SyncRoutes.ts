@@ -32,7 +32,7 @@ export class SyncRoutes {
     SyncQueueRegisterBroadcast(broadcastToClients);
     // Notify clients when folder cache is refreshed
     FolderDataRegisterOnCacheRefreshed(() =>
-      broadcastToClients({ type: "folder_cache_updated" })
+      broadcastToClients({ type: "folder_cache_updated" }),
     );
 
     //
@@ -52,9 +52,14 @@ export class SyncRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
+      const counts = SyncQueueGetCounts();
+      const items = SyncQueueGetQueue();
+      const totalItems = counts.reduce((sum, c) => sum + (c.count || 0), 0);
       return res.status(200).send({
-        counts: SyncQueueGetCounts(),
-        items: SyncQueueGetQueue(),
+        counts,
+        items,
+        totalItems,
+        truncated: items.length < totalItems,
       });
     });
 

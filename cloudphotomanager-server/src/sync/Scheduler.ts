@@ -111,7 +111,7 @@ export async function SchedulerStartAccountSync(
     SyncQueueQueueItem(
       accountId,
       rootFolderCloud.id,
-      rootFolderCloud,
+      { folderId: rootFolderCloud.id },
       "SyncInventorySyncFolder",
       SyncQueueItemPriority.NORMAL,
     );
@@ -124,7 +124,7 @@ export async function SchedulerStartAccountSync(
     SyncQueueQueueItem(
       accountId,
       folder.id,
-      folder,
+      { folderId: folder.id },
       "SyncInventorySyncFolder",
       SyncQueueItemPriority.NORMAL,
     );
@@ -205,7 +205,7 @@ async function SchedulerRunDeepScan(context: Span) {
         SyncQueueQueueItem(
           accountDefinition.id,
           folder.id,
-          folder,
+          { folderId: folder.id },
           "SyncInventorySyncFolder",
           SyncQueueItemPriority.NORMAL,
         );

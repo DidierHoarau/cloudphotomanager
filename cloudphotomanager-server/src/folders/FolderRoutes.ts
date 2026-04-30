@@ -159,7 +159,7 @@ export class FolderRoutes {
       SyncQueueQueueItem(
         account.getAccountDefinition().id,
         folder.id,
-        folder,
+        { folderId: folder.id },
         "SyncInventorySyncFolder",
         SyncQueueItemPriority.INTERACTIVE,
       );
@@ -199,7 +199,7 @@ export class FolderRoutes {
         SyncQueueQueueItem(
           account.getAccountDefinition().id,
           subFolder.id,
-          subFolder,
+          { folderId: subFolder.id },
           "SyncInventorySyncFolder",
           SyncQueueItemPriority.INTERACTIVE,
         );
@@ -235,7 +235,7 @@ export class FolderRoutes {
       SyncQueueQueueItem(
         req.params.accountId,
         folder.id,
-        folderParent,
+        { folderId: folderParent.id },
         "SyncInventorySyncFolder",
         SyncQueueItemPriority.INTERACTIVE,
       );
@@ -286,7 +286,7 @@ export class FolderRoutes {
       SyncQueueQueueItem(
         req.params.accountId,
         folderParent.id,
-        folderParent,
+        { folderId: folderParent.id },
         "SyncInventorySyncFolder",
         SyncQueueItemPriority.INTERACTIVE,
       );

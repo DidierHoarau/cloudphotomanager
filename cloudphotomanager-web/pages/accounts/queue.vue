@@ -13,6 +13,9 @@
     </div>
     <div class="queue-table">
       <Loading v-if="loading" />
+      <div v-if="!loading && displayTruncated" class="queue-truncated-hint">
+        Showing {{ resolvedItems.length }} of {{ displayTotalItems }} items
+      </div>
       <table v-if="!loading && resolvedItems.length > 0">
         <thead>
           <tr>
@@ -85,6 +88,8 @@ export default {
       loading: false,
       httpItems: [],
       httpCounts: { active: 0, waiting: 0 },
+      httpTotalItems: 0,
+      httpTruncated: false,
     };
   },
   computed: {
@@ -112,6 +117,16 @@ export default {
         return { active, waiting };
       }
       return this.httpCounts;
+    },
+    displayTotalItems() {
+      return SyncStore().wsConnected
+        ? SyncStore().queueTotalItems
+        : this.httpTotalItems;
+    },
+    displayTruncated() {
+      return SyncStore().wsConnected
+        ? SyncStore().queueTruncated
+        : this.httpTruncated;
     },
   },
   async created() {
@@ -148,6 +163,11 @@ export default {
 
         this.httpCounts = countsObj;
         this.httpItems = response.data.items || [];
+        this.httpTotalItems =
+          typeof response.data.totalItems === "number"
+            ? response.data.totalItems
+            : countsObj.active + countsObj.waiting;
+        this.httpTruncated = !!response.data.truncated;
       } catch (err) {
         handleError(err);
       } finally {
@@ -199,6 +219,16 @@ export default {
 
 .queue-table {
   overflow-x: auto;
+}
+
+.queue-truncated-hint {
+  margin: 0.5em 0;
+  padding: 0.5em 0.75em;
+  font-size: 0.85em;
+  opacity: 0.75;
+  border-left: 3px solid rgba(13, 110, 253, 0.5);
+  background: rgba(13, 110, 253, 0.08);
+  border-radius: 0.2em;
 }
 
 tbody tr.active {
