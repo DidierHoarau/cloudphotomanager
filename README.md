@@ -43,18 +43,40 @@ spec:
         - image: didierhoarau/cloudphotomanager:latest
           name: cloudphotomanager
           env:
+            # Storage provider credentials
             - name: ONEDRIVE_CLIENT_ID
               value: ... # Only needed for OneDrive
             - name: ONEDRIVE_CLIENT_SECRET
               value: ... # Only needed for OneDrive
             - name: ONEDRIVE_CALLBACK_SIGNIN
-              value: ... Only needed for OneDrive
+              value: ... # Only needed for OneDrive
             - name: AWS_ACCESS_KEY_ID
               value: ... # Only needed for S3
             - name: AWS_SECRET_ACCESS_KEY
               value: ... # Only needed for S3
             - name: AWS_DEFAULT_REGION
               value: ... # Only needed for S3
+            # Sync and scheduling (optional; defaults shown)
+            - name: AUTO_SYNC
+              value: "Y" # Set to "N" to disable automatic background sync
+            - name: SOURCE_FETCH_FREQUENCY
+              value: "1800000" # Base sync interval in milliseconds (30 min)
+            - name: SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR
+              value: "6" # Max multiplier applied to dynamic sync backoff
+            - name: CRON_METRIC_REFRESH
+              value: "*/15 * * * *" # Cron schedule for metric refresh
+            - name: CRON_SCAN_DEEP
+              value: "0 0 * * *" # Cron schedule for deep thumbnail/preview scan
+            # Database and media processing (optional; defaults shown)
+            - name: DATABASE_ASYNC_WRITE
+              value: "false" # Enable async SQLite writes (faster, less durable)
+            - name: VIDEO_PREVIEW_WIDTH
+              value: "900" # Width in pixels for generated video previews
+            # Image classification (optional; defaults shown)
+            - name: IMAGE_CLASSIFICATION_ENABLED
+              value: "true"
+            - name: IMAGE_CLASSIFICATION_MODEL
+              value: "Xenova/mobilenet_v2_1.0_224" # HuggingFace ONNX model
             # OpenTelemetry configuration (optional)
             - name: OPENTELEMETRY_COLLECTOR_HTTP_TRACES
               value: "" # Set to your OpenTelemetry traces endpoint
