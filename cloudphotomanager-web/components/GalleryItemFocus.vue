@@ -69,7 +69,7 @@
             >
               <i
                 class="bi"
-                :class="actionsMenuOpen ? 'bi-chevron-up' : 'bi-chevron-down'"
+                :class="actionsMenuOpen ? 'bi-chevron-down' : 'bi-chevron-up'"
               ></i>
             </button>
             <div v-if="actionsMenuOpen" class="action-menu-list">
@@ -742,7 +742,7 @@ export default {
   height: 100%;
   text-align: center;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
 }
 #media-container {
   display: grid;
@@ -759,12 +759,16 @@ export default {
   grid-row: 1;
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
   display: block;
 }
 .action-bar {
   position: fixed;
-  bottom: 1em;
+  bottom: 3em;
   left: 0;
   z-index: 200;
   display: flex;
