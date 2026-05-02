@@ -23,7 +23,7 @@
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "apache-md5": "^1.1.8",
     "aws-sdk": "^1.18.0",
-    "axios": "^1.15.2",
+    "axios": "^1.16.0",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.9.0",
     "exif-reader": "^2.0.3",
