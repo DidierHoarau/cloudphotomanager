@@ -15,13 +15,13 @@
   },
   "devDependencies": {
     "@types/lodash": "^4.17.24",
-    "nuxt": "4.4.2"
+    "nuxt": "4.4.4"
   },
   "dependencies": {
     "@picocss/pico": "^2.1.1",
     "@pinia/nuxt": "^0.11.3",
     "@vuepic/vue-datepicker": "^12.1.0",
-    "@vueuse/core": "^14.2.1",
+    "@vueuse/core": "^14.3.0",
     "axios": "^1.15.2",
     "bootstrap-icons": "^1.13.1",
     "hammerjs": "^2.0.8",
