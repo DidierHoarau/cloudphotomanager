@@ -37,6 +37,22 @@ const LEGACY_QUEUE_FILE_PATH = path.join(
 const BROADCAST_DEBOUNCE_MS = 500;
 const QUEUE_ITEMS_BROADCAST_LIMIT = 200;
 
+// Per-priority hard cap on how long a single dispatched item is allowed to
+// run. If a handler hangs (e.g., a cloud API never resolves), Promise.race
+// below ensures the finally block still runs so the DB row is cleared and
+// the pool slot is freed. Values are intentionally generous to avoid
+// aborting legitimate long-running syncs.
+const ITEM_PROCESS_TIMEOUTS: Record<number, number> = {
+  [SyncQueueItemPriority.INTERACTIVE]: 5 * 60 * 1000,
+  [SyncQueueItemPriority.NORMAL]: 30 * 60 * 1000,
+  [SyncQueueItemPriority.BATCH]: 4 * 3600 * 1000,
+};
+const DEFAULT_ITEM_PROCESS_TIMEOUT = 30 * 60 * 1000;
+const STUCK_ACTIVE_SWEEP_INTERVAL = 5 * 60 * 1000;
+// Extra grace on top of the longest per-item timeout before the sweeper
+// considers an ACTIVE row orphaned.
+const STUCK_ACTIVE_BUFFER = 30 * 60 * 1000;
+
 const logger = OTelLogger().createModuleLogger("SyncQueue");
 
 type QueueFunction = (
@@ -201,6 +217,7 @@ export async function SyncQueueInit(context: Span): Promise<void> {
   }
 
   processQueue();
+  startStuckActiveSweeper();
 
   span.end();
 }
@@ -431,14 +448,30 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
   }
 
   const itemProcess = async () => {
+    const timeoutMs =
+      ITEM_PROCESS_TIMEOUTS[item.priority] ?? DEFAULT_ITEM_PROCESS_TIMEOUT;
+    let timeoutHandle: NodeJS.Timeout | null = null;
     try {
-      const account = await AccountFactoryGetAccountImplementation(
-        item.accountId,
-      );
-      await fn(account, item.data, item.priority);
+      const work = (async () => {
+        const account = await AccountFactoryGetAccountImplementation(
+          item.accountId,
+        );
+        await fn(account, item.data, item.priority);
+      })();
+      const timeout = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(
+            new Error(
+              `Sync queue item ${item.id} (${item.functionName}) timed out after ${timeoutMs}ms`,
+            ),
+          );
+        }, timeoutMs);
+      });
+      await Promise.race([work, timeout]);
     } catch (err) {
       logger.error("Error Processing Queue Item", err);
     } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
       const span = OTelTracer().startSpan("SyncQueueItemComplete");
       SqlDbUtilsExecSQL(span, "DELETE FROM sync_queue WHERE id = ?", [item.id]);
       span.end();
@@ -455,6 +488,50 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
   };
 
   pool.add(itemProcess);
+}
+
+let stuckActiveSweeperStarted = false;
+
+function startStuckActiveSweeper(): void {
+  if (stuckActiveSweeperStarted) return;
+  stuckActiveSweeperStarted = true;
+  setInterval(() => {
+    const span = OTelTracer().startSpan("SyncQueueSweepStuckActive");
+    try {
+      const maxTimeoutMs = Math.max(
+        ...Object.values(ITEM_PROCESS_TIMEOUTS),
+        DEFAULT_ITEM_PROCESS_TIMEOUT,
+      );
+      const cutoff = new Date(
+        Date.now() - (maxTimeoutMs + STUCK_ACTIVE_BUFFER),
+      ).toISOString();
+      const stuck = SqlDbUtilsQuerySQL(
+        span,
+        "SELECT id, fileIds FROM sync_queue WHERE status = ? AND dateCreated < ?",
+        [SyncQueueItemStatus.ACTIVE, cutoff],
+      );
+      if (stuck.length === 0) {
+        return;
+      }
+      logger.info(
+        `Sweeping ${stuck.length} stuck ACTIVE sync_queue rows older than ${cutoff}`,
+      );
+      for (const row of stuck) {
+        SqlDbUtilsExecSQL(span, "DELETE FROM sync_queue WHERE id = ?", [
+          row.id,
+        ]);
+        for (const fid of safeParseStringArray(row.fileIds)) {
+          decrementFileIdRef(fid);
+        }
+      }
+      scheduleBroadcastQueueUpdate();
+      processQueue();
+    } catch (err) {
+      logger.error("Error in stuck-active sweeper", err);
+    } finally {
+      span.end();
+    }
+  }, STUCK_ACTIVE_SWEEP_INTERVAL);
 }
 
 function scheduleBroadcastQueueUpdate(): void {
