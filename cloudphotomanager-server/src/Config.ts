@@ -34,6 +34,15 @@ export class Config implements ConfigOTelInterface {
   public DATABASE_ASYNC_WRITE = false;
   public VIDEO_PREVIEW_WIDTH = 900;
   public IMAGE_CLASSIFICATION_ENABLED = true;
+  // HuggingFace transformers.js image-classification model. Must be an ONNX
+  // model compatible with pipeline("image-classification"). Examples:
+  //   "Xenova/mobilenet_v2_1.0_224"      (~14MB, default, fastest)
+  //   "Xenova/efficientnet-b0"           (~20MB, better accuracy)
+  //   "Xenova/deit-tiny-distilled-patch16-224" (~22MB)
+  //   "Xenova/vit-base-patch16-224"      (~340MB, highest accuracy)
+  public IMAGE_CLASSIFICATION_MODEL = "Xenova/mobilenet_v2_1.0_224";
+  public CRON_METRIC_REFRESH = "*/15 * * * *"; // every 15 minutes
+  public CRON_SCAN_DEEP = "0 0 * * *"; // every day at midnight
 
   constructor() {
     let version = "1";
@@ -89,5 +98,8 @@ export class Config implements ConfigOTelInterface {
     setIfSet("DATABASE_ASYNC_WRITE");
     setIfSet("VIDEO_PREVIEW_WIDTH");
     setIfSet("IMAGE_CLASSIFICATION_ENABLED");
+    setIfSet("IMAGE_CLASSIFICATION_MODEL");
+    setIfSet("CRON_METRIC_REFRESH");
+    setIfSet("CRON_SCAN_DEEP");
   }
 }

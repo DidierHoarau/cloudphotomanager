@@ -20,14 +20,7 @@
           File Info
         </header>
         <div class="dialog-thumbnail">
-          <img
-            :src="thumbnailUrl"
-            onerror="
-              this.onerror = null;
-              this.src = '/images/file-sync-in-progress.webp';
-            "
-            alt="Thumbnail"
-          />
+          <LazyMediaThumbnail :file="file" />
         </div>
         <table class="dialog-info-table">
           <tbody>
@@ -119,7 +112,6 @@ export default {
   },
   data() {
     return {
-      staticUrl: "",
       duplicates: null,
       loadingDuplicates: false,
       showConfirmDelete: false,
@@ -128,7 +120,6 @@ export default {
     };
   },
   async created() {
-    this.staticUrl = (await Config.get()).STATIC_URL;
     await this.loadDuplicates();
   },
   methods: {
@@ -214,21 +205,6 @@ export default {
     },
     isAdmin() {
       return AuthenticationStore().isAdmin;
-    },
-    thumbnailUrl() {
-      if (!this.file || !this.staticUrl) return "";
-      return (
-        this.staticUrl +
-        "/" +
-        this.file.accountId +
-        "/" +
-        this.file.id[0] +
-        "/" +
-        this.file.id[1] +
-        "/" +
-        this.file.id +
-        "/thumbnail.webp"
-      );
     },
   },
 };

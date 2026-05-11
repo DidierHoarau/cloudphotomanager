@@ -3,12 +3,12 @@ import { FastifyInstance } from "fastify";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { FileDataListByFolder } from "../files/FileData";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { SyncInventorySyncFolder } from "../sync/SyncInventory";
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
 import { UserPermissionCheckFilterFoldersForUser } from "../users/UserPermissionCheck";
 import {
   FolderDataDelete,
+  FolderDataDeletePathRecursive,
   FolderDataGet,
   FolderDataGetParent,
   FolderDataListCountsForAccount,
@@ -159,10 +159,51 @@ export class FolderRoutes {
       SyncQueueQueueItem(
         account.getAccountDefinition().id,
         folder.id,
-        folder,
+        { folderId: folder.id },
         "SyncInventorySyncFolder",
         SyncQueueItemPriority.INTERACTIVE,
       );
+      return res.status(200).send({});
+    });
+
+    fastify.put<{
+      Params: {
+        accountId: string;
+        folderId: string;
+      };
+    }>("/:folderId/deep-sync", async (req, res) => {
+      const span = OTelRequestSpan(req);
+      const userSession = await AuthGetUserSession(req);
+      if (!userSession.isAuthenticated) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const folder = await FolderDataGet(span, req.params.folderId);
+      if (!folder) {
+        return res.status(200).send({});
+      }
+      const account = await AccountFactoryGetAccountImplementation(
+        req.params.accountId,
+      );
+      const allFolders = await FolderDataListForAccount(
+        span,
+        req.params.accountId,
+      );
+      const prefix = folder.folderpath === "/" ? "/" : `${folder.folderpath}/`;
+      const foldersToSync = allFolders.filter(
+        (f) =>
+          f.id === folder.id ||
+          f.folderpath === folder.folderpath ||
+          f.folderpath.startsWith(prefix),
+      );
+      for (const subFolder of foldersToSync) {
+        SyncQueueQueueItem(
+          account.getAccountDefinition().id,
+          subFolder.id,
+          { folderId: subFolder.id },
+          "SyncInventorySyncFolder",
+          SyncQueueItemPriority.INTERACTIVE,
+        );
+      }
       return res.status(200).send({});
     });
 
@@ -194,11 +235,62 @@ export class FolderRoutes {
       SyncQueueQueueItem(
         req.params.accountId,
         folder.id,
-        folderParent,
+        { folderId: folderParent.id },
         "SyncInventorySyncFolder",
         SyncQueueItemPriority.INTERACTIVE,
       );
       return res.status(202).send({});
+    });
+
+    fastify.put<{
+      Params: {
+        accountId: string;
+        folderId: string;
+      };
+      Body: {
+        newName: string;
+      };
+    }>("/:folderId/operations/rename", async (req, res) => {
+      const span = OTelRequestSpan(req);
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const newName = (req.body?.newName || "").trim();
+      if (!newName) {
+        return res.status(400).send({ error: "Missing parameter: newName" });
+      }
+      if (newName.includes("/") || newName === "." || newName === "..") {
+        return res.status(400).send({ error: "Invalid folder name" });
+      }
+      const folder = await FolderDataGet(span, req.params.folderId);
+      if (!folder) {
+        return res.status(404).send({ error: "Folder not found" });
+      }
+      if (folder.folderpath === "/") {
+        return res.status(403).send({ error: "Can not rename root folder" });
+      }
+      const folderParent = await FolderDataGetParent(span, folder.id);
+      if (!folderParent) {
+        return res.status(404).send({ error: "Parent folder not found" });
+      }
+      const account = await AccountFactoryGetAccountImplementation(
+        req.params.accountId,
+      );
+      await account.renameFolder(span, folder, newName);
+      await FolderDataDeletePathRecursive(
+        span,
+        account.getAccountDefinition().id,
+        folder.folderpath,
+      );
+      SyncQueueQueueItem(
+        req.params.accountId,
+        folderParent.id,
+        { folderId: folderParent.id },
+        "SyncInventorySyncFolder",
+        SyncQueueItemPriority.INTERACTIVE,
+      );
+      return res.status(202).send({ parentFolderId: folderParent.id });
     });
   }
 }

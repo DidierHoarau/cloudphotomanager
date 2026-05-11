@@ -8,16 +8,36 @@ export interface Account {
   validate(context: Span): Promise<boolean>;
   listFilesInFolder(context: Span, folder: Folder): Promise<File[]>;
   listFoldersInFolder(context: Span, folder: Folder): Promise<Folder[]>;
-  downloadFile(context: Span, file: File, destinationFolderpath: string, destinationFilename: string): Promise<void>;
-  downloadPreview(context: Span, file: File, folder: string, filename: string): Promise<void>;
-  downloadThumbnail(context: Span, file: File, folder: string, filename: string): Promise<void>;
+  downloadFile(
+    context: Span,
+    file: File,
+    destinationFolderpath: string,
+    destinationFilename: string,
+  ): Promise<void>;
+  downloadPreview(
+    context: Span,
+    file: File,
+    folder: string,
+    filename: string,
+  ): Promise<void>;
+  downloadThumbnail(
+    context: Span,
+    file: File,
+    folder: string,
+    filename: string,
+  ): Promise<void>;
   getAccountDefinition(): AccountDefinition;
   updateFileMetadata(context: Span, file: File): Promise<void>;
-  moveFile(context: Span, file: File, folderpathDestination: string): Promise<void>;
+  moveFile(
+    context: Span,
+    file: File,
+    folderpathDestination: string,
+  ): Promise<void>;
   deleteFile(context: Span, file: File): Promise<void>;
   getFolder(context: Span, folder: Folder): Promise<Folder>;
   getFolderByPath(context: Span, folderpath: string): Promise<Folder>;
   getCapabilities(): AccountCapabilities;
   deleteFolder(context: Span, folder: Folder): Promise<void>;
+  renameFolder(context: Span, folder: Folder, newName: string): Promise<void>;
   renameFile(context: Span, file: File, filename: string): Promise<void>;
 }

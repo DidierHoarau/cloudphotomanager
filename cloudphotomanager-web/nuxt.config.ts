@@ -15,12 +15,18 @@ export default defineNuxtConfig({
         { rel: "manifest", href: "/manifest.json" },
         { rel: "icon", href: "/icon.png" },
         { rel: "stylesheet", href: "/styles.css" },
-        { rel: "stylesheet", href: "https://unpkg.com/@picocss/pico@latest/css/pico.min.css" },
-        { rel: "stylesheet", href: "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" },
+        {
+          rel: "stylesheet",
+          href: "https://unpkg.com/@picocss/pico@latest/css/pico.min.css",
+        },
+        {
+          rel: "stylesheet",
+          href: "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css",
+        },
       ],
     },
   },
-  css: ["~/assets/css/main.css"],
+  css: ["~/assets/css/main.css", "~/assets/css/duplicate-badge.css"],
   modules: ["@pinia/nuxt"],
   imports: {
     dirs: ["./stores"],

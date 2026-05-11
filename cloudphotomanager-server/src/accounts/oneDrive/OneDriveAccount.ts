@@ -20,6 +20,7 @@ import {
   OneDriveFileOperationsDownloadThumbnail,
   OneDriveFileOperationsMoveFile,
   OneDriveFileOperationsRenameFile,
+  OneDriveFileOperationsRenameFolder,
 } from "./OneDriveFileOperations";
 import { OTelLogger, OTelTracer } from "../../OTelContext";
 
@@ -53,7 +54,7 @@ export class OneDriveAccount implements Account {
   public async updateFileMetadata(context: Span, file: File): Promise<void> {
     const span = OTelTracer().startSpan(
       "OneDriveAccount_updateFileMetadata",
-      context
+      context,
     );
     const info = (
       await axios.get(
@@ -62,7 +63,7 @@ export class OneDriveAccount implements Account {
           headers: {
             Authorization: `Bearer ${await this.getToken(context)}`,
           },
-        }
+        },
       )
     ).data;
     if (info.photo) {
@@ -87,7 +88,7 @@ export class OneDriveAccount implements Account {
     await axios
       .post(
         "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-        params
+        params,
       )
       .then((res) => {
         if (res.data.access_token) {
@@ -114,18 +115,18 @@ export class OneDriveAccount implements Account {
       params.append("client_secret", process.env.ONEDRIVE_CLIENT_SECRET);
       params.append(
         "refresh_token",
-        this.accountDefinition.infoPrivate.refreshToken
+        this.accountDefinition.infoPrivate.refreshToken,
       );
       params.append("grant_type", "refresh_token");
       await axios
         .post(
           "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-          params
+          params,
         )
         .then((res) => {
           this.token = res.data.access_token;
           this.tokenExpiration = new Date(
-            new Date().getTime() + parseInt(res.data.expires_in) * 1000 * 0.8
+            new Date().getTime() + parseInt(res.data.expires_in) * 1000 * 0.8,
           );
         });
       span.end();
@@ -135,14 +136,14 @@ export class OneDriveAccount implements Account {
 
   public async listFilesInFolder(
     context: Span,
-    folder: Folder
+    folder: Folder,
   ): Promise<File[]> {
     return await OneDriveInventoryListFilesInFolder(context, this, folder);
   }
 
   public async listFoldersInFolder(
     context: Span,
-    folder: Folder
+    folder: Folder,
   ): Promise<Folder[]> {
     return await OneDriveInventoryListFoldersInFolder(context, this, folder);
   }
@@ -151,14 +152,14 @@ export class OneDriveAccount implements Account {
     context: Span,
     file: File,
     destinationFolderpath: string,
-    destinationFilename: string
+    destinationFilename: string,
   ): Promise<void> {
     await OneDriveFileOperationsDownloadFile(
       context,
       this,
       file,
       destinationFolderpath,
-      destinationFilename
+      destinationFilename,
     );
   }
 
@@ -166,7 +167,7 @@ export class OneDriveAccount implements Account {
     context: Span,
     file: File,
     folder: string,
-    filename: string
+    filename: string,
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }
@@ -175,27 +176,27 @@ export class OneDriveAccount implements Account {
     context: Span,
     file: File,
     folderpath: string,
-    filename: string
+    filename: string,
   ): Promise<void> {
     await OneDriveFileOperationsDownloadThumbnail(
       context,
       this,
       file,
       folderpath,
-      filename
+      filename,
     );
   }
 
   public async moveFile(
     context: Span,
     file: File,
-    folderpathDestination: string
+    folderpathDestination: string,
   ): Promise<void> {
     await OneDriveFileOperationsMoveFile(
       context,
       this,
       file,
-      folderpathDestination
+      folderpathDestination,
     );
   }
 
@@ -209,7 +210,7 @@ export class OneDriveAccount implements Account {
 
   public async getFolderByPath(
     context: Span,
-    folderpath: string
+    folderpath: string,
   ): Promise<Folder> {
     return await OneDriveInventoryGetFolderByPath(context, this, folderpath);
   }
@@ -218,13 +219,21 @@ export class OneDriveAccount implements Account {
     return encodeURI(
       `${this.accountDefinition.rootpath}/${relativePath.replace(/\/+$/, "")}`.replace(
         /\/+/g,
-        "/"
-      )
+        "/",
+      ),
     );
   }
 
   public async deleteFolder(context: Span, folder: Folder): Promise<void> {
     await OneDriveFileOperationsDeleteFolder(context, this, folder);
+  }
+
+  public async renameFolder(
+    context: Span,
+    folder: Folder,
+    newName: string,
+  ): Promise<void> {
+    await OneDriveFileOperationsRenameFolder(context, this, folder, newName);
   }
 
   async renameFile(context: Span, file: File, filename: string): Promise<void> {

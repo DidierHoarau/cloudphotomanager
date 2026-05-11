@@ -16,12 +16,12 @@ export async function OneDriveFileOperationsDownloadFile(
   oneDriveAccount: OneDriveAccount,
   file: File,
   folder: string,
-  filename: string
+  filename: string,
 ): Promise<void> {
   return new Promise(async (resolve, reject) => {
     const span = OTelTracer().startSpan(
       "OneDriveFileOperations_downloadFile",
-      context
+      context,
     );
     axios({
       url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/content`,
@@ -55,12 +55,12 @@ export async function OneDriveFileOperationsDownloadThumbnail(
   oneDriveAccount: OneDriveAccount,
   file: File,
   folder: string,
-  filename: string
+  filename: string,
 ): Promise<void> {
   return new Promise(async (resolve, reject) => {
     const span = OTelTracer().startSpan(
       "OneDriveFileOperations_downloadFile",
-      context
+      context,
     );
     axios({
       url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/thumbnails`,
@@ -102,12 +102,12 @@ export async function OneDriveFileOperationsMoveFile(
   context: Span,
   oneDriveAccount: OneDriveAccount,
   file: File,
-  folderpathDestination: string
+  folderpathDestination: string,
 ): Promise<void> {
   const parentFolder = await OneDriveFileOperationsEnsureFolder(
     context,
     oneDriveAccount,
-    folderpathDestination
+    folderpathDestination,
   );
   await axios.patch(
     `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`,
@@ -121,7 +121,7 @@ export async function OneDriveFileOperationsMoveFile(
       headers: {
         Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
       },
-    }
+    },
   );
 }
 
@@ -129,7 +129,7 @@ export async function OneDriveFileOperationsRenameFile(
   context: Span,
   oneDriveAccount: OneDriveAccount,
   file: File,
-  filename: string
+  filename: string,
 ): Promise<void> {
   await axios.patch(
     `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`,
@@ -140,14 +140,14 @@ export async function OneDriveFileOperationsRenameFile(
       headers: {
         Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
       },
-    }
+    },
   );
 }
 
 export async function OneDriveFileOperationsDeleteFile(
   context: Span,
   oneDriveAccount: OneDriveAccount,
-  file: File
+  file: File,
 ): Promise<void> {
   await axios.delete(
     `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}`,
@@ -155,14 +155,14 @@ export async function OneDriveFileOperationsDeleteFile(
       headers: {
         Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
       },
-    }
+    },
   );
 }
 
 export async function OneDriveFileOperationsDeleteFolder(
   context: Span,
   oneDriveAccount: OneDriveAccount,
-  folder: Folder
+  folder: Folder,
 ): Promise<void> {
   await axios.delete(
     `https://graph.microsoft.com/v1.0/me/drive/items/${folder.idCloud}`,
@@ -170,7 +170,26 @@ export async function OneDriveFileOperationsDeleteFolder(
       headers: {
         Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
       },
-    }
+    },
+  );
+}
+
+export async function OneDriveFileOperationsRenameFolder(
+  context: Span,
+  oneDriveAccount: OneDriveAccount,
+  folder: Folder,
+  newName: string,
+): Promise<void> {
+  await axios.patch(
+    `https://graph.microsoft.com/v1.0/me/drive/items/${folder.idCloud}`,
+    {
+      name: newName,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+      },
+    },
   );
 }
 
@@ -178,18 +197,18 @@ export async function OneDriveFileOperationsCreateFolder(
   context: Span,
   oneDriveAccount: OneDriveAccount,
   parentFolder: Folder,
-  foldername: string
+  foldername: string,
 ): Promise<Folder> {
   const span = OTelTracer().startSpan(
     "OneDriveFileOperationsCreateFolder",
-    context
+    context,
   );
   const absoluteFolderPath =
     `${oneDriveAccount.getAccountDefinition().rootpath}/${
       parentFolder.folderpath
     }/${foldername}`.replace(/\/+/g, "/");
   logger.info(
-    `Creating folder: ${foldername} in ${parentFolder.folderpath} / ${absoluteFolderPath}`
+    `Creating folder: ${foldername} in ${parentFolder.folderpath} / ${absoluteFolderPath}`,
   );
   const folderRaw = (
     await axios.post(
@@ -199,12 +218,12 @@ export async function OneDriveFileOperationsCreateFolder(
         headers: {
           Authorization: `Bearer ${await oneDriveAccount.getToken(span)}`,
         },
-      }
+      },
     )
   ).data;
   const folder = new Folder(
     oneDriveAccount.getAccountDefinition().id,
-    `${parentFolder.folderpath}/${foldername}`.replace(/\/+/g, "/")
+    `${parentFolder.folderpath}/${foldername}`.replace(/\/+/g, "/"),
   );
   folder.idCloud = folderRaw.id;
   span.end();
@@ -214,13 +233,13 @@ export async function OneDriveFileOperationsCreateFolder(
 export async function OneDriveFileOperationsEnsureFolder(
   context: Span,
   oneDriveAccount: OneDriveAccount,
-  folderpath: string
+  folderpath: string,
 ): Promise<Folder> {
   let subfolderPath = "";
   let parentFolder = await OneDriveInventoryGetFolderByPath(
     context,
     oneDriveAccount,
-    subfolderPath
+    subfolderPath,
   );
   for (const subFolderName of folderpath.split("/")) {
     if (subFolderName) {
@@ -229,14 +248,14 @@ export async function OneDriveFileOperationsEnsureFolder(
       let subFolder = await OneDriveInventoryGetFolderByPath(
         context,
         oneDriveAccount,
-        subfolderPath
+        subfolderPath,
       );
       if (!subFolder) {
         subFolder = await OneDriveFileOperationsCreateFolder(
           context,
           oneDriveAccount,
           parentFolder,
-          subFolderName
+          subFolderName,
         );
       }
       parentFolder = subFolder;

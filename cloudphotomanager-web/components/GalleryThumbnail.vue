@@ -1,36 +1,10 @@
 <template>
   <div :class="{ 'file-processing': isProcessing }">
-    <div
-      class="gallery-file-image"
-      v-on:click="
-        !isProcessing && getType(file) !== 'unknown' && focusGalleryItem(file)
-      "
-    >
-      <i
-        v-if="getType(file) == 'video'"
-        class="bi bi-play-circle gallery-file-video-type-overlay"
-      ></i>
-      <div v-if="getType(file) === 'unknown'" class="unknown-type-placeholder">
-        <i class="bi bi-question-circle"></i>
-      </div>
-      <img
-        v-else
-        :src="
-          staticUrl +
-          '/' +
-          file.accountId +
-          '/' +
-          file.id[0] +
-          '/' +
-          file.id[1] +
-          '/' +
-          file.id +
-          '/thumbnail.webp'
-        "
-        onerror="
-          this.onerror = null;
-          this.src = '/images/file-sync-in-progress.webp';
-        "
+    <div class="gallery-file-image">
+      <LazyMediaThumbnail
+        :file="file"
+        :duplicateCount="duplicateCount"
+        @click="onThumbnailClick"
       />
       <div v-if="isProcessing" class="processing-overlay">
         <i class="bi bi-hourglass-split processing-icon"></i>
@@ -59,8 +33,6 @@ const syncStore = SyncStore();
 
 <script>
 import { findIndex } from "lodash";
-import { FileUtils } from "~~/services/FileUtils";
-import Config from "~~/services/Config.ts";
 
 export default {
   props: {
@@ -79,14 +51,11 @@ export default {
       required: false,
       default: () => true,
     },
-  },
-  data() {
-    return {
-      staticUrl: "",
-    };
-  },
-  async created() {
-    this.staticUrl = (await Config.get()).STATIC_URL;
+    duplicateCount: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
   },
   computed: {
     isProcessing() {
@@ -100,8 +69,9 @@ export default {
     isFileSelected(file) {
       return findIndex(this.selectedFiles, { id: file.id }) >= 0;
     },
-    focusGalleryItem(file) {
-      this.$emit("focusGalleryItem", file);
+    onThumbnailClick() {
+      if (this.isProcessing) return;
+      this.$emit("focusGalleryItem", this.file);
     },
     displayDate(date) {
       if (!date || new Date(date).getTime() === 0) {
@@ -128,9 +98,6 @@ export default {
         return "";
       }
     },
-    getType(file) {
-      return FileUtils.getType(file);
-    },
   },
 };
 </script>
@@ -150,24 +117,7 @@ export default {
   grid-column-end: span 3;
   word-break: break-all;
   position: relative;
-}
-.gallery-file-image img {
-  width: 100%;
   height: 8em;
-  object-fit: cover;
-}
-.unknown-type-placeholder {
-  width: 100%;
-  height: 8em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(128, 128, 128, 0.15);
-  cursor: default;
-}
-.unknown-type-placeholder i {
-  font-size: 2.5em;
-  opacity: 0.4;
 }
 .file-processing {
   opacity: 0.4;
@@ -183,6 +133,7 @@ export default {
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.3);
+  pointer-events: none;
 }
 .processing-icon {
   font-size: 2em;
@@ -210,12 +161,5 @@ export default {
   grid-row-start: 2;
   grid-row-end: span 2;
   padding-right: 0.3em;
-}
-.gallery-file-video-type-overlay {
-  font-size: 3em;
-  position: absolute;
-  right: 0.1em;
-  bottom: 0em;
-  opacity: 0.5;
 }
 </style>

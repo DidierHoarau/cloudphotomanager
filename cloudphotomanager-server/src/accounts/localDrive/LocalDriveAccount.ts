@@ -53,15 +53,15 @@ export class LocalAccount implements Account {
   async moveFile(
     context: Span,
     file: File,
-    folderpathDestination: string
+    folderpathDestination: string,
   ): Promise<void> {
     await fs.move(
       file.idCloud,
       path.join(
         this.accountDefinition.rootpath,
         folderpathDestination,
-        file.filename
-      )
+        file.filename,
+      ),
     );
   }
 
@@ -76,7 +76,7 @@ export class LocalAccount implements Account {
   async renameFile(context: Span, file: File, filename: string): Promise<void> {
     await fs.move(
       file.idCloud,
-      path.join(path.dirname(file.idCloud), filename)
+      path.join(path.dirname(file.idCloud), filename),
     );
   }
 
@@ -84,16 +84,26 @@ export class LocalAccount implements Account {
     context: Span,
     file: File,
     destinationFolderpath: string,
-    destinationFilename: string
+    destinationFilename: string,
   ): Promise<void> {
     await fs.copyFile(
       file.idCloud,
-      path.join(destinationFolderpath, destinationFilename)
+      path.join(destinationFolderpath, destinationFilename),
     );
   }
 
   public async deleteFolder(context: Span, folder: Folder): Promise<void> {
     await fs.rm(folder.idCloud, { recursive: true, force: true });
+  }
+
+  public async renameFolder(
+    context: Span,
+    folder: Folder,
+    newName: string,
+  ): Promise<void> {
+    const parentDir = path.dirname(folder.idCloud);
+    const destination = path.join(parentDir, newName);
+    await fs.move(folder.idCloud, destination);
   }
 
   public async validate(context: Span): Promise<boolean> {
@@ -124,7 +134,7 @@ export class LocalAccount implements Account {
     context: Span,
     file: File,
     folder: string,
-    filename: string
+    filename: string,
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }
@@ -133,7 +143,7 @@ export class LocalAccount implements Account {
     context: Span,
     file: File,
     folder: string,
-    filename: string
+    filename: string,
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }
