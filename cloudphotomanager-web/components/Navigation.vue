@@ -6,6 +6,15 @@
       </li>
     </ul>
     <ul class="menu-links">
+      <li v-if="syncStore.failuresCount > 0">
+        <NuxtLink
+          to="/accounts/queue?tab=failures"
+          class="sync-indicator sync-indicator-error"
+          title="Sync operations failed — click to review"
+        >
+          <i class="bi bi-exclamation-triangle-fill"></i>
+        </NuxtLink>
+      </li>
       <li v-if="syncStore.countTotal > 0">
         <NuxtLink
           to="/accounts/queue"
@@ -110,6 +119,11 @@ nav {
   opacity: 0.6;
   font-size: 1em;
   animation: pulse 1.5s infinite;
+}
+.sync-indicator-error {
+  color: #dc3545;
+  opacity: 1;
+  animation: none;
 }
 @keyframes pulse {
   0%,

@@ -28,6 +28,11 @@ import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
 } from "../utils-std-ts/SqlDbUtils";
+import {
+  MoveConflictError,
+  SyncFailuresAdd,
+  SyncFailuresGetCount,
+} from "./SyncFailures";
 
 const MAX_PARALLEL_SYNC = 3;
 const LEGACY_QUEUE_FILE_PATH = path.join(
@@ -54,6 +59,13 @@ const STUCK_ACTIVE_SWEEP_INTERVAL = 5 * 60 * 1000;
 const STUCK_ACTIVE_BUFFER = 30 * 60 * 1000;
 
 const logger = OTelLogger().createModuleLogger("SyncQueue");
+
+const RECORDABLE_OPS = new Set<string>([
+  "fileDelete",
+  "folderMove",
+  "fileRename",
+  "fileCacheRebuild",
+]);
 
 type QueueFunction = (
   account: Account,
@@ -470,6 +482,37 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
       await Promise.race([work, timeout]);
     } catch (err) {
       logger.error("Error Processing Queue Item", err);
+      if (RECORDABLE_OPS.has(item.functionName)) {
+        try {
+          if (err instanceof MoveConflictError) {
+            SyncFailuresAdd({
+              accountId: item.accountId,
+              functionName: item.functionName,
+              kind: "conflict",
+              priority: item.priority,
+              data: item.data,
+              fileIds: item.fileIds || [],
+              errorMessage: err.message,
+              conflict: err.conflict,
+            });
+          } else {
+            const errorMessage =
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (err as any)?.message || String(err);
+            SyncFailuresAdd({
+              accountId: item.accountId,
+              functionName: item.functionName,
+              kind: "error",
+              priority: item.priority,
+              data: item.data,
+              fileIds: item.fileIds || [],
+              errorMessage,
+            });
+          }
+        } catch (addErr) {
+          logger.error("Error recording sync failure", addErr);
+        }
+      }
     } finally {
       if (timeoutHandle) clearTimeout(timeoutHandle);
       const span = OTelTracer().startSpan("SyncQueueItemComplete");
@@ -562,6 +605,7 @@ function emitBroadcastQueueUpdate(): void {
     items,
     totalItems,
     truncated: items.length < totalItems,
+    failuresCount: SyncFailuresGetCount(),
   });
 }
 
@@ -705,26 +749,25 @@ async function fileDeleteOperation(
   const spanSubProcess = OTelTracer().startSpan("fileDeleteOperation");
   try {
     const file = await FileDataGet(spanSubProcess, data.fileId as string);
-    if (file) {
-      logger.info(
-        `Delete file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename}`,
-        spanSubProcess,
-      );
-      const folderId = file.folderId;
-      await account.deleteFile(spanSubProcess, file);
-      const folder = await FolderDataGet(spanSubProcess, folderId);
-      if (folder) {
-        SyncQueueQueueItem(
-          account.getAccountDefinition().id,
-          folder.id,
-          { folderId: folder.id },
-          "SyncInventorySyncFolder",
-          SyncQueueItemPriority.INTERACTIVE,
-        );
-      }
+    if (!file) {
+      throw new Error(`File ${data.fileId} not found`);
     }
-  } catch (err) {
-    logger.error("Error in fileDeleteOperation", err, spanSubProcess);
+    logger.info(
+      `Delete file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename}`,
+      spanSubProcess,
+    );
+    const folderId = file.folderId;
+    await account.deleteFile(spanSubProcess, file);
+    const folder = await FolderDataGet(spanSubProcess, folderId);
+    if (folder) {
+      SyncQueueQueueItem(
+        account.getAccountDefinition().id,
+        folder.id,
+        { folderId: folder.id },
+        "SyncInventorySyncFolder",
+        SyncQueueItemPriority.INTERACTIVE,
+      );
+    }
   } finally {
     spanSubProcess.end();
   }
@@ -738,71 +781,123 @@ async function folderMoveOperation(
   const spanSubProcess = OTelTracer().startSpan("folderMoveOperation");
   try {
     const file = await FileDataGet(spanSubProcess, data.fileId as string);
-    if (file) {
-      const initialFolderId = file.folderId;
-      logger.info(
-        `Moving file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${data.folderpath}`,
-        spanSubProcess,
-      );
-      await account.moveFile(spanSubProcess, file, data.folderpath);
+    if (!file) {
+      throw new Error(`File ${data.fileId} not found`);
+    }
+    const initialFolderId = file.folderId;
+    logger.info(
+      `Moving file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${data.folderpath}`,
+      spanSubProcess,
+    );
 
-      // Re-sync the source folder
-      const initialFolder = await FolderDataGet(
+    // Pre-check for name conflict in the target folder (local DB only).
+    const accountId = account.getAccountDefinition().id;
+    const targetFolderRows = SqlDbUtilsQuerySQL(
+      spanSubProcess,
+      "SELECT id FROM folders WHERE accountId = ? AND folderpath = ? LIMIT 1",
+      [accountId, data.folderpath],
+    );
+    const targetFolderId: string | null =
+      targetFolderRows.length > 0 ? targetFolderRows[0].id : null;
+    if (targetFolderId && targetFolderId !== initialFolderId) {
+      const clashRows = SqlDbUtilsQuerySQL(
         spanSubProcess,
-        initialFolderId,
+        "SELECT * FROM files WHERE accountId = ? AND folderId = ? AND filename = ? LIMIT 1",
+        [accountId, targetFolderId, file.filename],
       );
-      if (initialFolder) {
-        SyncQueueQueueItem(
-          account.getAccountDefinition().id,
-          initialFolder.id,
-          { folderId: initialFolder.id },
-          "SyncInventorySyncFolder",
-          SyncQueueItemPriority.INTERACTIVE,
-        );
-      }
-
-      // Get (or create) the target folder in the local DB, then re-sync it
-      // and also queue a re-sync of its parent so the parent discovers the new child
-      const targetFolderCloud = await account.getFolderByPath(
-        spanSubProcess,
-        data.folderpath,
-      );
-      if (targetFolderCloud) {
-        let targetFolderDb = await FolderDataGet(
-          spanSubProcess,
-          targetFolderCloud.id,
-        );
-        if (!targetFolderDb) {
-          // New folder — persist it so SyncInventorySyncFolder can run on it
-          targetFolderCloud.dateSync = new Date(0);
-          await FolderDataAdd(spanSubProcess, targetFolderCloud);
-          targetFolderDb = targetFolderCloud;
+      if (clashRows.length > 0) {
+        const clashRaw = clashRows[0];
+        let clashInfo: { size?: number } = {};
+        try {
+          clashInfo = clashRaw.info ? JSON.parse(clashRaw.info) : {};
+        } catch {
+          clashInfo = {};
         }
-        SyncQueueQueueItem(
-          account.getAccountDefinition().id,
-          targetFolderDb.id,
-          { folderId: targetFolderDb.id },
-          "SyncInventorySyncFolder",
-          SyncQueueItemPriority.INTERACTIVE,
-        );
-        // Queue the parent of the target folder so it picks up the new subfolder
-        const targetParent = await FolderDataGetParent(
+        const sourceFolder = await FolderDataGet(
           spanSubProcess,
-          targetFolderDb.id,
+          initialFolderId,
         );
-        if (targetParent) {
-          SyncQueueQueueItem(
-            account.getAccountDefinition().id,
-            targetParent.id,
-            { folderId: targetParent.id },
-            "SyncInventorySyncFolder",
-            SyncQueueItemPriority.INTERACTIVE,
-          );
-        }
+        throw new MoveConflictError({
+          sourceFileId: file.id,
+          targetFileId: clashRaw.id,
+          targetFolderId,
+          targetFolderpath: data.folderpath,
+          targetFilename: clashRaw.filename,
+          source: {
+            filename: file.filename,
+            folderpath: sourceFolder ? sourceFolder.folderpath : "",
+            dateMedia: file.dateMedia ? file.dateMedia.toISOString() : null,
+            size:
+              file.info && typeof file.info.size === "number"
+                ? file.info.size
+                : null,
+          },
+          target: {
+            filename: clashRaw.filename,
+            folderpath: data.folderpath,
+            dateMedia: clashRaw.dateMedia ? clashRaw.dateMedia : null,
+            size:
+              clashInfo && typeof clashInfo.size === "number"
+                ? clashInfo.size
+                : null,
+          },
+        });
       }
     }
-  } catch (err) {
-    logger.error("Error in folderMoveOperation", err, spanSubProcess);
+
+    await account.moveFile(spanSubProcess, file, data.folderpath);
+
+    // Re-sync the source folder
+    const initialFolder = await FolderDataGet(spanSubProcess, initialFolderId);
+    if (initialFolder) {
+      SyncQueueQueueItem(
+        account.getAccountDefinition().id,
+        initialFolder.id,
+        { folderId: initialFolder.id },
+        "SyncInventorySyncFolder",
+        SyncQueueItemPriority.INTERACTIVE,
+      );
+    }
+
+    // Get (or create) the target folder in the local DB, then re-sync it
+    // and also queue a re-sync of its parent so the parent discovers the new child
+    const targetFolderCloud = await account.getFolderByPath(
+      spanSubProcess,
+      data.folderpath,
+    );
+    if (targetFolderCloud) {
+      let targetFolderDb = await FolderDataGet(
+        spanSubProcess,
+        targetFolderCloud.id,
+      );
+      if (!targetFolderDb) {
+        // New folder — persist it so SyncInventorySyncFolder can run on it
+        targetFolderCloud.dateSync = new Date(0);
+        await FolderDataAdd(spanSubProcess, targetFolderCloud);
+        targetFolderDb = targetFolderCloud;
+      }
+      SyncQueueQueueItem(
+        account.getAccountDefinition().id,
+        targetFolderDb.id,
+        { folderId: targetFolderDb.id },
+        "SyncInventorySyncFolder",
+        SyncQueueItemPriority.INTERACTIVE,
+      );
+      // Queue the parent of the target folder so it picks up the new subfolder
+      const targetParent = await FolderDataGetParent(
+        spanSubProcess,
+        targetFolderDb.id,
+      );
+      if (targetParent) {
+        SyncQueueQueueItem(
+          account.getAccountDefinition().id,
+          targetParent.id,
+          { folderId: targetParent.id },
+          "SyncInventorySyncFolder",
+          SyncQueueItemPriority.INTERACTIVE,
+        );
+      }
+    }
   } finally {
     spanSubProcess.end();
   }
@@ -816,25 +911,24 @@ async function fileRenameOperation(
   const spanSubProcess = OTelTracer().startSpan("fileRenameOperation");
   try {
     const file = await FileDataGet(spanSubProcess, data.fileId as string);
-    if (file) {
-      logger.info(
-        `Rename file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${data.filename}`,
-        spanSubProcess,
-      );
-      await account.renameFile(spanSubProcess, file, data.filename);
-      const folder = await FolderDataGet(spanSubProcess, file.folderId);
-      if (folder) {
-        SyncQueueQueueItem(
-          account.getAccountDefinition().id,
-          folder.id,
-          { folderId: folder.id },
-          "SyncInventorySyncFolder",
-          SyncQueueItemPriority.INTERACTIVE,
-        );
-      }
+    if (!file) {
+      throw new Error(`File ${data.fileId} not found`);
     }
-  } catch (err) {
-    logger.error("Error in fileRenameOperation", err, spanSubProcess);
+    logger.info(
+      `Rename file: ${account.getAccountDefinition().id}: ${file.id} ${file.filename} to ${data.filename}`,
+      spanSubProcess,
+    );
+    await account.renameFile(spanSubProcess, file, data.filename);
+    const folder = await FolderDataGet(spanSubProcess, file.folderId);
+    if (folder) {
+      SyncQueueQueueItem(
+        account.getAccountDefinition().id,
+        folder.id,
+        { folderId: folder.id },
+        "SyncInventorySyncFolder",
+        SyncQueueItemPriority.INTERACTIVE,
+      );
+    }
   } finally {
     spanSubProcess.end();
   }
@@ -848,19 +942,18 @@ async function fileCacheRebuildOperation(
   const spanSubProcess = OTelTracer().startSpan("fileCacheRebuildOperation");
   try {
     const file = await FileDataGet(spanSubProcess, data.fileId as string);
-    if (file) {
-      logger.info(
-        `Rebuild cache: ${account.getAccountDefinition().id}: ${file.id} ${file.filename}`,
-        spanSubProcess,
-      );
-      await SyncFileCacheRemoveFile(spanSubProcess, account, file);
-      // Reset keywords so syncPhotoKeyWords is re-queued to re-extract EXIF
-      file.keywords = null;
-      await FileDataUpdateKeywords(spanSubProcess, file);
-      SyncFileCacheCheckFile(spanSubProcess, account, file);
+    if (!file) {
+      throw new Error(`File ${data.fileId} not found`);
     }
-  } catch (err) {
-    logger.error("Error in fileCacheRebuildOperation", err, spanSubProcess);
+    logger.info(
+      `Rebuild cache: ${account.getAccountDefinition().id}: ${file.id} ${file.filename}`,
+      spanSubProcess,
+    );
+    await SyncFileCacheRemoveFile(spanSubProcess, account, file);
+    // Reset keywords so syncPhotoKeyWords is re-queued to re-extract EXIF
+    file.keywords = null;
+    await FileDataUpdateKeywords(spanSubProcess, file);
+    SyncFileCacheCheckFile(spanSubProcess, account, file);
   } finally {
     spanSubProcess.end();
   }

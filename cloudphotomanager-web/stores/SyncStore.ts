@@ -13,6 +13,8 @@ export const SyncStore = defineStore("SyncStore", {
     queueItems: [] as any[],
     queueTotalItems: 0,
     queueTruncated: false,
+    failures: [] as any[],
+    failuresCount: 0,
     monitoring: false,
     wsConnected: false,
     // Fallback polling state
@@ -95,6 +97,15 @@ export const SyncStore = defineStore("SyncStore", {
             this.queueTotalItems =
               typeof msg.totalItems === "number" ? msg.totalItems : total;
             this.queueTruncated = !!msg.truncated;
+            if (typeof msg.failuresCount === "number") {
+              this.failuresCount = msg.failuresCount;
+            }
+          } else if (msg.type === "failures_update") {
+            this.failuresCount =
+              typeof msg.count === "number"
+                ? msg.count
+                : (msg.items || []).length;
+            this.failures = msg.items || [];
           } else if (msg.type === "folder_cache_updated") {
             EventBus.emit(EventTypes.FOLDER_CACHE_UPDATED);
           } else if (msg.type === "operation_complete") {
@@ -157,6 +168,93 @@ export const SyncStore = defineStore("SyncStore", {
         if (!this.pendingFileIds.includes(id)) {
           this.pendingFileIds.push(id);
         }
+      }
+    },
+
+    async fetchFailures() {
+      try {
+        const config = await Config.get();
+        const res = await axios.get(
+          `${config.SERVER_URL}/sync/failures/`,
+          await AuthService.getAuthHeader(),
+        );
+        this.failures = res.data.items || [];
+        this.failuresCount =
+          typeof res.data.count === "number"
+            ? res.data.count
+            : this.failures.length;
+      } catch (err) {
+        handleError(err);
+      }
+    },
+
+    async retryFailure(id: string) {
+      try {
+        const config = await Config.get();
+        await axios.post(
+          `${config.SERVER_URL}/sync/failures/${encodeURIComponent(id)}/retry`,
+          {},
+          await AuthService.getAuthHeader(),
+        );
+        await this.fetchFailures();
+      } catch (err) {
+        handleError(err);
+      }
+    },
+
+    async cancelFailure(id: string) {
+      try {
+        const config = await Config.get();
+        await axios.post(
+          `${config.SERVER_URL}/sync/failures/${encodeURIComponent(id)}/cancel`,
+          {},
+          await AuthService.getAuthHeader(),
+        );
+        await this.fetchFailures();
+      } catch (err) {
+        handleError(err);
+      }
+    },
+
+    async resolveFailure(id: string, action: "replace" | "deleteSource") {
+      try {
+        const config = await Config.get();
+        await axios.post(
+          `${config.SERVER_URL}/sync/failures/${encodeURIComponent(id)}/resolve`,
+          { action },
+          await AuthService.getAuthHeader(),
+        );
+        await this.fetchFailures();
+      } catch (err) {
+        handleError(err);
+      }
+    },
+
+    async retryAllFailures() {
+      try {
+        const config = await Config.get();
+        await axios.post(
+          `${config.SERVER_URL}/sync/failures/retry-all`,
+          {},
+          await AuthService.getAuthHeader(),
+        );
+        await this.fetchFailures();
+      } catch (err) {
+        handleError(err);
+      }
+    },
+
+    async cancelAllFailures() {
+      try {
+        const config = await Config.get();
+        await axios.post(
+          `${config.SERVER_URL}/sync/failures/cancel-all`,
+          {},
+          await AuthService.getAuthHeader(),
+        );
+        await this.fetchFailures();
+      } catch (err) {
+        handleError(err);
       }
     },
   },

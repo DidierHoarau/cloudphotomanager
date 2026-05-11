@@ -1,72 +1,99 @@
 <template>
   <div class="page page-queue">
     <h1>Sync Queue</h1>
-    <div class="queue-stats">
-      <div class="stat-card">
-        <div class="stat-label">Active</div>
-        <div class="stat-value">{{ displayCounts.active || 0 }}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Waiting</div>
-        <div class="stat-value">{{ displayCounts.waiting || 0 }}</div>
-      </div>
+    <div class="queue-tabs">
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'queue' }"
+        @click="setTab('queue')"
+      >
+        Queue
+      </button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'failures' }"
+        @click="setTab('failures')"
+      >
+        Failures
+        <span v-if="failuresCount > 0" class="tab-badge">{{
+          failuresCount
+        }}</span>
+      </button>
     </div>
-    <div class="queue-table">
-      <Loading v-if="loading" />
-      <div v-if="!loading && displayTruncated" class="queue-truncated-hint">
-        Showing {{ resolvedItems.length }} of {{ displayTotalItems }} items
-      </div>
-      <table v-if="!loading && resolvedItems.length > 0">
-        <thead>
-          <tr>
-            <td>Status</td>
-            <td>Priority</td>
-            <td>Account</td>
-            <td>Function</td>
-            <td>Item</td>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="(item, index) in resolvedItems"
-            :key="index"
-            :class="{
-              active: item.status === 'ACTIVE',
-              waiting: item.status === 'WAITING',
-            }"
-          >
-            <td>
-              <kbd class="badge" :class="'status-' + item.status.toLowerCase()">
-                {{ item.status }}
-              </kbd>
-            </td>
-            <td>
-              <kbd
-                class="badge"
-                :class="
-                  'priority-' + getPriorityLabel(item.priority).toLowerCase()
-                "
-              >
-                {{ getPriorityLabel(item.priority) }}
-              </kbd>
-            </td>
-            <td>{{ item.accountName }}</td>
-            <td>
-              <code>{{ item.functionName }}</code>
-            </td>
-            <td>
-              <span v-if="item.label">{{ item.label }}</span>
-              <span v-else>-</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
 
-      <div v-if="!loading && resolvedItems.length === 0" class="empty-state">
-        <i class="bi bi-inbox"></i>
-        <p>Queue is empty</p>
+    <template v-if="activeTab === 'queue'">
+      <div class="queue-stats">
+        <div class="stat-card">
+          <div class="stat-label">Active</div>
+          <div class="stat-value">{{ displayCounts.active || 0 }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Waiting</div>
+          <div class="stat-value">{{ displayCounts.waiting || 0 }}</div>
+        </div>
       </div>
-    </div>
+      <div class="queue-table">
+        <Loading v-if="loading" />
+        <div v-if="!loading && displayTruncated" class="queue-truncated-hint">
+          Showing {{ resolvedItems.length }} of {{ displayTotalItems }} items
+        </div>
+        <table v-if="!loading && resolvedItems.length > 0">
+          <thead>
+            <tr>
+              <td>Status</td>
+              <td>Priority</td>
+              <td>Account</td>
+              <td>Function</td>
+              <td>Item</td>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(item, index) in resolvedItems"
+              :key="index"
+              :class="{
+                active: item.status === 'ACTIVE',
+                waiting: item.status === 'WAITING',
+              }"
+            >
+              <td>
+                <kbd class="badge" :class="'status-' + item.status.toLowerCase()">
+                  {{ item.status }}
+                </kbd>
+              </td>
+              <td>
+                <kbd
+                  class="badge"
+                  :class="
+                    'priority-' + getPriorityLabel(item.priority).toLowerCase()
+                  "
+                >
+                  {{ getPriorityLabel(item.priority) }}
+                </kbd>
+              </td>
+              <td>{{ item.accountName }}</td>
+              <td>
+                <code>{{ item.functionName }}</code>
+              </td>
+              <td>
+                <span v-if="item.label">{{ item.label }}</span>
+                <span v-else>-</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div v-if="!loading && resolvedItems.length === 0" class="empty-state">
+          <i class="bi bi-inbox"></i>
+          <p>Queue is empty</p>
+        </div>
+      </div>
+    </template>
+
+    <template v-else>
+      <Loading v-if="failuresLoading" />
+      <SyncFailuresList v-else :failures="failuresList" />
+    </template>
   </div>
 </template>
 
@@ -86,6 +113,8 @@ export default {
   data() {
     return {
       loading: false,
+      failuresLoading: false,
+      activeTab: "queue",
       httpItems: [],
       httpCounts: { active: 0, waiting: 0 },
       httpTotalItems: 0,
@@ -132,15 +161,31 @@ export default {
         ? SyncStore().queueTruncated
         : this.httpTruncated;
     },
+    failuresList() {
+      return SyncStore().failures || [];
+    },
+    failuresCount() {
+      return SyncStore().failuresCount || 0;
+    },
   },
   async created() {
     await AccountsStore().fetch();
+    const queryTab = this.$route.query && this.$route.query.tab;
+    if (queryTab === "failures") {
+      this.activeTab = "failures";
+    }
     this.loading = true;
     await this.fetchQueue();
     this.loading = false;
+    this.failuresLoading = true;
+    await SyncStore().fetchFailures();
+    this.failuresLoading = false;
     this.intervalId = setInterval(async () => {
       if (!this.loading) {
         await this.fetchQueue();
+      }
+      if (!SyncStore().wsConnected) {
+        await SyncStore().fetchFailures();
       }
     }, 5000);
   },
@@ -150,6 +195,20 @@ export default {
     }
   },
   methods: {
+    setTab(tab) {
+      if (this.activeTab === tab) return;
+      this.activeTab = tab;
+      const query = { ...(this.$route.query || {}) };
+      if (tab === "failures") {
+        query.tab = "failures";
+      } else {
+        delete query.tab;
+      }
+      this.$router.replace({ query });
+      if (tab === "failures") {
+        SyncStore().fetchFailures();
+      }
+    },
     async fetchQueue() {
       try {
         const response = await axios.get(
@@ -198,6 +257,41 @@ export default {
 .page-queue {
   display: grid;
   grid-template-rows: auto auto 1fr;
+}
+
+.queue-tabs {
+  display: flex;
+  gap: 0.3em;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  margin-bottom: 0.75em;
+}
+.tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.5em 1em;
+  cursor: pointer;
+  font-size: 1em;
+  color: inherit;
+  opacity: 0.7;
+}
+.tab-btn.active {
+  opacity: 1;
+  border-bottom-color: currentColor;
+  font-weight: 500;
+}
+.tab-btn:hover {
+  opacity: 1;
+}
+.tab-badge {
+  display: inline-block;
+  margin-left: 0.4em;
+  padding: 0.1em 0.5em;
+  border-radius: 1em;
+  background: #dc3545;
+  color: #fff;
+  font-size: 0.75em;
+  font-weight: 600;
 }
 
 .queue-stats {
