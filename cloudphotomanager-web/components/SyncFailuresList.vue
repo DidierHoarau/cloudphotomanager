@@ -13,9 +13,7 @@
       <div class="failures-toolbar-info">
         <strong>{{ failures.length }}</strong>
         failed {{ failures.length === 1 ? "action" : "actions" }}
-        <small class="retention-hint">
-          (kept for 24 h, max 500)
-        </small>
+        <small class="retention-hint"> (kept for 24 h, max 500) </small>
       </div>
       <div class="failures-toolbar-actions">
         <button
@@ -57,11 +55,16 @@
             {{ failure.kind === "conflict" ? "Name conflict" : "Error" }}
           </kbd>
           <code class="failure-function">{{ failure.functionName }}</code>
-          <span class="failure-date">{{ formatDate(failure.dateCreated) }}</span>
+          <span class="failure-date">{{
+            formatDate(failure.dateCreated)
+          }}</span>
         </div>
 
         <!-- Conflict layout -->
-        <div v-if="failure.kind === 'conflict' && failure.conflict" class="conflict-body">
+        <div
+          v-if="failure.kind === 'conflict' && failure.conflict"
+          class="conflict-body"
+        >
           <div class="conflict-pair">
             <div class="conflict-side">
               <div class="conflict-side-label">Source (being moved)</div>
@@ -82,7 +85,9 @@
                   {{ failure.conflict.source.folderpath || "-" }}
                 </div>
                 <div class="conflict-meta-stats">
-                  <span>{{ formatDate(failure.conflict.source.dateMedia) }}</span>
+                  <span>{{
+                    formatDate(failure.conflict.source.dateMedia)
+                  }}</span>
                   <span>{{ formatSize(failure.conflict.source.size) }}</span>
                 </div>
               </div>
@@ -109,7 +114,9 @@
                   {{ failure.conflict.target.folderpath || "-" }}
                 </div>
                 <div class="conflict-meta-stats">
-                  <span>{{ formatDate(failure.conflict.target.dateMedia) }}</span>
+                  <span>{{
+                    formatDate(failure.conflict.target.dateMedia)
+                  }}</span>
                   <span>{{ formatSize(failure.conflict.target.size) }}</span>
                 </div>
               </div>
@@ -241,8 +248,7 @@ export default {
       const d = failure.data || {};
       const fn = failure.functionName;
       if (fn === "fileDelete") return `Delete: ${d.fileId || ""}`;
-      if (fn === "fileRename")
-        return `Rename: ${d.filename || d.fileId || ""}`;
+      if (fn === "fileRename") return `Rename: ${d.filename || d.fileId || ""}`;
       if (fn === "folderMove")
         return `Move: ${d.fileId || ""}${d.folderpath ? " \u2192 " + d.folderpath : ""}`;
       if (fn === "fileCacheRebuild") return `Rebuild cache: ${d.fileId || ""}`;

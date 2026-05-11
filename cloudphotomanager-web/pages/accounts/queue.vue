@@ -57,7 +57,10 @@
               }"
             >
               <td>
-                <kbd class="badge" :class="'status-' + item.status.toLowerCase()">
+                <kbd
+                  class="badge"
+                  :class="'status-' + item.status.toLowerCase()"
+                >
                   {{ item.status }}
                 </kbd>
               </td>

@@ -24,6 +24,7 @@ import {
   SyncFileCacheRemoveFile,
 } from "./SyncFileCache";
 import { FileDataGet, FileDataUpdateKeywords } from "../files/FileData";
+import { File } from "../model/File";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
@@ -773,6 +774,66 @@ async function fileDeleteOperation(
   }
 }
 
+async function detectMoveConflictInLocalDb(
+  span: Span,
+  accountId: string,
+  file: File,
+  initialFolderId: string,
+  targetFolderpath: string,
+): Promise<MoveConflictError | null> {
+  const targetFolderRows = SqlDbUtilsQuerySQL(
+    span,
+    "SELECT id FROM folders WHERE accountId = ? AND folderpath = ? LIMIT 1",
+    [accountId, targetFolderpath],
+  );
+  const targetFolderId: string | null =
+    targetFolderRows.length > 0 ? targetFolderRows[0].id : null;
+  if (!targetFolderId || targetFolderId === initialFolderId) {
+    return null;
+  }
+  const clashRows = SqlDbUtilsQuerySQL(
+    span,
+    "SELECT * FROM files WHERE accountId = ? AND folderId = ? AND filename = ? AND id != ? LIMIT 1",
+    [accountId, targetFolderId, file.filename, file.id],
+  );
+  if (clashRows.length === 0) {
+    return null;
+  }
+  const clashRaw = clashRows[0];
+  let clashInfo: { size?: number } = {};
+  try {
+    clashInfo = clashRaw.info ? JSON.parse(clashRaw.info) : {};
+  } catch {
+    clashInfo = {};
+  }
+  const sourceFolder = await FolderDataGet(span, initialFolderId);
+  return new MoveConflictError({
+    sourceFileId: file.id,
+    targetFileId: clashRaw.id,
+    targetFolderId,
+    targetFolderpath,
+    targetFilename: clashRaw.filename,
+    source: {
+      filename: file.filename,
+      folderpath: sourceFolder ? sourceFolder.folderpath : "",
+      dateMedia: file.dateMedia ? file.dateMedia.toISOString() : null,
+      size:
+        file.info && typeof file.info.size === "number"
+          ? file.info.size
+          : null,
+    },
+    target: {
+      filename: clashRaw.filename,
+      folderpath: targetFolderpath,
+      dateMedia: clashRaw.dateMedia ? clashRaw.dateMedia : null,
+      size:
+        clashInfo && typeof clashInfo.size === "number"
+          ? clashInfo.size
+          : null,
+    },
+  });
+}
+
 async function folderMoveOperation(
   account: Account,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -792,60 +853,66 @@ async function folderMoveOperation(
 
     // Pre-check for name conflict in the target folder (local DB only).
     const accountId = account.getAccountDefinition().id;
-    const targetFolderRows = SqlDbUtilsQuerySQL(
+    const preConflict = await detectMoveConflictInLocalDb(
       spanSubProcess,
-      "SELECT id FROM folders WHERE accountId = ? AND folderpath = ? LIMIT 1",
-      [accountId, data.folderpath],
+      accountId,
+      file,
+      initialFolderId,
+      data.folderpath,
     );
-    const targetFolderId: string | null =
-      targetFolderRows.length > 0 ? targetFolderRows[0].id : null;
-    if (targetFolderId && targetFolderId !== initialFolderId) {
-      const clashRows = SqlDbUtilsQuerySQL(
-        spanSubProcess,
-        "SELECT * FROM files WHERE accountId = ? AND folderId = ? AND filename = ? LIMIT 1",
-        [accountId, targetFolderId, file.filename],
-      );
-      if (clashRows.length > 0) {
-        const clashRaw = clashRows[0];
-        let clashInfo: { size?: number } = {};
-        try {
-          clashInfo = clashRaw.info ? JSON.parse(clashRaw.info) : {};
-        } catch {
-          clashInfo = {};
-        }
-        const sourceFolder = await FolderDataGet(
-          spanSubProcess,
-          initialFolderId,
-        );
-        throw new MoveConflictError({
-          sourceFileId: file.id,
-          targetFileId: clashRaw.id,
-          targetFolderId,
-          targetFolderpath: data.folderpath,
-          targetFilename: clashRaw.filename,
-          source: {
-            filename: file.filename,
-            folderpath: sourceFolder ? sourceFolder.folderpath : "",
-            dateMedia: file.dateMedia ? file.dateMedia.toISOString() : null,
-            size:
-              file.info && typeof file.info.size === "number"
-                ? file.info.size
-                : null,
-          },
-          target: {
-            filename: clashRaw.filename,
-            folderpath: data.folderpath,
-            dateMedia: clashRaw.dateMedia ? clashRaw.dateMedia : null,
-            size:
-              clashInfo && typeof clashInfo.size === "number"
-                ? clashInfo.size
-                : null,
-          },
-        });
-      }
+    if (preConflict) {
+      throw preConflict;
     }
 
-    await account.moveFile(spanSubProcess, file, data.folderpath);
+    try {
+      await account.moveFile(spanSubProcess, file, data.folderpath);
+    } catch (moveErr) {
+      // The local pre-check may miss a conflict when the target folder (or
+      // its file listing) is not yet indexed in the local DB. Many cloud
+      // providers reject the move with a "name already exists" style error
+      // in that case. Refresh the target folder listing and re-check so the
+      // failure is surfaced as an actionable MoveConflictError instead of a
+      // generic error.
+      try {
+        const targetFolderCloud = await account.getFolderByPath(
+          spanSubProcess,
+          data.folderpath,
+        );
+        if (targetFolderCloud) {
+          let targetFolderDb = await FolderDataGet(
+            spanSubProcess,
+            targetFolderCloud.id,
+          );
+          if (!targetFolderDb) {
+            targetFolderCloud.dateSync = new Date(0);
+            await FolderDataAdd(spanSubProcess, targetFolderCloud);
+            targetFolderDb = targetFolderCloud;
+          }
+          // Inline sync to refresh the files listing before the re-check.
+          await SyncInventorySyncFolder(
+            account,
+            targetFolderDb,
+            SyncQueueItemPriority.INTERACTIVE,
+          );
+        }
+      } catch (refreshErr) {
+        logger.warn(
+          `folderMoveOperation: could not refresh target folder "${data.folderpath}" after move error: ${(refreshErr as Error)?.message}`,
+          spanSubProcess,
+        );
+      }
+      const postConflict = await detectMoveConflictInLocalDb(
+        spanSubProcess,
+        accountId,
+        file,
+        initialFolderId,
+        data.folderpath,
+      );
+      if (postConflict) {
+        throw postConflict;
+      }
+      throw moveErr;
+    }
 
     // Re-sync the source folder
     const initialFolder = await FolderDataGet(spanSubProcess, initialFolderId);
