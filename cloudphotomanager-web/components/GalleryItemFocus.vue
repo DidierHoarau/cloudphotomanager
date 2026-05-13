@@ -12,6 +12,12 @@
       @onClose="showFileInfo = false"
       @onDuplicateDeleted="onDuplicateDeleted"
     />
+    <DialogFileMetadata
+      v-if="showFileMetadata && file"
+      :key="`meta-${file.id}`"
+      :file="file"
+      @onClose="showFileMetadata = false"
+    />
     <DialogConfirm
       v-if="showConfirmDialog"
       :title="confirmDialogTitle"
@@ -109,6 +115,12 @@
                 @click="onActionClicked('rebuild-cache')"
               >
                 Rebuild cache
+              </button>
+              <button
+                class="action-menu-item"
+                @click="onActionClicked('metadata')"
+              >
+                Show metadata
               </button>
             </div>
           </div>
@@ -232,6 +244,7 @@ export default {
       activeOperation: "",
       actionsMenuOpen: false,
       showFileInfo: false,
+      showFileMetadata: false,
       file: null,
       files: [],
       position: 0,
@@ -484,6 +497,9 @@ export default {
       }
       if (action === "rebuild-cache") {
         await this.doActionRebuildCache();
+      }
+      if (action === "metadata") {
+        this.showFileMetadata = true;
       }
     },
     onDuplicateDeleted(fileId) {

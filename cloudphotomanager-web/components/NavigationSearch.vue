@@ -13,6 +13,11 @@
           >Search Duplicates</NuxtLink
         >
       </span>
+      <span v-if="authenticationStore.isAuthenticated">
+        <NuxtLink to="/search/map" :class="isSearchMap ? 'active' : 'inactive'"
+          >Map</NuxtLink
+        >
+      </span>
     </div>
     <div v-if="accountsStore.accounts.length > 1" class="menu-accounts">
       <fieldset>
@@ -47,6 +52,7 @@ export default {
     return {
       isSearch: false,
       isSearchDuplicates: false,
+      isSearchMap: false,
       selectedAccount: "",
     };
   },
@@ -63,8 +69,13 @@ export default {
       this.$emit("onAccountSelected", { id: accountId });
     },
     checkActiveFolder(currentPath) {
+      this.isSearch = false;
+      this.isSearchDuplicates = false;
+      this.isSearchMap = false;
       if (currentPath.indexOf("search/duplicates") >= 0) {
         this.isSearchDuplicates = true;
+      } else if (currentPath.indexOf("search/map") >= 0) {
+        this.isSearchMap = true;
       } else {
         this.isSearch = true;
       }
@@ -76,7 +87,7 @@ export default {
 <style scoped>
 .menu-subcategory {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   text-align: center;
   margin-bottom: 1em;
 }
