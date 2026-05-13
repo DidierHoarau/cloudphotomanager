@@ -34,6 +34,8 @@ import {
 import { AccountRoutes } from "./accounts/AccountRoutes";
 import { FolderRoutes } from "./folders/FolderRoutes";
 import { SyncQueueInit } from "./sync/SyncQueue";
+import { SyncFailuresInit } from "./sync/SyncFailures";
+import { SyncFailureRoutes } from "./sync/SyncFailureRoutes";
 
 const logger = OTelLogger().createModuleLogger("App");
 
@@ -56,6 +58,7 @@ Promise.resolve().then(async () => {
 
   await SqlDbUtilsInit(span, config);
   await SyncQueueInit(span);
+  await SyncFailuresInit(span);
   await SyncFileCacheInit(span, config);
   await AuthInit(span, config);
   await FileDataInit(span, config);
@@ -131,6 +134,10 @@ Promise.resolve().then(async () => {
 
   fastify.register(new SyncRoutes().getRoutes, {
     prefix: "/api/sync",
+  });
+
+  fastify.register(new SyncFailureRoutes().getRoutes, {
+    prefix: "/api/sync/failures",
   });
 
   fastify.get("/api/status", async () => {

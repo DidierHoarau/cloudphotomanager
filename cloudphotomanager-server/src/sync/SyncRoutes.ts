@@ -8,6 +8,11 @@ import {
   SyncQueueGetQueue,
   SyncQueueRegisterBroadcast,
 } from "./SyncQueue";
+import {
+  SyncFailuresGetCount,
+  SyncFailuresList,
+  SyncFailuresRegisterBroadcast,
+} from "./SyncFailures";
 import { FolderDataRegisterOnCacheRefreshed } from "../folders/FolderData";
 
 const wsClients = new Set<WebSocket>();
@@ -30,6 +35,7 @@ export class SyncRoutes {
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     // Register the broadcast function for queue events
     SyncQueueRegisterBroadcast(broadcastToClients);
+    SyncFailuresRegisterBroadcast(broadcastToClients);
     // Notify clients when folder cache is refreshed
     FolderDataRegisterOnCacheRefreshed(() =>
       broadcastToClients({ type: "folder_cache_updated" }),
@@ -44,6 +50,7 @@ export class SyncRoutes {
       return res.status(200).send({
         sync: SyncQueueGetCounts(),
         recentEvents: await SyncEventHistoryGetRecent(),
+        failuresCount: SyncFailuresGetCount(),
       });
     });
 
@@ -81,6 +88,14 @@ export class SyncRoutes {
             counts: SyncQueueGetCounts(),
             processingFileIds: SyncQueueGetProcessingFileIds(),
             items: SyncQueueGetQueue(),
+            failuresCount: SyncFailuresGetCount(),
+          }),
+        );
+        socket.send(
+          JSON.stringify({
+            type: "failures_update",
+            count: SyncFailuresGetCount(),
+            items: SyncFailuresList(),
           }),
         );
       } catch {
