@@ -74,9 +74,10 @@ export class SyncFailureRoutes {
         return res.status(403).send({ error: "Access Denied" });
       }
       let retried = 0;
+      // Retry every failure, conflict or plain error. Conflicts that still
+      // exist will simply be re-detected and recorded again by the dispatcher.
       const all = SyncFailuresList();
       for (const failure of all) {
-        if (failure.kind === "conflict") continue;
         requeueFailure(failure);
         SyncFailuresRemove(failure.id);
         retried++;
@@ -105,11 +106,9 @@ export class SyncFailureRoutes {
       }
       const action = req.body?.action;
       if (action !== "replace" && action !== "deleteSource") {
-        return res
-          .status(400)
-          .send({
-            error: "Invalid action (expected 'replace' | 'deleteSource')",
-          });
+        return res.status(400).send({
+          error: "Invalid action (expected 'replace' | 'deleteSource')",
+        });
       }
       const accountId = failure.accountId;
       const conflict = failure.conflict;

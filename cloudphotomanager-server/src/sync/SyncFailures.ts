@@ -14,22 +14,14 @@ const WRITE_DEBOUNCE_MS = 300;
 
 const logger = OTelLogger().createModuleLogger("SyncFailures");
 
-export interface SyncFailureConflictSnapshot {
-  filename: string;
-  folderpath: string;
-  dateMedia: string | null;
-  size: number | null;
-}
-
-export interface SyncFailureConflict {
-  sourceFileId: string;
-  targetFileId: string | null;
-  targetFolderId: string | null;
-  targetFolderpath: string;
-  targetFilename: string;
-  source: SyncFailureConflictSnapshot;
-  target: SyncFailureConflictSnapshot;
-}
+// Conflict types and MoveConflictError live in SyncMoveConflict.ts (the
+// detector module). Re-exported here so existing callers keep working.
+export {
+  MoveConflictError,
+  SyncFailureConflict,
+  SyncFailureConflictSnapshot,
+} from "./SyncMoveConflict";
+import { SyncFailureConflict } from "./SyncMoveConflict";
 
 export interface SyncFailure {
   id: string;
@@ -43,17 +35,6 @@ export interface SyncFailure {
   errorMessage?: string;
   dateCreated: string;
   conflict?: SyncFailureConflict;
-}
-
-export class MoveConflictError extends Error {
-  public readonly conflict: SyncFailureConflict;
-  constructor(conflict: SyncFailureConflict) {
-    super(
-      `Move conflict: ${conflict.targetFilename} already exists in ${conflict.targetFolderpath}`,
-    );
-    this.name = "MoveConflictError";
-    this.conflict = conflict;
-  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

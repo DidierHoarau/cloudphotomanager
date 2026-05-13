@@ -13,7 +13,7 @@
     "dev:test": "NODE_ENV=dev jest --watch --config='jest.config.js'"
   },
   "dependencies": {
-    "@devopsplaybook.io/otel-utils-fastify": "^1.0.18",
+    "@devopsplaybook.io/otel-utils-fastify": "^1.0.19",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.2.0",
     "@fastify/multipart": "^10.0.0",
@@ -25,10 +25,10 @@
     "aws-sdk": "^1.18.0",
     "axios": "^1.16.0",
     "bcrypt": "^6.0.0",
-    "better-sqlite3": "^12.9.0",
+    "better-sqlite3": "^12.10.0",
     "exif-reader": "^2.0.3",
     "fastify": "^5.8.5",
-    "fs-extra": "^11.3.4",
+    "fs-extra": "^11.3.5",
     "html-entities": "^2.6.0",
     "jsonwebtoken": "^9.0.3",
     "lodash": "^4.18.1",
@@ -54,13 +54,13 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/lodash": "^4.17.24",
     "@types/md5": "^2.3.6",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.7.0",
     "eslint": "^10.3.0",
-    "jest": "^30.3.0",
+    "jest": "^30.4.2",
     "prettier-plugin-organize-imports": "^4.3.0",
-    "sinon": "^21.1.2",
+    "sinon": "^22.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.1"
+    "typescript-eslint": "^8.59.3"
   }
 }

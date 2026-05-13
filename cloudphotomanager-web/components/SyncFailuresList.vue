@@ -18,9 +18,9 @@
       <div class="failures-toolbar-actions">
         <button
           class="secondary outline"
-          :disabled="!hasRetryable || busy"
+          :disabled="failures.length === 0 || busy"
           @click="clickedRetryAll"
-          title="Retry all non-conflict failures"
+          title="Retry all failed actions"
         >
           <i class="bi bi-arrow-repeat"></i> Retry all
         </button>
@@ -130,27 +130,27 @@
               @click="clickedReplace(failure)"
               :title="
                 failure.conflict.targetFileId
-                  ? 'Delete the existing target, then move the source'
+                  ? 'Delete the existing destination file, then move the source in its place'
                   : 'Target file id not available'
               "
             >
-              <i class="bi bi-arrow-repeat"></i> Replace target
+              <i class="bi bi-arrow-repeat"></i> Replace Destination
             </button>
             <button
               class="action-btn action-delete-source"
               :disabled="busy"
               @click="clickedDeleteSource(failure)"
-              title="Delete the file being moved"
+              title="Delete the origin file being moved"
             >
-              <i class="bi bi-trash"></i> Delete source
+              <i class="bi bi-trash"></i> Remove Origin file
             </button>
             <button
               class="action-btn"
               :disabled="busy"
               @click="clickedRetry(failure)"
-              title="Retry the move (use if the conflict was resolved elsewhere)"
+              title="Re-queue the move"
             >
-              <i class="bi bi-arrow-clockwise"></i> Retry move
+              <i class="bi bi-arrow-clockwise"></i> Retry
             </button>
             <button
               class="action-btn secondary"
@@ -207,11 +207,6 @@ export default {
       confirmMessage: "",
       pendingAction: null,
     };
-  },
-  computed: {
-    hasRetryable() {
-      return this.failures.some((f) => f.kind !== "conflict");
-    },
   },
   methods: {
     sourceFile(failure) {
@@ -293,23 +288,23 @@ export default {
     clickedReplace(failure) {
       const c = failure.conflict;
       this.askConfirm(
-        "Replace target",
-        `Delete the existing file and move the source in its place?\nTarget: ${c.target.filename} in ${c.targetFolderpath}`,
+        "Replace Destination",
+        `Delete the existing destination file and move the source in its place?\nDestination: ${c.target.filename} in ${c.targetFolderpath}`,
         () => SyncStore().resolveFailure(failure.id, "replace"),
       );
     },
     clickedDeleteSource(failure) {
       const c = failure.conflict;
       this.askConfirm(
-        "Delete source",
-        `Delete the file being moved? (Can't be undone!)\nFile: ${c.source.filename}`,
+        "Remove Origin file",
+        `Delete the origin file being moved? (Can't be undone!)\nFile: ${c.source.filename}`,
         () => SyncStore().resolveFailure(failure.id, "deleteSource"),
       );
     },
     clickedRetryAll() {
       this.askConfirm(
         "Retry all",
-        "Re-queue all non-conflict failures? Conflicts must be resolved individually.",
+        "Re-queue all failed actions? Conflicts that still exist will be recorded again.",
         () => SyncStore().retryAllFailures(),
       );
     },
