@@ -1,21 +1,33 @@
 // SQL fragments to read GPS coordinates from the JSON `info` column
-// (stored under info.exif.GPSInfo by SyncFileCache). Decimal degrees
-// are negated for southern latitudes / western longitudes via the
-// GPSLatitudeRef / GPSLongitudeRef tags. Centralized here so the
+// (stored under info.exif.GPSInfo by SyncFileCache, populated via
+// `exif-reader` v2). exif-reader v2 stores GPSLatitude / GPSLongitude
+// as DMS arrays of 3 numbers ([degrees, minutes, seconds]), with sign
+// carried separately in GPSLatitudeRef / GPSLongitudeRef ('N'/'S',
+// 'E'/'W'). Decimal degrees = D + M/60 + S/3600, then negated for
+// southern latitudes / western longitudes. Centralized here so the
 // search filter and the geo-grid aggregation share one source of truth.
 
 export const GEO_LAT_EXPR =
-  "(json_extract(info, '$.exif.GPSInfo.GPSLatitude') * " +
+  "((" +
+  "  COALESCE(json_extract(info, '$.exif.GPSInfo.GPSLatitude[0]'), 0) + " +
+  "  COALESCE(json_extract(info, '$.exif.GPSInfo.GPSLatitude[1]'), 0) / 60.0 + " +
+  "  COALESCE(json_extract(info, '$.exif.GPSInfo.GPSLatitude[2]'), 0) / 3600.0" +
+  ") * " +
   "(CASE WHEN json_extract(info, '$.exif.GPSInfo.GPSLatitudeRef') = 'S' THEN -1 ELSE 1 END))";
 
 export const GEO_LON_EXPR =
-  "(json_extract(info, '$.exif.GPSInfo.GPSLongitude') * " +
+  "((" +
+  "  COALESCE(json_extract(info, '$.exif.GPSInfo.GPSLongitude[0]'), 0) + " +
+  "  COALESCE(json_extract(info, '$.exif.GPSInfo.GPSLongitude[1]'), 0) / 60.0 + " +
+  "  COALESCE(json_extract(info, '$.exif.GPSInfo.GPSLongitude[2]'), 0) / 3600.0" +
+  ") * " +
   "(CASE WHEN json_extract(info, '$.exif.GPSInfo.GPSLongitudeRef') = 'W' THEN -1 ELSE 1 END))";
 
-// Filters out files without a parsed GPSInfo block.
+// Filters out files without a parsed GPSInfo block. Tests for the
+// first DMS component (degrees) being present in both lat and lon.
 export const GEO_PRESENT_CONDITION =
-  " json_extract(info, '$.exif.GPSInfo.GPSLatitude') IS NOT NULL " +
-  " AND json_extract(info, '$.exif.GPSInfo.GPSLongitude') IS NOT NULL ";
+  " json_extract(info, '$.exif.GPSInfo.GPSLatitude[0]') IS NOT NULL " +
+  " AND json_extract(info, '$.exif.GPSInfo.GPSLongitude[0]') IS NOT NULL ";
 
 export interface GeoBox {
   minLat: number;

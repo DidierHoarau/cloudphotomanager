@@ -136,16 +136,28 @@ export default {
   },
   computed: {
     // Mirrors the server-side extraction in SearchGeoSql.ts:
-    // info.exif.GPSInfo.{GPSLatitude,GPSLongitude} with sign from
-    // GPSLatitudeRef / GPSLongitudeRef.
+    // info.exif.GPSInfo.{GPSLatitude,GPSLongitude} stored by
+    // exif-reader v2 as DMS arrays [degrees, minutes, seconds],
+    // with sign from GPSLatitudeRef / GPSLongitudeRef.
     gps() {
       const g = this.file?.info?.exif?.GPSInfo;
       if (!g) return null;
-      const rawLat = g.GPSLatitude;
-      const rawLon = g.GPSLongitude;
-      if (typeof rawLat !== "number" || typeof rawLon !== "number") {
+      const toDecimal = (v) => {
+        if (typeof v === "number" && Number.isFinite(v)) return v;
+        if (
+          Array.isArray(v) &&
+          v.length >= 3 &&
+          typeof v[0] === "number" &&
+          typeof v[1] === "number" &&
+          typeof v[2] === "number"
+        ) {
+          return v[0] + v[1] / 60 + v[2] / 3600;
+        }
         return null;
-      }
+      };
+      const rawLat = toDecimal(g.GPSLatitude);
+      const rawLon = toDecimal(g.GPSLongitude);
+      if (rawLat === null || rawLon === null) return null;
       const lat = g.GPSLatitudeRef === "S" ? -rawLat : rawLat;
       const lon = g.GPSLongitudeRef === "W" ? -rawLon : rawLon;
       return { lat, lon };
