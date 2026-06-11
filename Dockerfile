@@ -6,7 +6,7 @@ WORKDIR /opt/src
 RUN apt-get update && apt-get install -y \
         curl \
         ca-certificates \
-    && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_26.x | bash - \
     && apt-get install -y \
         nodejs \
         build-essential \
@@ -41,7 +41,7 @@ COPY docker-config/entrypoint.sh /entrypoint.sh
 RUN apt-get update && apt-get install -y \
         curl \
         ca-certificates \
-    && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_26.x | bash - \
     && apt-get install -y \
         nodejs \
         build-essential \
