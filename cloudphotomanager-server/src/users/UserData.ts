@@ -4,14 +4,14 @@ import { OTelTracer } from "../OTelContext";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
-} from "../utils-std-ts/SqlDbUtils";
+} from "@devopsplaybook.io/common-utils";
 
 export async function UserDataGet(context: Span, id: string): Promise<User> {
   const span = OTelTracer().startSpan("UserData_get", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM users WHERE id=?",
-    [id]
+    [id],
   );
   let user: User = null;
   if (rawData.length > 0) {
@@ -23,13 +23,13 @@ export async function UserDataGet(context: Span, id: string): Promise<User> {
 
 export async function UserDataGetByName(
   context: Span,
-  name: string
+  name: string,
 ): Promise<User> {
   const span = OTelTracer().startSpan("UserData_getByName", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM users WHERE name=?",
-    [name]
+    [name],
   );
   let user: User = null;
   if (rawData.length > 0) {
@@ -55,7 +55,7 @@ export async function UserDataAdd(context: Span, user: User): Promise<void> {
   await SqlDbUtilsExecSQL(
     span,
     "INSERT INTO users (id, name, passwordEncrypted) VALUES (?, ?, ?)",
-    [user.id, user.name, user.passwordEncrypted]
+    [user.id, user.name, user.passwordEncrypted],
   );
   span.end();
 }
@@ -65,7 +65,7 @@ export async function UserDataUpdate(context: Span, user: User): Promise<void> {
   await SqlDbUtilsExecSQL(
     span,
     "UPDATE users SET passwordEncrypted = ? WHERE id = ? ",
-    [user.passwordEncrypted, user.id]
+    [user.passwordEncrypted, user.id],
   );
   span.end();
 }

@@ -1,62 +1,60 @@
 <template>
-  <div class="search-map-layout page">
-    <NavigationSearch
-      class="search-map-layout-navigation"
-      @onAccountSelected="onAccountSelected"
-    />
-    <div class="search-map-info">
-      <kbd v-if="totalGeoTagged > 0">
-        Geo-tagged photos in view: {{ totalGeoTagged }}
-      </kbd>
-      <kbd v-else-if="!loadingGrid && currentAccountId">
-        No geo-tagged photos in view
-      </kbd>
-    </div>
-    <div class="search-map-container">
-      <div ref="mapEl" class="search-map"></div>
-      <div v-if="loadingMap" class="search-map-loading">
-        <Loading />
+  <SearchLayout @onAccountSelected="onAccountSelected">
+    <div class="search-map-content">
+      <div class="search-map-info">
+        <kbd v-if="totalGeoTagged > 0">
+          Geo-tagged photos in view: {{ totalGeoTagged }}
+        </kbd>
+        <kbd v-else-if="!loadingGrid && currentAccountId">
+          No geo-tagged photos in view
+        </kbd>
       </div>
-    </div>
+      <div class="search-map-container">
+        <div ref="mapEl" class="search-map"></div>
+        <div v-if="loadingMap" class="search-map-loading">
+          <Loading />
+        </div>
+      </div>
 
-    <!-- Cell dialog (reuses Gallery) -->
-    <div
-      v-if="cellDialogOpen"
-      class="dialog-overlay"
-      @click.self="closeCellDialog()"
-    >
-      <article class="dialog-article">
-        <header>
-          <a
-            href="#close"
-            aria-label="Close"
-            class="close"
-            @click.prevent="closeCellDialog()"
-          ></a>
-          <span v-if="selectedCell">
-            Cell {{ selectedCell.row }}/{{ selectedCell.col }} -
-            {{ selectedCell.count }} photo(s)
-          </span>
-        </header>
-        <Loading v-if="loadingCell" />
-        <Gallery
-          v-else
-          :files="cellFiles"
-          :enableSelection="false"
-          @focusGalleryItem="focusGalleryItem"
-        />
-      </article>
-    </div>
+      <!-- Cell dialog (reuses Gallery) -->
+      <div
+        v-if="cellDialogOpen"
+        class="dialog-overlay"
+        @click.self="closeCellDialog()"
+      >
+        <article class="dialog-article">
+          <header>
+            <a
+              href="#close"
+              aria-label="Close"
+              class="close"
+              @click.prevent="closeCellDialog()"
+            ></a>
+            <span v-if="selectedCell">
+              Cell {{ selectedCell.row }}/{{ selectedCell.col }} -
+              {{ selectedCell.count }} photo(s)
+            </span>
+          </header>
+          <Loading v-if="loadingCell" />
+          <Gallery
+            v-else
+            :files="cellFiles"
+            :enableSelection="false"
+            @focusGalleryItem="focusGalleryItem"
+          />
+        </article>
+      </div>
 
-    <GalleryItemFocus
-      v-if="displayFullScreen"
-      :galleryFiles="cellFiles"
-      :initialPosition="positionFocus"
-      :selectedFiles="[]"
-      class="gallery-item-focus"
-      @onFileClosed="unFocusGalleryItem"
-    />
-  </div>
+      <GalleryItemFocus
+        v-if="displayFullScreen"
+        :galleryFiles="cellFiles"
+        :initialPosition="positionFocus"
+        :selectedFiles="[]"
+        class="gallery-item-focus"
+        @onFileClosed="unFocusGalleryItem"
+      />
+    </div>
+  </SearchLayout>
 </template>
 
 <script>
@@ -316,11 +314,8 @@ export default {
 </script>
 
 <style scoped>
-.search-map-layout {
-  display: grid;
-  grid-template-rows: auto auto 1fr;
-  grid-template-columns: 1fr;
-  gap: 0.5em;
+.search-map-content {
+  min-height: 0;
 }
 .search-map-info {
   min-height: 1.6em;
@@ -334,7 +329,7 @@ export default {
 .search-map {
   width: 100%;
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
 }
 .search-map-loading {
   position: absolute;
@@ -352,7 +347,7 @@ export default {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background-color: rgba(0, 0, 0, 0.6);
+  background-color: var(--color-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -362,7 +357,7 @@ export default {
   width: min(90vw, 90em);
   max-height: 85vh;
   overflow: auto;
-  padding: 1em;
+  padding: var(--space-base);
 }
 .gallery-item-focus {
   background-color: black;

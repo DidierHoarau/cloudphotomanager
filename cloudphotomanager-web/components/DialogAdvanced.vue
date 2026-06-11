@@ -174,25 +174,25 @@ small {
 
 fieldset {
   border: none;
-  padding: 0.5em 0;
+  padding: var(--space-sm) 0;
 }
 
 .outtakes-section {
-  margin-bottom: 1em;
+  margin-bottom: var(--space-base);
 }
 
 .outtakes-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.5em;
-  margin-top: 0.5em;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
 }
 
 .outtakes-btn {
-  padding: 0.4em 0.6em;
-  font-size: 0.9em;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-body);
   border: 1px solid currentColor;
-  border-radius: 0.3em;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.2s ease;
 }

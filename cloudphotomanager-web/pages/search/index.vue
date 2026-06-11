@@ -1,65 +1,63 @@
 <template>
-  <div class="search-gallery-layout page">
-    <NavigationSearch
-      class="search-gallery-layout-navigation"
-      @onAccountSelected="onAccountSelected"
-    />
-    <div class="search-gallery-criteria">
-      <input
-        v-model="searchKeyword"
-        type="search"
-        name="search"
-        placeholder="Search File"
-        aria-label="Search"
-        class="folder-component-layout-filter"
-        v-on:input="onSearchFilterChanged"
-      />
-      <div class="search-gallery-layout-dates">
-        <label>
-          From
-          <input
-            type="date"
-            name="date"
-            aria-label="Date"
-            v-model="dateFrom"
-            v-on:input="onSearchFilterChanged"
-          />
-        </label>
-        <label>
-          To
-          <input
-            type="date"
-            name="date"
-            aria-label="Date"
-            v-model="dateTo"
-            v-on:input="onSearchFilterChanged"
-          />
-        </label>
-        <kbd v-if="files.length > 0">Images Found: {{ files.length }}</kbd>
+  <SearchLayout @onAccountSelected="onAccountSelected">
+    <div class="search-gallery-content">
+      <div class="search-gallery-criteria">
+        <input
+          v-model="searchKeyword"
+          type="search"
+          name="search"
+          placeholder="Search File"
+          aria-label="Search"
+          class="folder-component-layout-filter"
+          v-on:input="onSearchFilterChanged"
+        />
+        <div class="search-gallery-content-dates">
+          <label>
+            From
+            <input
+              type="date"
+              name="date"
+              aria-label="Date"
+              v-model="dateFrom"
+              v-on:input="onSearchFilterChanged"
+            />
+          </label>
+          <label>
+            To
+            <input
+              type="date"
+              name="date"
+              aria-label="Date"
+              v-model="dateTo"
+              v-on:input="onSearchFilterChanged"
+            />
+          </label>
+          <kbd v-if="files.length > 0">Images Found: {{ files.length }}</kbd>
+        </div>
       </div>
-    </div>
 
-    <div class="search-items-actions actions"></div>
-    <div class="search-item-list">
-      <Loading v-if="loading" />
-      <Gallery
-        v-else
-        :files="files"
-        :enableSelection="false"
-        @focusGalleryItem="focusGalleryItem"
-        @onFileSelected="onFileSelected"
+      <div class="search-items-actions actions"></div>
+      <div class="search-item-list">
+        <Loading v-if="loading" />
+        <Gallery
+          v-else
+          :files="files"
+          :enableSelection="false"
+          @focusGalleryItem="focusGalleryItem"
+          @onFileSelected="onFileSelected"
+          :selectedFiles="selectedFiles"
+        />
+      </div>
+      <GalleryItemFocus
+        v-if="displayFullScreen"
+        :galleryFiles="files"
+        :initialPosition="positionFocus"
         :selectedFiles="selectedFiles"
+        class="gallery-item-focus"
+        @onFileClosed="unFocusGalleryItem"
       />
     </div>
-    <GalleryItemFocus
-      v-if="displayFullScreen"
-      :galleryFiles="files"
-      :initialPosition="positionFocus"
-      :selectedFiles="selectedFiles"
-      class="gallery-item-focus"
-      @onFileClosed="unFocusGalleryItem"
-    />
-  </div>
+  </SearchLayout>
 </template>
 
 <script>
@@ -163,33 +161,31 @@ export default {
 </script>
 
 <style scoped>
-.search-gallery-layout {
-  display: grid;
-  grid-template-rows: auto auto 2.5em 1fr;
-  grid-template-columns: 1fr;
-  gap: 1em;
+.search-gallery-content {
+  min-height: 0;
+  overflow-y: auto;
 }
 
-.search-gallery-layout-dates {
+.search-gallery-content-dates {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  column-gap: 1em;
+  column-gap: var(--space-base);
 }
 
 @media (prefers-color-scheme: dark) {
   .source-active {
-    background-color: #333;
+    background-color: var(--color-bg-hover);
   }
   .gallery-folders {
-    background-color: #33333333;
+    background-color: var(--color-bg-secondary);
   }
 }
 @media (prefers-color-scheme: light) {
   .source-active {
-    background-color: #bbb;
+    background-color: var(--color-bg-hover);
   }
   .gallery-folders {
-    background-color: #aaaaaa33;
+    background-color: var(--color-bg-secondary);
   }
 }
 .gallery-item-focus {
@@ -204,19 +200,19 @@ export default {
   display: grid;
   width: 100%;
   grid-template-columns: 1fr auto;
-  margin-top: 0.5em;
-  padding-top: 0.6em;
-  padding-bottom: 0.6em;
-  border-top: 1px solid #333333aa;
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-top: 1px solid var(--color-border);
 }
 .search-file-list-file-name {
   word-break: break-all;
 }
 .search-file-list-file-actions i {
-  padding-left: 0.9em;
-  padding-right: 0.5em;
+  padding-left: var(--space-base);
+  padding-right: var(--space-sm);
 }
 .search-item {
-  margin-top: 1em;
+  margin-top: var(--space-base);
 }
 </style>

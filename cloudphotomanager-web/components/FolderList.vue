@@ -156,12 +156,12 @@ export default {
 }
 @media (prefers-color-scheme: dark) {
   .source-active {
-    background-color: #333;
+    background-color: var(--color-bg-hover);
   }
 }
 @media (prefers-color-scheme: light) {
   .source-active {
-    background-color: #bbb;
+    background-color: var(--color-bg-hover);
   }
 }
 
@@ -178,20 +178,20 @@ export default {
 
 .folder-component-layout-filter {
   grid-row: 1;
-  font-size: 0.7em;
+  font-size: var(--font-xs);
   height: 100%;
 }
 
 .folder-layout {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  padding: 0.3em 0.5em;
+  padding: var(--space-xs) var(--space-sm);
   max-width: 100%;
   text-align: left;
 }
 .source-name-indent {
   grid-column: 1;
-  padding-right: 0.5em;
+  padding-right: var(--space-sm);
 }
 .folder-layout-name {
   grid-column: 2;
@@ -202,6 +202,6 @@ export default {
 .folder-layout-count {
   grid-column: 3;
   opacity: 0.2;
-  font-size: 0.9em;
+  font-size: var(--font-body);
 }
 </style>

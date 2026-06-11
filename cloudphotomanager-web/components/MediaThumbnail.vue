@@ -132,14 +132,14 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 0.3em;
-  background: rgba(128, 128, 128, 0.15);
+  background: var(--color-bg-hover);
 }
 .media-thumb-placeholder i {
   font-size: 2.5em;
   opacity: 0.4;
 }
 .media-thumb-placeholder span {
-  font-size: 0.65em;
+  font-size: var(--font-xs);
   opacity: 0.55;
   letter-spacing: 0.02em;
 }
@@ -149,9 +149,9 @@ export default {
 .media-thumb-skeleton {
   background: linear-gradient(
     90deg,
-    rgba(128, 128, 128, 0.08) 0%,
-    rgba(128, 128, 128, 0.2) 50%,
-    rgba(128, 128, 128, 0.08) 100%
+    var(--color-bg-hover) 0%,
+    var(--color-border) 50%,
+    var(--color-bg-hover) 100%
   );
   background-size: 200% 100%;
   animation: media-thumb-pulse 1.4s ease-in-out infinite;
@@ -178,13 +178,13 @@ export default {
 }
 .gallery-duplicate-badge {
   position: absolute;
-  top: 0.25em;
-  right: 0.25em;
+  top: var(--space-xs);
+  right: var(--space-xs);
   background: rgba(0, 0, 0, 0.6);
-  color: #fff;
+  color: var(--color-text-inverse);
   padding: 0.1em 0.4em;
-  border-radius: 0.3em;
-  font-size: 0.7em;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
   pointer-events: none;
 }
 </style>

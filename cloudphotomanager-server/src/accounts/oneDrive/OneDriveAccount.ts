@@ -164,10 +164,10 @@ export class OneDriveAccount implements Account {
   }
 
   public async downloadPreview(
-    context: Span,
-    file: File,
-    folder: string,
-    filename: string,
+    _context: Span,
+    _file: File,
+    _folder: string,
+    _filename: string,
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }

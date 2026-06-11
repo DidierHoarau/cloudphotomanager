@@ -54,7 +54,7 @@ export default {
   width: 100%;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(10em, 1fr));
-  gap: 1em;
+  gap: var(--space-base);
 }
 .gallery-file {
   display: grid;

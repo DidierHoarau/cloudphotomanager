@@ -1,4 +1,12 @@
 @import "@picocss/pico/css/pico.min.css";
 @import "bootstrap-icons/font/bootstrap-icons.css";
 @import "@vuepic/vue-datepicker/dist/main.css";
+
+/* Note: Pico CSS is also loaded from CDN in nuxt.config.ts head link.
+   The CDN import is redundant with the npm import above and should be
+   removed after verifying no side effects. */
+
+@import "./variables.css";
+@import "./shared.css";
 @import "./dialog.css";
+@import "./tab-navigation.css";

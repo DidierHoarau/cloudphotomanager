@@ -107,7 +107,7 @@ export default {
   grid-row: 2;
   grid-column-start: 2;
   grid-column-end: span 2;
-  font-size: 0.7em;
+  font-size: var(--font-xs);
   word-break: break-all;
   opacity: 0.8;
 }
@@ -132,19 +132,19 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-overlay);
   pointer-events: none;
 }
 .processing-icon {
   font-size: 2em;
-  color: #fff;
+  color: var(--color-text-inverse);
   opacity: 0.9;
 }
 .gallery-file-date {
   height: 2em;
   grid-column: 2;
   grid-row: 3;
-  font-size: 0.6em;
+  font-size: var(--font-xs);
   word-break: break-all;
   opacity: 0.4;
 }
@@ -152,7 +152,7 @@ export default {
   height: 2em;
   grid-column: 3;
   grid-row: 3;
-  font-size: 0.6em;
+  font-size: var(--font-xs);
   word-break: break-all;
   opacity: 0.4;
 }
@@ -160,6 +160,6 @@ export default {
   grid-column: 1;
   grid-row-start: 2;
   grid-row-end: span 2;
-  padding-right: 0.3em;
+  padding-right: var(--space-xs);
 }
 </style>

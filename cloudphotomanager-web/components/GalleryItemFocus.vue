@@ -784,7 +784,7 @@ export default {
 }
 .action-bar {
   position: fixed;
-  bottom: 3em;
+  bottom: var(--space-3xl);
   left: 0;
   z-index: 200;
   display: flex;
@@ -794,13 +794,13 @@ export default {
 .action-bar-main {
   display: flex;
   align-items: center;
-  gap: 0.2em;
+  gap: var(--space-xs);
   height: 2.6em;
-  padding: 0 0.6em;
-  background: rgba(20, 20, 40, 0.45);
+  padding: 0 var(--space-md);
+  background: var(--color-accent-bg);
   backdrop-filter: blur(6px);
-  border-top-right-radius: 0.5em;
-  border-bottom-right-radius: 0.5em;
+  border-top-right-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
 }
 .action-menu {
   position: relative;
@@ -810,8 +810,8 @@ export default {
   height: 2.2em;
   background: transparent;
   border: 1px solid rgba(170, 170, 255, 0.25);
-  border-radius: 0.35em;
-  color: #aaf;
+  border-radius: var(--radius-md);
+  color: var(--color-accent);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -828,13 +828,13 @@ export default {
 .action-menu-list {
   position: absolute;
   left: 0;
-  bottom: calc(100% + 0.4em);
+  bottom: calc(100% + var(--space-sm));
   min-width: 12em;
   display: flex;
   flex-direction: column;
-  gap: 0.2em;
-  padding: 0.35em;
-  border-radius: 0.4em;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  border-radius: var(--radius-md);
   border: 1px solid rgba(170, 170, 255, 0.25);
   background: rgba(20, 20, 40, 0.95);
   backdrop-filter: blur(6px);
@@ -845,41 +845,41 @@ export default {
   text-align: left;
   background: transparent;
   border: none;
-  border-radius: 0.3em;
-  color: #aaf;
-  font-size: 0.85em;
-  padding: 0.35em 0.45em;
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-size: var(--font-base);
+  padding: var(--space-xs) var(--space-sm);
   cursor: pointer;
 }
 .action-menu-item:hover {
   background: rgba(170, 170, 255, 0.15);
-  color: #fff;
+  color: var(--color-text-inverse);
 }
 .action-menu-item-danger:hover {
-  background: rgba(255, 80, 80, 0.2);
-  color: #f88;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 .action-checkbox {
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  padding: 0.25em 0.3em;
+  padding: var(--space-xs) var(--space-xs);
 }
 .action-checkbox input[type="checkbox"] {
   width: 1.1em;
   height: 1.1em;
   cursor: pointer;
-  accent-color: #aaf;
+  accent-color: var(--color-accent);
 }
 .action-btn {
   background: transparent;
   border: none;
-  color: #aaf;
-  font-size: 0.95em;
-  padding: 0.25em 0.4em;
+  color: var(--color-accent);
+  font-size: var(--font-body);
+  padding: var(--space-xs) var(--space-xs);
   cursor: pointer;
-  border-radius: 0.35em;
+  border-radius: var(--radius-md);
   transition:
     background 0.15s,
     color 0.15s;
@@ -887,21 +887,21 @@ export default {
 }
 .action-btn:hover:not(:disabled) {
   background: rgba(170, 170, 255, 0.15);
-  color: #fff;
+  color: var(--color-text-inverse);
 }
 .action-btn:disabled {
   opacity: 0.25;
   cursor: default;
 }
 .action-btn-danger:hover:not(:disabled) {
-  background: rgba(255, 80, 80, 0.2);
-  color: #f88;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-hover);
 }
 .action-bar-divider {
   width: 1px;
   height: 1.4em;
   background: rgba(170, 170, 255, 0.2);
-  margin: 0 0.2em;
+  margin: 0 var(--space-xs);
 }
 .animate-media-out-left {
   animation-duration: 0.3s;
@@ -988,12 +988,12 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.75em;
-  color: #aaf;
+  gap: var(--space-md);
+  color: var(--color-accent);
   opacity: 0.75;
-  font-size: 1.1em;
+  font-size: var(--font-xl);
   text-align: center;
-  padding: 1em;
+  padding: var(--space-base);
   position: relative;
   z-index: 2;
 }
@@ -1019,15 +1019,15 @@ export default {
 }
 .processing-banner {
   position: fixed;
-  top: 1em;
+  top: var(--space-base);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(20, 20, 40, 0.75);
+  background: var(--color-accent-bg);
   backdrop-filter: blur(6px);
-  color: #aaf;
-  padding: 0.4em 1.2em;
-  border-radius: 2em;
-  font-size: 0.9em;
+  color: var(--color-accent);
+  padding: var(--space-sm) var(--space-xl);
+  border-radius: var(--radius-full);
+  font-size: var(--font-body);
   z-index: 300;
   pointer-events: none;
 }

@@ -1,0 +1,45 @@
+/* Shared tab navigation styles */
+.tab-navigation {
+  display: flex;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-base);
+  border-bottom: 1px solid #ffffff22;
+  padding: 0;
+  overflow-x: auto;
+  min-width: 0;
+  list-style: none;
+}
+.tab {
+  background: none;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-sm) var(--space-base);
+  cursor: pointer;
+  font-size: var(--font-body);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+  font-weight: bold;
+  opacity: 0.3;
+  transition:
+    color 0.2s,
+    border-color 0.2s;
+}
+.tab:hover {
+  opacity: 0.6;
+}
+.tab.active {
+  opacity: 1;
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+:root[data-theme="light"] .tab.active {
+  color: var(--color-primary-dark);
+  border-bottom-color: var(--color-primary-dark);
+}

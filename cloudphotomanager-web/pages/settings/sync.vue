@@ -1,6 +1,6 @@
 <template>
-  <div class="page page-queue">
-    <h1>Sync Queue</h1>
+  <div class="page">
+    <TabNavigation :tabs="settingsTabs" />
     <div class="queue-tabs">
       <button
         class="tab-btn"
@@ -115,6 +115,23 @@ import { handleError } from "~~/services/EventBus";
 export default {
   data() {
     return {
+      settingsTabs: [
+        {
+          id: "accounts",
+          label: "Accounts",
+          to: "/settings/accounts",
+        },
+        {
+          id: "sync",
+          label: "Sync Queue",
+          to: "/settings/sync",
+        },
+        {
+          id: "users",
+          label: "Users",
+          to: "/settings/users",
+        },
+      ],
       loading: false,
       failuresLoading: false,
       activeTab: "queue",
@@ -257,24 +274,19 @@ export default {
 </script>
 
 <style scoped>
-.page-queue {
-  display: grid;
-  grid-template-rows: auto auto 1fr;
-}
-
 .queue-tabs {
   display: flex;
-  gap: 0.3em;
+  gap: var(--space-xs);
   border-bottom: 1px solid rgba(128, 128, 128, 0.25);
-  margin-bottom: 0.75em;
+  margin-bottom: var(--space-md);
 }
 .tab-btn {
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  padding: 0.5em 1em;
+  padding: var(--space-sm) var(--space-base);
   cursor: pointer;
-  font-size: 1em;
+  font-size: var(--font-lg);
   color: inherit;
   opacity: 0.7;
 }
@@ -288,33 +300,33 @@ export default {
 }
 .tab-badge {
   display: inline-block;
-  margin-left: 0.4em;
+  margin-left: var(--space-sm);
   padding: 0.1em 0.5em;
-  border-radius: 1em;
-  background: #dc3545;
-  color: #fff;
-  font-size: 0.75em;
+  border-radius: var(--radius-full);
+  background: var(--color-danger);
+  color: var(--color-text-inverse);
+  font-size: var(--font-sm);
   font-weight: 600;
 }
 
 .queue-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1em;
+  gap: var(--space-base);
 }
 
 .stat-card {
-  padding: 1em;
+  padding: var(--space-base);
   text-align: center;
 }
 
 .stat-label {
   opacity: 0.7;
-  margin-bottom: 0.5em;
+  margin-bottom: var(--space-sm);
 }
 
 .stat-value {
-  font-size: 1.3em;
+  font-size: var(--font-xl);
   font-weight: bold;
 }
 
@@ -323,13 +335,13 @@ export default {
 }
 
 .queue-truncated-hint {
-  margin: 0.5em 0;
-  padding: 0.5em 0.75em;
-  font-size: 0.85em;
+  margin: var(--space-sm) 0;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-base);
   opacity: 0.75;
   border-left: 3px solid rgba(13, 110, 253, 0.5);
   background: rgba(13, 110, 253, 0.08);
-  border-radius: 0.2em;
+  border-radius: var(--radius-sm);
 }
 
 tbody tr.active {
@@ -342,57 +354,57 @@ tbody tr.waiting {
 
 .badge {
   display: inline-block;
-  padding: 0.25em 0.75em;
-  border-radius: 0.25em;
-  font-size: 0.7em;
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
   font-weight: 500;
 }
 
 .status-active {
   background-color: rgba(25, 135, 84, 0.2);
-  color: #198754;
+  color: var(--color-success);
 }
 
 .status-waiting {
   background-color: rgba(255, 193, 7, 0.2);
-  color: #ffc107;
+  color: var(--color-warning);
 }
 
 .priority-interactive {
   background-color: rgba(220, 53, 69, 0.2);
-  color: #dc3545;
+  color: var(--color-danger);
 }
 
 .priority-normal {
   background-color: rgba(13, 110, 253, 0.2);
-  color: #0d6efd;
+  color: var(--color-primary);
 }
 
 .priority-batch {
   background-color: rgba(108, 117, 125, 0.2);
-  color: #6c757d;
+  color: var(--color-text-muted);
 }
 
 code {
   background: rgba(0, 0, 0, 0.1);
-  padding: 0.2em 0.4em;
-  border-radius: 0.2em;
-  font-size: 0.9em;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-body);
 }
 
 .empty-state {
   text-align: center;
-  padding: 3em;
+  padding: var(--space-3xl);
   opacity: 0.5;
 }
 
 .empty-state i {
   font-size: 4em;
-  margin-bottom: 0.5em;
+  margin-bottom: var(--space-sm);
 }
 
 small {
   opacity: 0.6;
-  font-size: 0.8em;
+  font-size: var(--font-base);
 }
 </style>

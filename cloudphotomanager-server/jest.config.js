@@ -4,10 +4,12 @@ module.exports = {
     "^.+\\.(ts|tsx)$": [
       "ts-jest",
       {
-        tsconfig: "tsconfig.json",
+        tsconfig: "tsconfig.spec.json",
       },
     ],
+    "^.+\\.js$": "babel-jest",
   },
+  transformIgnorePatterns: ["/node_modules/(?!uuid)"],
   testMatch: ["/**/src/**/*.spec.(ts|js)"],
   testEnvironment: "node",
 };

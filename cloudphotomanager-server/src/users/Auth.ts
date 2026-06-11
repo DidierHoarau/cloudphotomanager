@@ -9,7 +9,7 @@ import { OTelLogger, OTelTracer } from "../OTelContext";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
-} from "../utils-std-ts/SqlDbUtils";
+} from "@devopsplaybook.io/common-utils";
 import { UserPermissionDataGetForUser } from "./UserPermissionData";
 
 const logger = OTelLogger().createModuleLogger(path.basename(__filename));
@@ -93,7 +93,7 @@ export async function AuthGetUserSession(req: any): Promise<UserSession> {
   }
   return userSession;
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function AuthIsTokenValid(token: string): boolean {
   try {
     jwt.verify(token, config.JWT_KEY);

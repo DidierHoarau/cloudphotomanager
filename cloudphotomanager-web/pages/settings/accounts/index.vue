@@ -1,8 +1,10 @@
 <template>
   <div class="page">
-    <h1>Accounts</h1>
+    <TabNavigation :tabs="settingsTabs" />
     <div class="actions page-actions">
-      <NuxtLink to="/accounts/new"><i class="bi bi-plus-square"></i></NuxtLink>
+      <NuxtLink to="/settings/accounts/new"
+        ><i class="bi bi-plus-square"></i
+      ></NuxtLink>
     </div>
     <table>
       <thead>
@@ -43,7 +45,6 @@
         </tr>
       </tbody>
     </table>
-    <NuxtLink to="/accounts/queue">Synchronization Queue</NuxtLink>
     <DialogConfirm
       v-if="showConfirmDialog"
       :title="confirmDialogTitle"
@@ -67,6 +68,23 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 export default {
   data() {
     return {
+      settingsTabs: [
+        {
+          id: "accounts",
+          label: "Accounts",
+          to: "/settings/accounts",
+        },
+        {
+          id: "sync",
+          label: "Sync Queue",
+          to: "/settings/sync",
+        },
+        {
+          id: "users",
+          label: "Users",
+          to: "/settings/users",
+        },
+      ],
       showConfirmDialog: false,
       confirmDialogTitle: "",
       confirmDialogMessage: "",
@@ -104,36 +122,5 @@ export default {
 </script>
 
 <style scoped>
-.processor-info-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(20em, 1fr));
-  gap: 10px;
-}
-.processor-info-layout {
-  margin: 1em 1em;
-  display: grid;
-  grid-template-columns: 3em 1fr;
-  grid-template-rows: auto auto;
-}
-.processor-info-title {
-  display: grid;
-  grid-row: 1;
-  grid-column: 2;
-}
-.processor-info-icon {
-  display: grid;
-  grid-column: 1;
-  grid-row-start: 1;
-  grid-row-end: span 2;
-  font-size: 2em;
-}
-.processor-info-description {
-  grid-row: 2;
-  grid-column: 2;
-}
-.processor-info-description span {
-  font-size: 0.8em;
-  opacity: 0.5;
-  word-break: break-all;
-}
+/* Empty - using shared.css .page and .actions styles */
 </style>

@@ -54,14 +54,14 @@ export default {
 .alert-stack {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-sm);
 }
 
 .alert-message {
-  padding: 0.4rem 0.75rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  color: #eee;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-base);
+  color: var(--color-text-inverse);
   background-color: rgba(84, 110, 122, 0.75);
   backdrop-filter: blur(4px);
   white-space: nowrap;

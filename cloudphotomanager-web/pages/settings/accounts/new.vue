@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <h1>Account</h1>
+    <h1>New Account</h1>
     <label>Name</label>
     <input
       id="name"
@@ -16,7 +16,7 @@
       type="text"
     />
     <label>Type</label>
-    <select id="accountType" v-model="account.info.type" required disabled>
+    <select id="accountType" v-model="account.info.type" required>
       <option value="select" selected>Select Type...</option>
       <option value="awsS3" selected>AWS S3</option>
       <option value="oneDrive" selected>One Drive</option>
@@ -40,9 +40,9 @@
     <button
       :disabled="!accountValidParameters"
       v-if="!loading"
-      v-on:click="saveUpdate()"
+      v-on:click="saveNew()"
     >
-      Update
+      Add
     </button>
     <Loading v-if="loading" />
   </div>
@@ -62,19 +62,7 @@ export default {
       account: { rootpath: "/", info: {} },
     };
   },
-  async created() {
-    await axios
-      .get(
-        `${(await Config.get()).SERVER_URL}/accounts/${
-          this.$route.params.accountId
-        }`,
-        await AuthService.getAuthHeader()
-      )
-      .then((res) => {
-        this.account = res.data;
-      })
-      .catch(handleError);
-  },
+  async created() {},
   methods: {
     async infoPrivateValid(infoPrivate) {
       this.accountValidParameters = true;
@@ -88,20 +76,20 @@ export default {
         this.accountValidParameters = false;
       }
     },
-    async saveUpdate() {
+    async saveNew() {
       this.loading = true;
       await axios
-        .put(
-          `${(await Config.get()).SERVER_URL}/accounts/${this.account.id}`,
+        .post(
+          `${(await Config.get()).SERVER_URL}/accounts`,
           this.account,
-          await AuthService.getAuthHeader()
+          await AuthService.getAuthHeader(),
         )
         .then(async (res) => {
           EventBus.emit(EventTypes.ALERT_MESSAGE, {
             type: "success",
             text: "Account Added",
           });
-          useRouter().push({ path: "/accounts" });
+          useRouter().push({ path: "/settings/accounts" });
         })
         .catch(handleError);
       this.loading = false;

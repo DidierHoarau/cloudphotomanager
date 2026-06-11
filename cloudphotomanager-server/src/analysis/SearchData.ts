@@ -1,6 +1,6 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
 import * as _ from "lodash";
-import { SqlDbUtilsQuerySQL } from "../utils-std-ts/SqlDbUtils";
+import { SqlDbUtilsQuerySQL } from "@devopsplaybook.io/common-utils";
 import { File } from "../model/File";
 import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
 import { FolderDataListForAccount } from "../folders/FolderData";
@@ -14,7 +14,6 @@ import {
   isValidGeoBox,
 } from "./SearchGeoSql";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function SearchDataListAccountDuplicates(
   context: Span,
   accountId: string,
@@ -198,6 +197,7 @@ export async function SearchDataAggregateByGeoGrid(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const params: any[] = [...bucketParams, ...queryParameters];
   const rawData = await SqlDbUtilsQuerySQL(span, sql, params);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cells: GeoGridCell[] = rawData.map((r: any) => ({
     row: Number(r.row),
     col: Number(r.col),

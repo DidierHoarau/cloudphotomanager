@@ -126,29 +126,29 @@ export class LocalAccount implements Account {
 
   // Non Supported Features
 
-  updateFileMetadata(context: Span, file: File): Promise<void> {
+  updateFileMetadata(_context: Span, _file: File): Promise<void> {
     throw new Error("Method not implemented.");
   }
 
   downloadPreview(
-    context: Span,
-    file: File,
-    folder: string,
-    filename: string,
+    _context: Span,
+    _file: File,
+    _folder: string,
+    _filename: string,
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }
 
   downloadThumbnail(
-    context: Span,
-    file: File,
-    folder: string,
-    filename: string,
+    _context: Span,
+    _file: File,
+    _folder: string,
+    _filename: string,
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }
 
-  listFolders(context: Span): Promise<Folder[]> {
+  listFolders(_context: Span): Promise<Folder[]> {
     throw new Error("Method not implemented.");
   }
 }

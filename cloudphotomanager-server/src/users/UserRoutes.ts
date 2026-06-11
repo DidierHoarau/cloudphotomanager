@@ -213,23 +213,23 @@ export class UserRoutes {
       }
       const permissions = await UserPermissionDataGetForUser(
         span,
-        req.params.userId
+        req.params.userId,
       );
       permissions.info = req.body.info;
       await UserPermissionDataUpdateForUser(
         span,
         req.params.userId,
-        permissions
+        permissions,
       );
       res.status(201).send({});
     });
 
     fastify.get("/access/validate", async (req, res) => {
-      let tokenCokkie = null;
+      let tokenCokkie;
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tokenCokkie = (fastify as any).unsignCookie((req as any).cookies.token);
-      } catch (err) {
+      } catch {
         tokenCokkie = null;
       }
       if (

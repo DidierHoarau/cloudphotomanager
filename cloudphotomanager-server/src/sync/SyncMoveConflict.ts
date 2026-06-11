@@ -3,7 +3,7 @@ import { Account } from "../model/Account";
 import { File } from "../model/File";
 import { Folder } from "../model/Folder";
 import { OTelLogger, OTelTracer } from "../OTelContext";
-import { SqlDbUtilsQuerySQL } from "../utils-std-ts/SqlDbUtils";
+import { SqlDbUtilsQuerySQL } from "@devopsplaybook.io/common-utils";
 import { FolderDataAdd, FolderDataGet } from "../folders/FolderData";
 import { SyncInventorySyncFolder } from "./SyncInventory";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
@@ -142,7 +142,7 @@ async function checkLocalDb(
     return null;
   }
   const clashRaw = clashRows[0];
-  let clashInfo: { size?: number } = {};
+  let clashInfo: { size?: number };
   try {
     clashInfo = clashRaw.info ? JSON.parse(clashRaw.info) : {};
   } catch {
@@ -170,7 +170,7 @@ async function refreshTargetFolderIndex(
   account: Account,
   targetFolderpath: string,
 ): Promise<Folder | null> {
-  let targetFolderCloud: Folder | null = null;
+  let targetFolderCloud: Folder | null;
   try {
     targetFolderCloud = await account.getFolderByPath(span, targetFolderpath);
   } catch (err) {

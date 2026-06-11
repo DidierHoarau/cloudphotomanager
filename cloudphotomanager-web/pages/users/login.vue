@@ -1,11 +1,36 @@
 <template>
-  <div class="page">
-    <h1>Login</h1>
-    <label>Name</label>
-    <input id="username" v-model="user.name" type="text" />
-    <label>Password</label>
-    <input id="passwrd" v-model="user.password" type="password" />
-    <button v-on:click="login()">Login</button>
+  <div class="user-page">
+    <article class="profile-card">
+      <h3>
+        <i class="bi bi-box-arrow-in-right"></i>
+        Sign In
+      </h3>
+      <p>Enter your credentials to access the gallery.</p>
+      <label>
+        Username
+        <input
+          type="text"
+          v-model="user.name"
+          placeholder="Enter username"
+          @keyup.enter="login()"
+        />
+      </label>
+      <label>
+        Password
+        <input
+          type="password"
+          v-model="user.password"
+          placeholder="Enter password"
+          @keyup.enter="login()"
+        />
+      </label>
+      <div class="article-actions">
+        <button :disabled="loggingIn" @click="login()">
+          <i class="bi bi-box-arrow-in-right"></i>
+          {{ loggingIn ? "Signing in…" : "Sign In" }}
+        </button>
+      </div>
+    </article>
   </div>
 </template>
 
@@ -24,7 +49,7 @@ export default {
   data() {
     return {
       user: {},
-      isChangePasswordStarted: false,
+      loggingIn: false,
     };
   },
   async created() {
@@ -38,18 +63,27 @@ export default {
   methods: {
     async login() {
       if (this.user.name && this.user.password) {
-        await axios
-          .post(`${(await Config.get()).SERVER_URL}/users/session`, this.user, await AuthService.getAuthHeader())
-          .then((res) => {
-            AuthService.saveToken(res.data.token);
-            AuthenticationStore().isAuthenticated = true;
-            EventBus.emit(EventTypes.ALERT_MESSAGE, {
-              type: "info",
-              text: "User Logged In",
-            });
-            useRouter().push({ path: "/gallery" });
-          })
-          .catch(handleError);
+        this.loggingIn = true;
+        try {
+          await axios
+            .post(
+              `${(await Config.get()).SERVER_URL}/users/session`,
+              this.user,
+              await AuthService.getAuthHeader(),
+            )
+            .then((res) => {
+              AuthService.saveToken(res.data.token);
+              AuthenticationStore().isAuthenticated = true;
+              EventBus.emit(EventTypes.ALERT_MESSAGE, {
+                type: "info",
+                text: "User Logged In",
+              });
+              useRouter().push({ path: "/gallery" });
+            })
+            .catch(handleError);
+        } finally {
+          this.loggingIn = false;
+        }
       } else {
         EventBus.emit(EventTypes.ALERT_MESSAGE, {
           type: "error",
@@ -61,4 +95,23 @@ export default {
 };
 </script>
 
-<style scoped></style>
+<style scoped>
+.user-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: var(--space-2xl);
+  width: 100%;
+}
+
+.profile-card {
+  max-width: 480px;
+  width: 100%;
+}
+
+.article-actions {
+  margin-top: var(--space-base);
+  display: flex;
+  gap: var(--space-sm);
+}
+</style>

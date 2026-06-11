@@ -765,13 +765,13 @@ export default {
 
 <style scoped>
 .gallery-files-actions {
-  padding-bottom: 0.3em;
+  padding-bottom: var(--space-xs);
 }
 .gallery-files-actions button,
 .gallery-files-actions kbd {
-  padding: 0.3em 0.7em;
-  margin-right: 0.5em;
-  font-size: 0.8em;
+  padding: var(--space-xs) var(--space-sm);
+  margin-right: var(--space-sm);
+  font-size: var(--font-base);
 }
 
 .gallery-files-actions kbd {
@@ -789,11 +789,11 @@ export default {
     display: grid;
     grid-template-rows: auto auto 1fr;
     grid-template-columns: auto 1fr 1fr;
-    column-gap: 1em;
+    column-gap: var(--space-base);
     overflow: hidden;
   }
   .gallery-files-actions {
-    padding-top: 0.5em;
+    padding-top: var(--space-sm);
     grid-row: 1;
     grid-column-start: 2;
     grid-column-end: span 2;
@@ -837,7 +837,7 @@ export default {
     display: grid;
     grid-template-rows: auto auto auto 1fr;
     grid-template-columns: 1fr;
-    column-gap: 1em;
+    column-gap: var(--space-base);
     overflow: hidden;
   }
   .gallery-folders-mobile-wrapper {
@@ -852,13 +852,13 @@ export default {
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    padding: 0.5em 0.75em;
-    font-size: 0.85em;
+    padding: var(--space-sm) var(--space-md);
+    font-size: var(--font-base);
     font-weight: 600;
     cursor: pointer;
     user-select: none;
     border: 1px solid transparent;
-    border-radius: 0.4em;
+    border-radius: var(--radius-md);
     opacity: 0.85;
     box-sizing: border-box;
     margin: 0;
@@ -878,7 +878,7 @@ export default {
     font-size: 1em;
   }
   .gallery-files-actions {
-    padding-top: 0.5em;
+    padding-top: var(--space-sm);
     grid-row: 2;
     grid-column: 1;
   }
@@ -908,32 +908,32 @@ export default {
 
 @media (prefers-color-scheme: dark) {
   .source-active {
-    background-color: #333;
+    background-color: var(--color-bg-hover);
   }
   .gallery-folders-toggle {
-    background-color: #4a4a4a55;
-    border-color: #6a6a6a66;
+    background-color: var(--color-bg-hover);
+    border-color: var(--color-border);
   }
   .gallery-folders-toggle:hover {
-    background-color: #5a5a5a66;
+    background-color: var(--color-bg-hover);
   }
   .gallery-folders {
-    background-color: #33333333;
+    background-color: var(--color-bg-secondary);
   }
 }
 @media (prefers-color-scheme: light) {
   .source-active {
-    background-color: #bbb;
+    background-color: var(--color-bg-hover);
   }
   .gallery-folders-toggle {
-    background-color: #bdbdbd4d;
-    border-color: #a0a0a066;
+    background-color: var(--color-bg-hover);
+    border-color: var(--color-border);
   }
   .gallery-folders-toggle:hover {
-    background-color: #b0b0b066;
+    background-color: var(--color-bg-hover);
   }
   .gallery-folders {
-    background-color: #aaaaaa33;
+    background-color: var(--color-bg-secondary);
   }
 }
 .gallery-item-focus {
@@ -946,21 +946,21 @@ export default {
 }
 
 .gallery-files-actions kbd {
-  margin-right: 1em;
+  margin-right: var(--space-base);
 }
 
 .gallery-outtakes-section {
   display: flex;
   align-items: center;
-  padding: 0.5em 0.5em;
-  font-size: 0.8em;
+  padding: var(--space-sm) var(--space-sm);
+  font-size: var(--font-base);
   opacity: 0.85;
 }
 
 .outtakes-checkbox {
   display: flex;
   align-items: center;
-  gap: 0.5em;
+  gap: var(--space-sm);
   cursor: pointer;
   user-select: none;
 }

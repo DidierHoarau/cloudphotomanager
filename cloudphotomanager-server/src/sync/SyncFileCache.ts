@@ -2,7 +2,6 @@ import { Span } from "@opentelemetry/sdk-trace-base";
 import exifReader from "exif-reader";
 import * as fs from "fs-extra";
 import { find } from "lodash";
-import * as probe from "node-ffprobe";
 import * as path from "path";
 import sharp from "sharp";
 import { AnalysisImagesGetLabels } from "../analysis/AnalysisImages";
@@ -280,7 +279,9 @@ export async function syncVideoFromFull(account: Account, file: File) {
     span.setStatus({ code: 2, message: errSync.message });
     span.recordException(errSync);
     span.end();
-    throw new Error("syncVideoFromFull Failed");
+    const err = new Error("syncVideoFromFull Failed");
+    err.cause = errSync;
+    throw err;
   }
 }
 
@@ -349,7 +350,9 @@ export async function syncPhotoFromFull(account: Account, file: File) {
     span.setStatus({ code: 2, message: errSync.message });
     span.recordException(errSync);
     span.end();
-    throw new Error("syncPhotoFromFull Failed");
+    const err = new Error("syncPhotoFromFull Failed");
+    err.cause = errSync;
+    throw err;
   }
 }
 
@@ -455,7 +458,9 @@ export async function syncThumbnail(account: Account, file: File) {
     span.setStatus({ code: 2, message: errSync.message });
     span.recordException(errSync);
     span.end();
-    throw new Error("syncThumbnail Failed");
+    const err = new Error("syncThumbnail Failed");
+    err.cause = errSync;
+    throw err;
   }
 }
 
@@ -501,7 +506,9 @@ export async function syncThumbnailFromVideoPreview(
     span.setStatus({ code: 2, message: errSync.message });
     span.recordException(errSync);
     span.end();
-    throw new Error("syncThumbnailFromVideoPreview Failed");
+    const err = new Error("syncThumbnailFromVideoPreview Failed");
+    err.cause = errSync;
+    throw err;
   }
 }
 

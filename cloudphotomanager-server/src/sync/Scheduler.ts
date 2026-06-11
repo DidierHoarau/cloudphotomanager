@@ -16,8 +16,9 @@ import {
   FolderDataListForAccount,
 } from "../folders/FolderData";
 import { AccountDefinition } from "../model/AccountDefinition";
+import { Folder } from "../model/Folder";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
-import { TimeoutWait } from "../utils-std-ts/Timeout";
+import { TimeoutWait } from "@devopsplaybook.io/common-utils";
 import { SyncEventHistoryGetRecent } from "./SyncEventHistory";
 import {
   SyncFileCacheCleanUp,
@@ -49,7 +50,7 @@ export async function SchedulerInit(context: Span, configIn: Config) {
       observableResult.observe(stats.nbFiles, { type: "files" });
       observableResult.observe(stats.nbFolders, { type: "folders" });
     },
-    { description: "Number of files" },
+    "Number of files",
   );
   OTelMeter().createObservableGauge(
     "photos.queue.counts",
@@ -59,7 +60,7 @@ export async function SchedulerInit(context: Span, configIn: Config) {
         observableResult.observe(syncCount.count, { type: syncCount.type });
       });
     },
-    { description: "Size of the queue" },
+    "Size of the queue",
   );
 
   // Periodically refresh metric stats so gauges stay current between sync cycles.
@@ -251,7 +252,7 @@ async function SchedulerCollectFoldersToSync(context: Span, accountId: string) {
     FolderDataGetNewstUpdate(context, accountId, FOLDERS_SYNC_SAMPLE_SIZE),
   ]);
 
-  const foldersById = new Map<string, any>();
+  const foldersById = new Map<string, Folder>();
   for (const folder of newestSyncedFolders) {
     foldersById.set(folder.id, folder);
   }

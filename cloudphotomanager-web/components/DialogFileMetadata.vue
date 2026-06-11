@@ -187,8 +187,8 @@ export default {
 
 <style scoped>
 .dialog-metadata-maplink {
-  margin-left: 0.5em;
-  font-size: 0.9em;
+  margin-left: var(--space-sm);
+  font-size: var(--font-body);
 }
 .dialog-metadata-missing {
   opacity: 0.6;
@@ -199,12 +199,12 @@ export default {
   white-space: pre;
   text-align: left;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.8em;
+  font-size: var(--font-base);
   line-height: 1.4;
-  padding: 0.6em 0.8em;
-  margin: 0.4em 0;
+  padding: var(--space-md) var(--space-base);
+  margin: var(--space-sm) 0;
   background: #1118;
   color: #eee;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
 }
 </style>

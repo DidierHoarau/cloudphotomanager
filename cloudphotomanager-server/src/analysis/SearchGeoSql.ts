@@ -39,7 +39,8 @@ export interface GeoBox {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function isValidGeoBox(box: any): box is GeoBox {
   return (
-    box &&
+    box !== null &&
+    box !== undefined &&
     typeof box.minLat === "number" &&
     typeof box.maxLat === "number" &&
     typeof box.minLon === "number" &&

@@ -383,9 +383,9 @@ export default {
 
 .select-mode {
   display: flex;
-  gap: 1em;
+  gap: var(--space-base);
   flex-wrap: wrap;
-  margin-bottom: 0.75em;
+  margin-bottom: var(--space-md);
 }
 
 fieldset {
@@ -395,9 +395,9 @@ fieldset {
 .select-shortcuts,
 .select-dates {
   border: 1px solid rgba(127, 127, 127, 0.25);
-  border-radius: 0.4em;
-  padding: 0.6em;
-  margin-bottom: 0.75em;
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
 }
 
 summary {
@@ -407,7 +407,7 @@ summary {
 
 label {
   display: block;
-  margin-top: 0.35em;
+  margin-top: var(--space-xs);
 }
 
 small {
@@ -421,7 +421,7 @@ small {
 
 .basic-actions {
   display: flex;
-  gap: 0.75em;
+  gap: var(--space-md);
   flex-wrap: wrap;
 }
 </style>

@@ -1,8 +1,7 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import * as _ from "lodash";
 import { File } from "../model/File";
 import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
-import { SqlDbUtilsQuerySQL } from "../utils-std-ts/SqlDbUtils";
+import { SqlDbUtilsQuerySQL } from "@devopsplaybook.io/common-utils";
 import { OTelTracer } from "../OTelContext";
 
 export async function AnalysisDataGetFileDuplicates(
