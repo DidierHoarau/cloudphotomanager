@@ -597,7 +597,9 @@ export default {
     },
     onFolderActionsDone(result) {
       this.activeOperation = "";
-      if (result && result.action === "deep-refresh") {
+      if (result && result.action === "refresh") {
+        this.executeRefresh();
+      } else if (result && result.action === "deep-refresh") {
         this.executeDeepRefresh();
       } else if (result && result.action === "rename" && result.newName) {
         this.executeRenameFolder(result.newName);
@@ -675,6 +677,25 @@ export default {
         this.folder,
       ).id;
       this.activeOperation = "confirm-delete-folder";
+    },
+    async executeRefresh() {
+      SyncStore().markOperationInProgress();
+      await axios
+        .put(
+          `${(await Config.get()).SERVER_URL}/accounts/${
+            this.currentAccountId
+          }/folders/${this.currentFolderId}/sync`,
+          {},
+          await AuthService.getAuthHeader(),
+        )
+        .then(() => {
+          EventBus.emit(EventTypes.ALERT_MESSAGE, {
+            text: "Folder refresh queued — running in background",
+          });
+        })
+        .catch(handleError);
+      this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
+      EventBus.emit(EventTypes.FOLDER_UPDATED, {});
     },
     async executeDeepRefresh() {
       SyncStore().markOperationInProgress();
@@ -855,6 +876,7 @@ export default {
     padding: var(--space-sm) var(--space-md);
     font-size: var(--font-base);
     font-weight: 600;
+    color: var(--color-text);
     cursor: pointer;
     user-select: none;
     border: 1px solid transparent;
@@ -907,26 +929,21 @@ export default {
 }
 
 @media (prefers-color-scheme: dark) {
-  .source-active {
-    background-color: var(--color-bg-hover);
-  }
   .gallery-folders-toggle {
-    background-color: var(--color-bg-hover);
+    background-color: var(--color-bg-secondary);
     border-color: var(--color-border);
   }
   .gallery-folders-toggle:hover {
     background-color: var(--color-bg-hover);
   }
   .gallery-folders {
-    background-color: var(--color-bg-secondary);
+    background-color: var(--color-bg);
+    border-right: 1px solid var(--color-border-light);
   }
 }
 @media (prefers-color-scheme: light) {
-  .source-active {
-    background-color: var(--color-bg-hover);
-  }
   .gallery-folders-toggle {
-    background-color: var(--color-bg-hover);
+    background-color: var(--color-bg-secondary);
     border-color: var(--color-border);
   }
   .gallery-folders-toggle:hover {

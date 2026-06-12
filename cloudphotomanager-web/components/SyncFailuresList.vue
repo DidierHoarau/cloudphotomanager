@@ -452,8 +452,9 @@ export default {
 }
 .conflict-thumb {
   position: relative;
-  width: 100%;
-  aspect-ratio: 1;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
   background: rgba(128, 128, 128, 0.15);
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -543,11 +544,9 @@ export default {
 }
 
 @media (max-width: 640px) {
-  .conflict-pair {
-    grid-template-columns: 1fr;
-  }
-  .conflict-arrow {
-    transform: rotate(90deg);
+  .conflict-thumb {
+    width: 80px;
+    height: 80px;
   }
   .failure-date {
     margin-left: 0;

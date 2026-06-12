@@ -143,7 +143,7 @@ export class UserRoutes {
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      if (!(await UserDataGetByName(span, req.params.userId))) {
+      if (!(await UserDataGet(span, req.params.userId))) {
         return res.status(404).send({ error: "Not Found" });
       }
       await UserDataDelete(span, req.params.userId);
@@ -186,7 +186,7 @@ export class UserRoutes {
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      if (!(await UserDataGetByName(span, req.params.userId))) {
+      if (!(await UserDataGet(span, req.params.userId))) {
         return res.status(404).send({ error: "Not Found" });
       }
       res
@@ -208,7 +208,7 @@ export class UserRoutes {
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      if (!(await UserDataGetByName(span, req.params.userId))) {
+      if (!(await UserDataGet(span, req.params.userId))) {
         return res.status(404).send({ error: "Not Found" });
       }
       const permissions = await UserPermissionDataGetForUser(

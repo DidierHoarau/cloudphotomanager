@@ -156,12 +156,14 @@ export default {
 }
 @media (prefers-color-scheme: dark) {
   .source-active {
-    background-color: var(--color-bg-hover);
+    background-color: var(--color-primary-focus-ring);
+    border-radius: var(--radius-sm);
   }
 }
 @media (prefers-color-scheme: light) {
   .source-active {
-    background-color: var(--color-bg-hover);
+    background-color: var(--color-primary-focus-ring);
+    border-radius: var(--radius-sm);
   }
 }
 
@@ -188,6 +190,11 @@ export default {
   padding: var(--space-xs) var(--space-sm);
   max-width: 100%;
   text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.folder-layout:hover {
+  background-color: var(--color-primary-focus-ring);
 }
 .source-name-indent {
   grid-column: 1;
