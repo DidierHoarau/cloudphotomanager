@@ -14,9 +14,14 @@ describe("SearchGeoSql", () => {
       expect(typeof GEO_LAT_EXPR).toBe("string");
     });
 
-    it("should reference GPS latitude fields", () => {
+    it("should reference GPS latitude fields (DMS fallback)", () => {
       expect(GEO_LAT_EXPR).toContain("GPSLatitude");
       expect(GEO_LAT_EXPR).toContain("GPSLatitudeRef");
+    });
+
+    it("should prefer the new decimal field via COALESCE", () => {
+      expect(GEO_LAT_EXPR).toContain("GPSLatitudeDecimal");
+      expect(GEO_LAT_EXPR).toContain("COALESCE");
     });
   });
 
@@ -26,9 +31,14 @@ describe("SearchGeoSql", () => {
       expect(typeof GEO_LON_EXPR).toBe("string");
     });
 
-    it("should reference GPS longitude fields", () => {
+    it("should reference GPS longitude fields (DMS fallback)", () => {
       expect(GEO_LON_EXPR).toContain("GPSLongitude");
       expect(GEO_LON_EXPR).toContain("GPSLongitudeRef");
+    });
+
+    it("should prefer the new decimal field via COALESCE", () => {
+      expect(GEO_LON_EXPR).toContain("GPSLongitudeDecimal");
+      expect(GEO_LON_EXPR).toContain("COALESCE");
     });
   });
 
@@ -36,6 +46,12 @@ describe("SearchGeoSql", () => {
     it("should require both latitude and longitude GPS data", () => {
       expect(GEO_PRESENT_CONDITION).toContain("GPSLatitude");
       expect(GEO_PRESENT_CONDITION).toContain("GPSLongitude");
+    });
+
+    it("should accept either decimal or DMS format (OR logic)", () => {
+      expect(GEO_PRESENT_CONDITION).toContain("GPSLatitudeDecimal");
+      expect(GEO_PRESENT_CONDITION).toContain("GPSLongitudeDecimal");
+      expect(GEO_PRESENT_CONDITION).toContain("OR");
     });
   });
 

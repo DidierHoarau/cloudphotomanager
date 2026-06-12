@@ -1,5 +1,5 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import exifReader from "exif-reader";
+import * as exifr from "exifr";
 import * as fs from "fs-extra";
 import { find } from "lodash";
 import * as path from "path";
@@ -16,6 +16,7 @@ import {
   FileDataUpdateInfo,
   FileDataUpdateKeywords,
 } from "../files/FileData";
+import { extractGps } from "../files/ExifGpsExtractor";
 import { Account } from "../model/Account";
 import { File } from "../model/File";
 import { FileMediaType } from "../model/FileMediaType";
@@ -317,11 +318,26 @@ export async function syncPhotoFromFull(account: Account, file: File) {
           );
           tmpFileName += "_raw.jpg";
         }
-        // Extract and store EXIF from the source file before rotating
+        // Extract full EXIF and GPS (including Xiaomi maker-note fallback) from
+        // the raw source file using exifr — handles all IFDs, maker notes, and
+        // GPS IFD natively. Falls back to Xiaomi city-tag geocoding when the
+        // standard GPS IFD is absent.
         try {
-          const srcMeta = await sharp(`${tmpDir}/${tmpFileName}`).metadata();
-          if (srcMeta && srcMeta.exif) {
-            file.info.exif = exifReader(srcMeta.exif);
+          const filePath = `${tmpDir}/${tmpFileName}`;
+          const exifData = await exifr.parse(filePath, {
+            gps: true,
+            tiff: true,
+            exif: true,
+          });
+          if (exifData) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            file.info.exif = exifData as Record<string, any>;
+            const gpsResult = await extractGps(filePath);
+            if (gpsResult.gpsInfo) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (file.info.exif as Record<string, any>).GPSInfo =
+                gpsResult.gpsInfo;
+            }
           }
         } catch (_) {
           logger.info(
@@ -385,20 +401,36 @@ export async function syncPhotoKeyWords(account: Account, file: File) {
       .withMetadata()
       .toFile(`${tmpDir}/${tmpFileName}.jpeg`)
       .then(async () => {
-        try {
-          const metadata = await sharp(`${cacheDir}/preview.webp`).metadata();
-          if (metadata && metadata.exif) {
-            const exif = exifReader(
-              (await sharp(`${cacheDir}/preview.webp`).metadata()).exif,
+        // Only re-extract EXIF from preview if not already populated by
+        // syncPhotoFromFull (which has access to the original file and
+        // therefore better GPS / maker-note data).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const existingGps = (file.info.exif as Record<string, any> | undefined)
+          ?.GPSInfo;
+        if (!existingGps) {
+          try {
+            const previewPath = `${cacheDir}/preview.webp`;
+            const previewExif = await exifr.parse(previewPath, {
+              gps: true,
+              tiff: true,
+              exif: true,
+            });
+            if (previewExif) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              file.info.exif = previewExif as Record<string, any>;
+              const gpsResult = await extractGps(previewPath);
+              if (gpsResult.gpsInfo) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (file.info.exif as Record<string, any>).GPSInfo =
+                  gpsResult.gpsInfo;
+              }
+            }
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          } catch (err) {
+            logger.info(
+              `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
             );
-
-            file.info.exif = exif;
           }
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (err) {
-          logger.info(
-            `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
-          );
         }
         const classificationResults = await AnalysisImagesGetLabels(
           span,

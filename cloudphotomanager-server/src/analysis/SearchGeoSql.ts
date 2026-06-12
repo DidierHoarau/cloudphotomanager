@@ -1,33 +1,65 @@
-// SQL fragments to read GPS coordinates from the JSON `info` column
-// (stored under info.exif.GPSInfo by SyncFileCache, populated via
-// `exif-reader` v2). exif-reader v2 stores GPSLatitude / GPSLongitude
-// as DMS arrays of 3 numbers ([degrees, minutes, seconds]), with sign
-// carried separately in GPSLatitudeRef / GPSLongitudeRef ('N'/'S',
-// 'E'/'W'). Decimal degrees = D + M/60 + S/3600, then negated for
-// southern latitudes / western longitudes. Centralized here so the
-// search filter and the geo-grid aggregation share one source of truth.
+// SQL fragments to read GPS coordinates from the JSON `info` column.
+//
+// Two GPS storage formats are supported:
+//
+//  1. **Decimal** (new, written by ExifGpsExtractor via exifr):
+//     info.exif.GPSInfo.GPSLatitudeDecimal / GPSLongitudeDecimal
+//     These are pre-computed float values; SQL is cheap and direct.
+//
+//  2. **DMS arrays** (legacy, written by exif-reader v2):
+//     info.exif.GPSInfo.GPSLatitude = [D, M, S]
+//     info.exif.GPSInfo.GPSLatitudeRef = 'N'|'S'
+//     Decimal = (D + M/60 + S/3600) * (ref == 'S'|'W' ? -1 : 1)
+//
+// COALESCE picks the decimal field first; if absent (old data), the DMS
+// expression is evaluated as a fallback. This keeps all existing rows
+// working without a migration while new rows are read in a single
+// json_extract call.
 
-export const GEO_LAT_EXPR =
-  "((" +
+// --- Latitude ---------------------------------------------------------------
+
+const _DMS_LAT =
+  "(" +
   "  COALESCE(json_extract(info, '$.exif.GPSInfo.GPSLatitude[0]'), 0) + " +
   "  COALESCE(json_extract(info, '$.exif.GPSInfo.GPSLatitude[1]'), 0) / 60.0 + " +
   "  COALESCE(json_extract(info, '$.exif.GPSInfo.GPSLatitude[2]'), 0) / 3600.0" +
   ") * " +
-  "(CASE WHEN json_extract(info, '$.exif.GPSInfo.GPSLatitudeRef') = 'S' THEN -1 ELSE 1 END))";
+  "(CASE WHEN json_extract(info, '$.exif.GPSInfo.GPSLatitudeRef') = 'S' THEN -1 ELSE 1 END)";
 
-export const GEO_LON_EXPR =
-  "((" +
+export const GEO_LAT_EXPR =
+  "COALESCE(" +
+  "  json_extract(info, '$.exif.GPSInfo.GPSLatitudeDecimal'), " +
+  `  ${_DMS_LAT}` +
+  ")";
+
+// --- Longitude --------------------------------------------------------------
+
+const _DMS_LON =
+  "(" +
   "  COALESCE(json_extract(info, '$.exif.GPSInfo.GPSLongitude[0]'), 0) + " +
   "  COALESCE(json_extract(info, '$.exif.GPSInfo.GPSLongitude[1]'), 0) / 60.0 + " +
   "  COALESCE(json_extract(info, '$.exif.GPSInfo.GPSLongitude[2]'), 0) / 3600.0" +
   ") * " +
-  "(CASE WHEN json_extract(info, '$.exif.GPSInfo.GPSLongitudeRef') = 'W' THEN -1 ELSE 1 END))";
+  "(CASE WHEN json_extract(info, '$.exif.GPSInfo.GPSLongitudeRef') = 'W' THEN -1 ELSE 1 END)";
 
-// Filters out files without a parsed GPSInfo block. Tests for the
-// first DMS component (degrees) being present in both lat and lon.
+export const GEO_LON_EXPR =
+  "COALESCE(" +
+  "  json_extract(info, '$.exif.GPSInfo.GPSLongitudeDecimal'), " +
+  `  ${_DMS_LON}` +
+  ")";
+
+// Filters out files without a parsed GPSInfo block. A row qualifies if
+// either the new decimal field OR the legacy DMS array is present for
+// both latitude and longitude.
 export const GEO_PRESENT_CONDITION =
-  " json_extract(info, '$.exif.GPSInfo.GPSLatitude[0]') IS NOT NULL " +
-  " AND json_extract(info, '$.exif.GPSInfo.GPSLongitude[0]') IS NOT NULL ";
+  " ( " +
+  "   json_extract(info, '$.exif.GPSInfo.GPSLatitudeDecimal') IS NOT NULL " +
+  "   OR json_extract(info, '$.exif.GPSInfo.GPSLatitude[0]') IS NOT NULL " +
+  " ) " +
+  " AND ( " +
+  "   json_extract(info, '$.exif.GPSInfo.GPSLongitudeDecimal') IS NOT NULL " +
+  "   OR json_extract(info, '$.exif.GPSInfo.GPSLongitude[0]') IS NOT NULL " +
+  " ) ";
 
 export interface GeoBox {
   minLat: number;
