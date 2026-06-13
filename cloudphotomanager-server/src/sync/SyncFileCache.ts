@@ -473,9 +473,9 @@ export async function syncThumbnail(account: Account, file: File) {
       span,
     );
     // HEIC and other raw image formats can trigger a fatal SIGSEGV in sharp's
-    // bundled libheif (GObject class-init bug). Skip thumbnail generation here;
-    // syncPhotoFromFull will create the thumbnail safely after converting the
-    // raw file to JPG via ImageMagick (which uses the system libheif).
+    // bundled libheif (GObject class-init bug). Download the full file and
+    // convert via ImageMagick (which uses the system libheif) before creating
+    // the thumbnail with sharp.
     const fileExtension = file.filename.split(".").pop()?.toLowerCase() ?? "";
     const rawExtensions = [
       "heic",
@@ -490,11 +490,28 @@ export async function syncThumbnail(account: Account, file: File) {
       "pef",
       "srw",
     ];
-    // Also skip files that have HEIC/HEIF content despite a non-HEIC extension
-    // (e.g. Samsung MVIMG_*.jpg which contains a HEIC stream). Quick magic-byte
-    // check avoids triggering sharp's libheif GObject SIGSEGV (see above).
-    let isHeicContent = false;
-    if (!rawExtensions.includes(fileExtension)) {
+    if (rawExtensions.includes(fileExtension)) {
+      await account
+        .downloadFile(span, file, tmpDir, tmpFileName)
+        .then(async () => {
+          await SystemCommand.execute(
+            `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`,
+          );
+          await sharp(`${tmpDir}/${tmpFileName}_raw.jpg`)
+            .rotate()
+            .withMetadata()
+            .resize({ width: 300 })
+            .toFile(`${cacheDir}/thumbnail.webp`);
+        })
+        .catch((err) => {
+          logger.error("Error Synchronizing Thumbnail for raw file", err, span);
+        });
+    } else {
+      // Also handle files that have HEIC/HEIF content despite a non-HEIC
+      // extension (e.g. Samsung MVIMG_*.jpg which contains a HEIC stream).
+      // Quick magic-byte check avoids triggering sharp's libheif GObject
+      // SIGSEGV (see above).
+      let isHeicContent = false;
       try {
         const fd = fs.openSync(`${tmpDir}/tmp_tumbnail/${tmpFileName}`, "r");
         const buf = Buffer.alloc(12);
@@ -509,28 +526,42 @@ export async function syncThumbnail(account: Account, file: File) {
       } catch {
         // If we can't read the file, proceed and let sharp handle it
       }
+      if (isHeicContent) {
+        await account
+          .downloadFile(span, file, tmpDir, tmpFileName)
+          .then(async () => {
+            await SystemCommand.execute(
+              `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`,
+            );
+            await sharp(`${tmpDir}/${tmpFileName}_raw.jpg`)
+              .rotate()
+              .withMetadata()
+              .resize({ width: 300 })
+              .toFile(`${cacheDir}/thumbnail.webp`);
+          })
+          .catch((err) => {
+            logger.error(
+              "Error Synchronizing Thumbnail for HEIC content file",
+              err,
+              span,
+            );
+          });
+      } else {
+        await account
+          .downloadThumbnail(span, file, `${tmpDir}/tmp_tumbnail`, tmpFileName)
+          .then(async () => {
+            await sharp(`${tmpDir}/tmp_tumbnail/${tmpFileName}`)
+              .rotate()
+              .withMetadata()
+              .resize({ width: 300 })
+              .toFile(`${cacheDir}/thumbnail.webp`);
+          })
+          .catch((err) => {
+            logger.error("Error Synchronizing Thumbnail", err, span);
+          });
+      }
     }
-    if (rawExtensions.includes(fileExtension) || isHeicContent) {
-      logger.info(
-        `Skipping thumbnail for raw format (${fileExtension}) ${account.getAccountDefinition().id} ${file.id} : ${file.filename} - will be handled by syncPhotoFromFull`,
-        span,
-      );
-      span.end();
-      return;
-    }
-    await account
-      .downloadThumbnail(span, file, `${tmpDir}/tmp_tumbnail`, tmpFileName)
-      .then(async () => {
-        await sharp(`${tmpDir}/tmp_tumbnail/${tmpFileName}`)
-          .rotate()
-          .withMetadata()
-          .resize({ width: 300 })
-          .toFile(`${cacheDir}/thumbnail.webp`);
-      })
-      .catch((err) => {
-        logger.error("Error Synchronizing Thumbnail", err, span);
-      });
-    await fs.remove(`${tmpDir}/tmp_tumbnail`);
+    await fs.remove(tmpDir);
     span.end();
   } catch (errSync) {
     span.setStatus({ code: 2, message: errSync.message });
