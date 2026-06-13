@@ -148,6 +148,7 @@ import { AuthService } from "~~/services/AuthService";
 import { DuplicateCountService } from "~~/services/DuplicateCountService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import { FileUtils } from "~~/services/FileUtils";
+import { localCache, TTL } from "~~/services/LocalCache";
 
 export default {
   data() {
@@ -226,6 +227,7 @@ export default {
       this.fetchFiles(message.accountId, message.folderId, true);
     };
     this._onFolderCacheUpdated = () => {
+      FoldersStore().invalidateCache();
       FoldersStore().fetch();
     };
     this._onOperationComplete = (message) => {
@@ -389,6 +391,10 @@ export default {
       }
       return count;
     },
+    /** Build a deterministic cache key for a files-page request. */
+    _filesPageKey(accountId, folderId, page, pageSize) {
+      return `${accountId}:${folderId}:${this.includeSubFolders}:${this.sortOrder}:${page}:${pageSize}`;
+    },
     async _requestFilesPage({ accountId, folderId, page, pageSize }) {
       const serverUrl = (await Config.get()).SERVER_URL;
       const params = new URLSearchParams({
@@ -401,10 +407,19 @@ export default {
         `${serverUrl}/accounts/${accountId}/folders/${folderId}/files-recursive?${params}`,
         await AuthService.getAuthHeader(),
       );
-      return {
+      const result = {
         files: res.data.files || [],
         total: res.data.total || 0,
       };
+      // Persist page to IndexedDB for instant revisit
+      localCache
+        .put(
+          "fileMetadata",
+          this._filesPageKey(accountId, folderId, page, pageSize),
+          result,
+        )
+        .catch(() => {});
+      return result;
     },
     scheduleDuplicateCountLoad(newFiles) {
       if (!this.currentAccountId || !newFiles || newFiles.length === 0) {
@@ -449,11 +464,10 @@ export default {
     },
     async fetchFiles(accountId, folderId, forceLoading = false) {
       const requestEtag = new Date().toISOString();
-      if (
-        forceLoading ||
+      const isFolderChange =
         this.currentAccountId !== accountId ||
-        this.currentFolderId !== folderId
-      ) {
+        this.currentFolderId !== folderId;
+      if (forceLoading || isFolderChange) {
         this.currentAccountId = accountId;
         this.currentFolderId = folderId;
         this.selectedFiles = [];
@@ -464,6 +478,28 @@ export default {
         this.loading = true;
       }
       this.requestEtag = requestEtag;
+
+      // Hydrate from IndexedDB cache for instant display
+      if (isFolderChange || forceLoading) {
+        const cached = await localCache.get(
+          "fileMetadata",
+          this._filesPageKey(accountId, folderId, 0, this.pageSize),
+          TTL.FILE_METADATA,
+        );
+        if (
+          cached &&
+          this.requestEtag === requestEtag &&
+          this.files.length === 0
+        ) {
+          this.outtakesCount = this._markOuttakes(cached.files);
+          this.files = cached.files;
+          this.currentPage = 0;
+          this.hasMore = cached.total > this.pageSize;
+          this.loading = false; // show cached files immediately
+          this.scheduleDuplicateCountLoad(cached.files);
+        }
+      }
+
       try {
         const { files: newFiles, total } = await this._requestFilesPage({
           accountId,

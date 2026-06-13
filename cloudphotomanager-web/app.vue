@@ -1,6 +1,8 @@
 <script setup>
 import { ThemeService } from "~~/services/ThemeService";
 
+const { isOnline } = useNetworkStatus();
+
 function updateAppHeight() {
   const height = window.visualViewport?.height ?? window.innerHeight;
   document.documentElement.style.setProperty("--app-height", `${height}px`);
@@ -24,6 +26,14 @@ onUnmounted(() => {
     <header>
       <Navigation />
     </header>
+    <div
+      v-if="!isOnline"
+      class="offline-banner"
+      role="status"
+      aria-live="polite"
+    >
+      <i class="bi bi-wifi-off"></i> You are offline &mdash; showing cached data
+    </div>
     <main>
       <NuxtPage />
     </main>
@@ -31,6 +41,23 @@ onUnmounted(() => {
   </div>
 </template>
 
-<style>
-/* Global styles extracted to assets/css/shared.css */
+<style scoped>
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  padding: 0.35em 1em;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-warning, #fd7e14);
+  text-align: center;
+  pointer-events: none;
+}
 </style>

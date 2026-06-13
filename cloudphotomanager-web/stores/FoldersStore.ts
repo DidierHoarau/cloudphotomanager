@@ -4,17 +4,38 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import axios from "axios";
 import { find, findIndex, sortBy } from "lodash";
 import { PreferencesFolders } from "~~/services/PreferencesFolders";
+import { localCache, TTL } from "~~/services/LocalCache";
+
+const CACHE_KEY = "all";
 
 export const FoldersStore = defineStore("FoldersStore", {
   state: () => ({
-    folders: [],
+    folders: [] as any[],
     loading: false,
+    _hydrated: false,
   }),
 
   getters: {},
 
   actions: {
+    /** Hydrate folders from IndexedDB for instant display on revisit. */
+    async _hydrateFromCache() {
+      if (this._hydrated) return;
+      this._hydrated = true;
+      const cached = await localCache.get<any[]>(
+        "folders",
+        CACHE_KEY,
+        TTL.FOLDERS,
+      );
+      if (cached && cached.length > 0 && this.folders.length === 0) {
+        this.folders = cached;
+      }
+    },
+
     async fetch() {
+      // Hydrate from cache first for instant display
+      await this._hydrateFromCache();
+
       if (this.folders.length === 0) {
         this.loading = true;
       }
@@ -79,6 +100,9 @@ export const FoldersStore = defineStore("FoldersStore", {
       }
       (this.folders as any[]) = folders;
       this.loading = false;
+
+      // Persist processed folder tree to IndexedDB for next visit
+      await localCache.put("folders", CACHE_KEY, folders);
     },
     getIndentation(folderpath: string) {
       let indent = "";
@@ -158,6 +182,12 @@ export const FoldersStore = defineStore("FoldersStore", {
     },
     getParentFolder(folder: any) {
       return this.folders[folder.parentIndex];
+    },
+
+    /** Invalidate the cached folder tree (called on sync events). */
+    async invalidateCache() {
+      this._hydrated = false;
+      await localCache.delete("folders", CACHE_KEY);
     },
   },
 });
