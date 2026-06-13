@@ -60,7 +60,13 @@ class LocalCache {
   async put<T>(store: StoreName, key: string, data: T): Promise<void> {
     try {
       const db = await this.open();
-      const entry: CacheEntry<T> = { key, data, _ts: Date.now() };
+      // Deep-clone to strip reactive proxies (Pinia/Vue) so IndexedDB
+      // structured clone algorithm does not reject the value.
+      const entry: CacheEntry<T> = {
+        key,
+        data: JSON.parse(JSON.stringify(data)),
+        _ts: Date.now(),
+      };
       return new Promise<void>((resolve, reject) => {
         const tx = db.transaction(store, "readwrite");
         tx.objectStore(store).put(entry);
