@@ -490,7 +490,27 @@ export async function syncThumbnail(account: Account, file: File) {
       "pef",
       "srw",
     ];
-    if (rawExtensions.includes(fileExtension)) {
+    // Also skip files that have HEIC/HEIF content despite a non-HEIC extension
+    // (e.g. Samsung MVIMG_*.jpg which contains a HEIC stream). Quick magic-byte
+    // check avoids triggering sharp's libheif GObject SIGSEGV (see above).
+    let isHeicContent = false;
+    if (!rawExtensions.includes(fileExtension)) {
+      try {
+        const fd = fs.openSync(`${tmpDir}/tmp_tumbnail/${tmpFileName}`, "r");
+        const buf = Buffer.alloc(12);
+        fs.readSync(fd, buf, 0, 12, 0);
+        fs.closeSync(fd);
+        const brand = buf.toString("ascii", 4, 12);
+        isHeicContent =
+          brand.startsWith("ftyp") &&
+          ["heic", "heix", "mif1", "msf1"].includes(
+            buf.toString("ascii", 8, 12),
+          );
+      } catch {
+        // If we can't read the file, proceed and let sharp handle it
+      }
+    }
+    if (rawExtensions.includes(fileExtension) || isHeicContent) {
       logger.info(
         `Skipping thumbnail for raw format (${fileExtension}) ${account.getAccountDefinition().id} ${file.id} : ${file.filename} - will be handled by syncPhotoFromFull`,
         span,

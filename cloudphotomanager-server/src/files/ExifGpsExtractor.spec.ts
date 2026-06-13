@@ -76,38 +76,35 @@ describe("ExifGpsExtractor helpers", () => {
 
   describe("buildGpsInfo", () => {
     it("should build correct GpsInfo for northern/eastern hemisphere", () => {
-      const info = buildGpsInfo(40.416782, -3.703507, "gps");
+      const info = buildGpsInfo(40.416782, -3.703507);
       expect(info.GPSLatitudeRef).toBe("N");
       expect(info.GPSLongitudeRef).toBe("W");
       expect(info.GPSLatitudeDecimal).toBeCloseTo(40.416782, 6);
       expect(info.GPSLongitudeDecimal).toBeCloseTo(-3.703507, 6);
-      expect(info.GPSSource).toBe("gps");
       expect(info.GPSLatitude).toHaveLength(3);
       expect(info.GPSLongitude).toHaveLength(3);
     });
 
     it("should set S/E refs correctly", () => {
-      const info = buildGpsInfo(-33.865, 151.209, "maker_note");
+      const info = buildGpsInfo(-33.865, 151.209);
       expect(info.GPSLatitudeRef).toBe("S");
       expect(info.GPSLongitudeRef).toBe("E");
-      expect(info.GPSSource).toBe("maker_note");
     });
 
     it("should treat zero as N/E", () => {
-      const info = buildGpsInfo(0, 0, "gps");
+      const info = buildGpsInfo(0, 0);
       expect(info.GPSLatitudeRef).toBe("N");
       expect(info.GPSLongitudeRef).toBe("E");
     });
 
     it("should satisfy the GpsInfo type contract", () => {
-      const info: GpsInfo = buildGpsInfo(22.3, 114.1, "gps");
+      const info: GpsInfo = buildGpsInfo(22.3, 114.1);
       expect(typeof info.GPSLatitudeRef).toBe("string");
       expect(typeof info.GPSLongitudeRef).toBe("string");
       expect(Array.isArray(info.GPSLatitude)).toBe(true);
       expect(Array.isArray(info.GPSLongitude)).toBe(true);
       expect(typeof info.GPSLatitudeDecimal).toBe("number");
       expect(typeof info.GPSLongitudeDecimal).toBe("number");
-      expect(["gps", "maker_note"]).toContain(info.GPSSource);
     });
   });
 });
@@ -131,11 +128,5 @@ describe("extractGps", () => {
   it("should handle an empty buffer gracefully", async () => {
     const result = await extractGps(Buffer.alloc(0));
     expect(result.gpsInfo).toBeNull();
-  });
-
-  it("should return xiaomiHint null when no maker notes present", async () => {
-    const buf = Buffer.from("not a real image at all");
-    const result = await extractGps(buf);
-    expect(result.xiaomiHint).toBeNull();
   });
 });
