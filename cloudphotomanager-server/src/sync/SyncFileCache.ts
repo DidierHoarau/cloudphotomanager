@@ -472,6 +472,32 @@ export async function syncThumbnail(account: Account, file: File) {
       `Caching thumbnail ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
       span,
     );
+    // HEIC and other raw image formats can trigger a fatal SIGSEGV in sharp's
+    // bundled libheif (GObject class-init bug). Skip thumbnail generation here;
+    // syncPhotoFromFull will create the thumbnail safely after converting the
+    // raw file to JPG via ImageMagick (which uses the system libheif).
+    const fileExtension = file.filename.split(".").pop()?.toLowerCase() ?? "";
+    const rawExtensions = [
+      "heic",
+      "heif",
+      "dng",
+      "cr2",
+      "nef",
+      "arw",
+      "raf",
+      "rw2",
+      "orf",
+      "pef",
+      "srw",
+    ];
+    if (rawExtensions.includes(fileExtension)) {
+      logger.info(
+        `Skipping thumbnail for raw format (${fileExtension}) ${account.getAccountDefinition().id} ${file.id} : ${file.filename} - will be handled by syncPhotoFromFull`,
+        span,
+      );
+      span.end();
+      return;
+    }
     await account
       .downloadThumbnail(span, file, `${tmpDir}/tmp_tumbnail`, tmpFileName)
       .then(async () => {
