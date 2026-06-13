@@ -5,7 +5,7 @@ FILE_OUT=$2
 EXT=$(echo "${FILE_IN##*.}" | tr '[:upper:]' '[:lower:]')
 
 # List of RAW extensions (add more as needed)
-RAW_EXTENSIONS="cr2 nef arw dng raf rw2 orf pef srw"
+RAW_EXTENSIONS="cr2 nef arw dng raf rw2 orf pef srw heic heif"
 
 # Function to check if extension is in RAW_EXTENSIONS
 is_raw() {
