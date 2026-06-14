@@ -5,7 +5,8 @@ FILE_OUT=$2
 EXT=$(echo "${FILE_IN##*.}" | tr '[:upper:]' '[:lower:]')
 
 # List of RAW extensions (add more as needed)
-RAW_EXTENSIONS="cr2 nef arw dng raf rw2 orf pef srw heic heif"
+# NOTE: heic/heif are NOT camera RAW — they are handled separately below
+RAW_EXTENSIONS="cr2 nef arw dng raf rw2 orf pef srw"
 
 # Function to check if extension is in RAW_EXTENSIONS
 is_raw() {
@@ -17,9 +18,17 @@ is_raw() {
   return 1
 }
 
+# Function to check if extension is HEIC/HEIF
+is_heic() {
+  [ "$EXT" = "heic" ] || [ "$EXT" = "heif" ]
+}
+
 set -e
 
-if is_raw; then
+if is_heic; then
+  echo "Converting HEIC/HEIF ${FILE_IN} to JPG using heif-convert"
+  heif-convert "${FILE_IN}" "${FILE_OUT}"
+elif is_raw; then
   echo "Converting RAW/DNG ${FILE_IN} to JPG using darktable-cli"
   darktable-cli "${FILE_IN}" "${FILE_OUT}" --core
 else

@@ -54,6 +54,8 @@ RUN apt-get update && apt-get install -y \
         libfftw3-dev \
         libgif-dev \
         libheif-dev \
+        libheif-examples \
+        libheif-plugin-libde265 \
         libjpeg-dev \
         libpng-dev \
         libraw-bin \

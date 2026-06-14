@@ -16,7 +16,7 @@
   "devDependencies": {
     "@types/lodash": "^4.17.24",
     "@vite-pwa/nuxt": "^1.1.1",
-    "nuxt": "4.4.8"
+    "nuxt": "^2.18.1"
   },
   "dependencies": {
     "@picocss/pico": "^2.1.1",
