@@ -24,11 +24,6 @@ export default {
           label: "Duplicates",
           to: "/search/duplicates",
         },
-        {
-          id: "map",
-          label: "Map",
-          to: "/search/map",
-        },
       ],
     };
   },
