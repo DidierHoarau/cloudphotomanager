@@ -6,7 +6,7 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      charset: "utf-16",
+      charset: "utf-8",
       viewport:
         "width=device-width, initial-scale=1.0, height=device-height, maximum-scale=1.0, user-scalable=no",
       title: "CloudPhotoManager",
@@ -36,14 +36,33 @@ export default defineNuxtConfig({
   pinia: {
     autoImports: ["defineStore", "acceptHMRUpdate"],
   },
+  vite: {
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id: string) {
+            // Isolate heavy vendor libs into their own lazy chunks
+            if (id.includes("node_modules/hammerjs")) return "vendor-hammer";
+            if (id.includes("node_modules/lodash")) return "vendor-lodash";
+            if (id.includes("node_modules/axios")) return "vendor-axios";
+            if (id.includes("node_modules/@picocss")) return "vendor-picocss";
+            if (id.includes("node_modules/bootstrap-icons"))
+              return "vendor-bootstrap-icons";
+          },
+        },
+      },
+    },
+  },
   pwa: {
     registerType: "autoUpdate",
     // We manage our own manifest.json in /public
     manifest: false,
     workbox: {
-      navigateFallback: undefined,
-      // Do not glob any pre-cached assets; Nuxt SPA handles its own bundles.
-      globPatterns: [],
+      // Serve index.html for direct PWA navigation to /gallery, /settings, etc.
+      navigateFallback: "/index.html",
+      // Precache app shell bundles so repeat PWA launches are instant
+      globPatterns: ["**/*.{js,css,html,woff2,woff,webp,png}"],
+      maximumFileSizeToCacheInBytes: 500 * 1024, // 500 KB
       runtimeCaching: [
         // Static assets (JS, CSS, fonts from same origin) – Cache First
         {

@@ -1,13 +1,17 @@
 module.exports = {
   moduleFileExtensions: ["ts", "js"],
   transform: {
-    "^.+\\.(ts|tsx)$": [
+    "^.+\\.(ts|tsx|js)$": [
       "ts-jest",
       {
         tsconfig: "tsconfig.spec.json",
+        tsconfigRaw: {
+          compilerOptions: {
+            allowJs: true,
+          },
+        },
       },
     ],
-    "^.+\\.js$": "babel-jest",
   },
   transformIgnorePatterns: ["/node_modules/(?!uuid)"],
   testMatch: ["/**/src/**/*.spec.(ts|js)"],

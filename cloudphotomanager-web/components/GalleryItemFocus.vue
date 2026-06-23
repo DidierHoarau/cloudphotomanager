@@ -218,7 +218,6 @@ import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { FileUtils } from "~~/services/FileUtils";
 import { MediaUrls } from "~~/services/MediaUrls";
-import * as Hammer from "hammerjs";
 import { findIndex } from "lodash";
 
 export default {
@@ -338,9 +337,11 @@ export default {
     };
     EventBus.on(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
   },
-  mounted() {
+  async mounted() {
     const mediaContainer = this.$refs.mediaContainer;
     if (!mediaContainer) return;
+    // Dynamic import: hammerjs (~20 KB) is only needed when the viewer is open
+    const Hammer = await import("hammerjs");
     const gestureManager = new Hammer.Manager(mediaContainer, {
       touchAction: "none",
     });

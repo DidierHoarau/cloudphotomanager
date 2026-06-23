@@ -35,10 +35,8 @@ export const AccountsStore = defineStore("AccountsStore", {
     },
 
     async fetch() {
-      // Hydrate from cache first for instant display
-      await this._hydrateFromCache();
-
-      await axios
+      // Fire API call immediately — don't block on IndexedDB
+      const apiPromise = axios
         .get(
           `${(await Config.get()).SERVER_URL}/accounts/`,
           await AuthService.getAuthHeader(),
@@ -52,6 +50,12 @@ export const AccountsStore = defineStore("AccountsStore", {
           await localCache.put("accounts", CACHE_KEY, this.accounts);
         })
         .catch(handleError);
+
+      // Race: hydrate from cache in parallel (instant display if cached)
+      await this._hydrateFromCache();
+
+      // Wait for the API to finish (fresh data overwrites cache)
+      await apiPromise;
     },
   },
 });

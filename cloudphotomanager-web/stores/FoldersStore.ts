@@ -33,71 +33,91 @@ export const FoldersStore = defineStore("FoldersStore", {
     },
 
     async fetch() {
-      // Hydrate from cache first for instant display
-      await this._hydrateFromCache();
-
+      const accounts = AccountsStore().accounts;
       if (this.folders.length === 0) {
         this.loading = true;
       }
-      const folders: any[] = [];
-      for (const accountIn of AccountsStore().accounts) {
-        const account: any = accountIn;
-        await axios
-          .get(
+
+      // Fire folder API calls immediately — don't block on IndexedDB
+      const folderResultsPromise = Promise.allSettled(
+        accounts.map(async (accountIn: any) => {
+          const account = accountIn;
+          const res = await axios.get(
             `${(await Config.get()).SERVER_URL}/accounts/${account.id}/folders`,
             await AuthService.getAuthHeader(),
-          )
-          .then((res) => {
-            for (const folder of sortBy(res.data.folders, ["folderpath"])) {
-              if (folder.folderpath === "/") {
-                folders.push({
-                  id: folder.id,
-                  name: account.name,
-                  accountId: account.id,
-                  folderpath: "/",
-                  depth: 0,
-                  parentIndex: -1,
-                  indentation: "",
-                  isCollapsed: PreferencesFolders.isCollapsed(
-                    folder.accountId,
-                    folder.id,
-                  ),
-                  isVisible: true,
-                  children: 0,
-                });
-              } else {
-                let parentPath = getParentFolderPath(folder.folderpath);
-                if (parentPath === "") {
-                  parentPath = "/";
-                }
-                const parentIndex = findIndex(folders, {
-                  folderpath: parentPath,
-                  accountId: account.id,
-                });
-                folders.push({
-                  id: folder.id,
-                  name: folder.folderpath.split("/").pop(),
-                  type: "folder",
-                  accountId: account.id,
-                  folderpath: formatFolderPath(folder.folderpath),
-                  childrenCount: folder.childrenCount,
-                  indentation: this.getIndentation(folder.folderpath),
-                  isCollapsed: PreferencesFolders.isCollapsed(
-                    folder.accountId,
-                    folder.id,
-                  ),
-                  isVisible: true,
-                  parentIndex,
-                  children: 0,
-                });
-                folders[parentIndex].children++;
-              }
+          );
+          return { account, folders: res.data.folders };
+        }),
+      );
+
+      // Race: hydrate from IDB cache in parallel (instant display if cached)
+      await this._hydrateFromCache();
+
+      // Wait for folder API responses
+      const folderResults = await folderResultsPromise;
+
+      const folders: any[] = [];
+      for (const result of folderResults) {
+        if (result.status !== "fulfilled") {
+          handleError(result.reason);
+          continue;
+        }
+        const { account } = result.value;
+        for (const folder of sortBy(result.value.folders, ["folderpath"])) {
+          if (folder.folderpath === "/") {
+            folders.push({
+              id: folder.id,
+              name: account.name,
+              accountId: account.id,
+              folderpath: "/",
+              depth: 0,
+              parentIndex: -1,
+              indentation: "",
+              isCollapsed: PreferencesFolders.isCollapsed(
+                folder.accountId,
+                folder.id,
+              ),
+              isVisible: true,
+              children: 0,
+            });
+          } else {
+            let parentPath = getParentFolderPath(folder.folderpath);
+            if (parentPath === "") {
+              parentPath = "/";
             }
-          })
-          .catch(handleError);
+            const parentIndex = findIndex(folders, {
+              folderpath: parentPath,
+              accountId: account.id,
+            });
+            folders.push({
+              id: folder.id,
+              name: folder.folderpath.split("/").pop(),
+              type: "folder",
+              accountId: account.id,
+              folderpath: formatFolderPath(folder.folderpath),
+              childrenCount: folder.childrenCount,
+              indentation: this.getIndentation(folder.folderpath),
+              isCollapsed: PreferencesFolders.isCollapsed(
+                folder.accountId,
+                folder.id,
+              ),
+              isVisible: true,
+              parentIndex,
+              children: 0,
+            });
+            folders[parentIndex].children++;
+          }
+        }
         this.checkVisibility(folders, account.id);
-        await this.fetchCounts(folders, account.id);
       }
+
+      // Fetch counts for all accounts in parallel
+      await Promise.allSettled(
+        accounts.map((accountIn: any) =>
+          this.fetchCounts(folders, accountIn.id),
+        ),
+      );
+
       (this.folders as any[]) = folders;
       this.loading = false;
 

@@ -208,10 +208,13 @@ export default {
     } catch (e) {
       // ignore
     }
-    await AccountsStore().fetch();
-    if (AccountsStore().accounts.length > 0) {
-      await FoldersStore().fetch();
-    }
+    // Start store fetches in background — don't block startup on them
+    const storeReady = (async () => {
+      await AccountsStore().fetch();
+      if (AccountsStore().accounts.length > 0) {
+        await FoldersStore().fetch();
+      }
+    })();
     this._onFolderUpdated = (message) => {
       if (
         message.accountId === this.currentAccountId &&
@@ -288,19 +291,17 @@ export default {
     EventBus.on(EventTypes.FOLDER_SELECTED, this._onFolderSelected);
     EventBus.on(EventTypes.FOLDER_CACHE_UPDATED, this._onFolderCacheUpdated);
     EventBus.on(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
-    if (
-      useRoute().query.accountId &&
-      useRoute().query.folderId &&
-      useRoute().query.fileId
-    ) {
-      await this.fetchFiles(
-        useRoute().query.accountId,
-        useRoute().query.folderId,
-      );
-      this.focusGalleryItem(find(this.files, { id: useRoute().query.fileId }));
-    } else if (useRoute().query.accountId && useRoute().query.folderId) {
-      this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
+    const route = useRoute();
+    if (route.query.accountId && route.query.folderId && route.query.fileId) {
+      // Route has explicit target — fetch files immediately
+      await this.fetchFiles(route.query.accountId, route.query.folderId);
+      this.focusGalleryItem(find(this.files, { id: route.query.fileId }));
+    } else if (route.query.accountId && route.query.folderId) {
+      // Route has folder — fetch files immediately
+      this.fetchFiles(route.query.accountId, route.query.folderId);
     } else {
+      // No route target — wait for stores then navigate to first root folder
+      await storeReady;
       const firstRoot = FoldersStore().folders.find(
         (f) => f.parentIndex === -1,
       );
@@ -479,7 +480,15 @@ export default {
       }
       this.requestEtag = requestEtag;
 
-      // Hydrate from IndexedDB cache for instant display
+      // Fire API request immediately — don't block on IndexedDB
+      const apiPromise = this._requestFilesPage({
+        accountId,
+        folderId,
+        page: 0,
+        pageSize: this.pageSize,
+      });
+
+      // Race: hydrate from IDB cache in parallel (instant display if cached)
       if (isFolderChange || forceLoading) {
         const cached = await localCache.get(
           "fileMetadata",
@@ -500,13 +509,9 @@ export default {
         }
       }
 
+      // Wait for the API to finish (fresh data overwrites cache)
       try {
-        const { files: newFiles, total } = await this._requestFilesPage({
-          accountId,
-          folderId,
-          page: 0,
-          pageSize: this.pageSize,
-        });
+        const { files: newFiles, total } = await apiPromise;
         if (this.requestEtag === requestEtag) {
           this.outtakesCount = this._markOuttakes(newFiles);
           this.files = newFiles;
