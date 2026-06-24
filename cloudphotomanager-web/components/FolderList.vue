@@ -10,12 +10,8 @@
     />
     <Loading v-if="foldersStore.loading" class="folder-component-layout-list" />
     <div v-else class="folder-component-layout-list">
-      <template
-        v-for="(folder, index) in foldersStore.folders"
-        :key="folder.id"
-      >
+      <template v-for="{ folder, index } in visibleFolders" :key="folder.id">
         <div
-          v-if="isVisible(folder)"
           class="folder-layout"
           :class="{ 'source-active': selectedFolderId == folder.id }"
           :ref="'folder-' + folder.id"
@@ -72,17 +68,45 @@ export default {
     normalizedFilter() {
       return this.folderFilter.toLowerCase().trim();
     },
+    /**
+     * Pre-filtered list of visible folders. Computed so the filter
+     * only re-evaluates when folders, accountId or filter actually change
+     * — not on every render cycle.
+     */
+    visibleFolders() {
+      const filter = this.normalizedFilter;
+      const accountId = this.accountId;
+      const folders = this.foldersStore.folders;
+      const result = [];
+      for (let i = 0; i < folders.length; i++) {
+        const folder = folders[i];
+        if (accountId && accountId !== folder.accountId) continue;
+        if (filter) {
+          if (folder.folderpath.toLowerCase().includes(filter)) {
+            result.push({ folder, index: i });
+          }
+          continue;
+        }
+        if (folder.folderpath === "/" || folder.isVisible) {
+          result.push({ folder, index: i });
+        }
+      }
+      return result;
+    },
   },
   async created() {
-    this._folderUpdatedHandler = () => FoldersStore().fetch();
-    this._folderCacheUpdatedHandler = () => FoldersStore().fetch();
+    this._folderUpdatedHandler = () => FoldersStore().ensureLoaded();
+    this._folderCacheUpdatedHandler = () => {
+      FoldersStore().invalidateCache();
+      FoldersStore().ensureLoaded();
+    };
     EventBus.on(EventTypes.FOLDER_UPDATED, this._folderUpdatedHandler);
     EventBus.on(
       EventTypes.FOLDER_CACHE_UPDATED,
       this._folderCacheUpdatedHandler,
     );
 
-    await FoldersStore().fetch();
+    await FoldersStore().ensureLoaded();
     const initialFolderId = useRoute().query.folderId;
     if (initialFolderId) {
       this.activateFolder(initialFolderId);
@@ -130,18 +154,6 @@ export default {
     selectFolder(folder) {
       this.$emit("onFolderSelected", { folder });
       this.selectedFolderId = folder.id;
-    },
-    isVisible(folder) {
-      if (this.accountId && this.accountId !== folder.accountId) {
-        return false;
-      }
-      if (this.normalizedFilter) {
-        return folder.folderpath.toLowerCase().includes(this.normalizedFilter);
-      }
-      if (folder.folderpath === "/") {
-        return true;
-      }
-      return folder.isVisible;
     },
     toggleFolderCollapsed(index) {
       FoldersStore().toggleFolderCollapsed(index);

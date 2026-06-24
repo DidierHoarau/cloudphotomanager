@@ -193,7 +193,7 @@ export default {
     };
   },
   async created() {
-    this.serverUrl = (await Config.get()).SERVER_URL;
+    this.serverUrl = Config.sync.SERVER_URL;
     try {
       const saved = localStorage.getItem("galleryOptions");
       if (saved) {
@@ -208,13 +208,8 @@ export default {
     } catch (e) {
       // ignore
     }
-    // Start store fetches in background — don't block startup on them
-    const storeReady = (async () => {
-      await AccountsStore().fetch();
-      if (AccountsStore().accounts.length > 0) {
-        await FoldersStore().fetch();
-      }
-    })();
+    // FolderList.vue triggers ensureLoaded() — no need to duplicate here.
+    // We only await it when there's no route target below.
     this._onFolderUpdated = (message) => {
       if (
         message.accountId === this.currentAccountId &&
@@ -231,7 +226,7 @@ export default {
     };
     this._onFolderCacheUpdated = () => {
       FoldersStore().invalidateCache();
-      FoldersStore().fetch();
+      FoldersStore().ensureLoaded();
     };
     this._onOperationComplete = (message) => {
       if (!this.currentAccountId || !this.currentFolderId) return;
@@ -300,8 +295,8 @@ export default {
       // Route has folder — fetch files immediately
       this.fetchFiles(route.query.accountId, route.query.folderId);
     } else {
-      // No route target — wait for stores then navigate to first root folder
-      await storeReady;
+      // No route target — ensure folders are loaded then navigate to first root
+      await FoldersStore().ensureLoaded();
       const firstRoot = FoldersStore().folders.find(
         (f) => f.parentIndex === -1,
       );
@@ -397,7 +392,7 @@ export default {
       return `${accountId}:${folderId}:${this.includeSubFolders}:${this.sortOrder}:${page}:${pageSize}`;
     },
     async _requestFilesPage({ accountId, folderId, page, pageSize }) {
-      const serverUrl = (await Config.get()).SERVER_URL;
+      const serverUrl = Config.sync.SERVER_URL;
       const params = new URLSearchParams({
         includeSubFolders: String(this.includeSubFolders),
         sortOrder: this.sortOrder,
@@ -575,7 +570,7 @@ export default {
     async clickedRefresh() {
       await axios
         .put(
-          `${(await Config.get()).SERVER_URL}/accounts/${
+          `${Config.sync.SERVER_URL}/accounts/${
             this.currentAccountId
           }/folders/${this.currentFolderId}/sync`,
           {},
@@ -696,7 +691,7 @@ export default {
       SyncStore().markOperationInProgress();
       await axios
         .post(
-          `${(await Config.get()).SERVER_URL}/accounts/${
+          `${Config.sync.SERVER_URL}/accounts/${
             this.currentAccountId
           }/files/batch/operations/fileDelete`,
           {
@@ -723,7 +718,7 @@ export default {
       SyncStore().markOperationInProgress();
       await axios
         .put(
-          `${(await Config.get()).SERVER_URL}/accounts/${
+          `${Config.sync.SERVER_URL}/accounts/${
             this.currentAccountId
           }/folders/${this.currentFolderId}/sync`,
           {},
@@ -742,7 +737,7 @@ export default {
       SyncStore().markOperationInProgress();
       await axios
         .put(
-          `${(await Config.get()).SERVER_URL}/accounts/${
+          `${Config.sync.SERVER_URL}/accounts/${
             this.currentAccountId
           }/folders/${this.currentFolderId}/deep-sync`,
           {},
@@ -765,7 +760,7 @@ export default {
       SyncStore().markOperationInProgress();
       await axios
         .put(
-          `${(await Config.get()).SERVER_URL}/accounts/${
+          `${Config.sync.SERVER_URL}/accounts/${
             this.folder.accountId
           }/folders/${this.folder.id}/operations/rename`,
           { newName },
@@ -798,7 +793,7 @@ export default {
       SyncStore().markOperationInProgress();
       await axios
         .delete(
-          `${(await Config.get()).SERVER_URL}/accounts/${
+          `${Config.sync.SERVER_URL}/accounts/${
             this.folder.accountId
           }/folders/${this.folder.id}/operations/delete`,
           await AuthService.getAuthHeader(),
