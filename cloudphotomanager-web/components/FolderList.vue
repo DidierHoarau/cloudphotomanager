@@ -76,7 +76,7 @@ export default {
     visibleFolders() {
       const filter = this.normalizedFilter;
       const accountId = this.accountId;
-      const folders = this.foldersStore.folders;
+      const folders = FoldersStore().folders;
       const result = [];
       for (let i = 0; i < folders.length; i++) {
         const folder = folders[i];
