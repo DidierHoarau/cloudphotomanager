@@ -4,17 +4,17 @@ import { OTelTracer } from "../OTelContext";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
-} from "../utils-std-ts/SqlDbUtils";
+} from "@devopsplaybook.io/common-utils";
 
 export async function UserPermissionDataGetForUser(
   context: Span,
-  userId: string
+  userId: string,
 ): Promise<UserPermission> {
   const span = OTelTracer().startSpan("UserPermissionData_get", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM users_permissions WHERE userId=?",
-    [userId]
+    [userId],
   );
   if (rawData.length === 0) {
     const emptyPermission = new UserPermission();
@@ -29,11 +29,11 @@ export async function UserPermissionDataGetForUser(
 export async function UserPermissionDataUpdateForUser(
   context: Span,
   userId: string,
-  userPermission: UserPermission
+  userPermission: UserPermission,
 ): Promise<void> {
   const span = OTelTracer().startSpan(
     "UserPermissionData_updateForUser",
-    context
+    context,
   );
   SqlDbUtilsExecSQL(span, "DELETE FROM users_permissions WHERE userId = ?", [
     userId,
@@ -41,18 +41,18 @@ export async function UserPermissionDataUpdateForUser(
   SqlDbUtilsExecSQL(
     span,
     "INSERT INTO users_permissions (id, userid, info) " + "VALUES (?, ?,?)",
-    [userPermission.id, userId, JSON.stringify(userPermission.toJson().info)]
+    [userPermission.id, userId, JSON.stringify(userPermission.toJson().info)],
   );
   span.end();
 }
 
 export async function UserPermissionDataDeleteForUser(
   context: Span,
-  userId: string
+  userId: string,
 ): Promise<void> {
   const span = OTelTracer().startSpan(
     "UserPermissionData_deleteForUser",
-    context
+    context,
   );
   SqlDbUtilsExecSQL(span, "DELETE FROM users_permissions WHERE userId = ?", [
     userId,

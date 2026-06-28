@@ -1,5 +1,6 @@
 import * as childProcess from "child_process";
 
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class SystemCommand {
   //
   public static execute(command: string): Promise<string> {

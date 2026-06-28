@@ -8,7 +8,7 @@
     <ul class="menu-links">
       <li v-if="syncStore.failuresCount > 0">
         <NuxtLink
-          to="/accounts/queue?tab=failures"
+          to="/settings/sync?tab=failures"
           class="sync-indicator sync-indicator-error"
           title="Sync operations failed — click to review"
         >
@@ -17,7 +17,7 @@
       </li>
       <li v-if="syncStore.countTotal > 0">
         <NuxtLink
-          to="/accounts/queue"
+          to="/settings/sync"
           class="sync-indicator"
           title="Operations in progress"
         >
@@ -40,9 +40,9 @@
       </li>
       <li v-if="authenticationStore.isAdmin">
         <NuxtLink
-          to="/accounts"
-          :class="baseFolder === 'accounts' ? 'active' : 'inactive'"
-          ><i class="bi bi-clouds-fill"></i
+          to="/settings/accounts"
+          :class="baseFolder === 'settings' ? 'active' : 'inactive'"
+          ><i class="bi bi-gear-fill"></i
         ></NuxtLink>
       </li>
       <li>
@@ -65,7 +65,6 @@ const syncStore = SyncStore();
 <script>
 import axios from "axios";
 import Config from "~~/services/Config.ts";
-
 export default {
   watch: {
     $route(to, from) {
@@ -103,8 +102,8 @@ nav {
   height: 2rem;
 }
 .menu-links li {
-  padding-right: 1em;
-  font-size: 1.1em;
+  padding-right: var(--space-base);
+  font-size: var(--font-xl);
 }
 .inactive {
   opacity: 0.4;
@@ -121,7 +120,7 @@ nav {
   animation: pulse 1.5s infinite;
 }
 .sync-indicator-error {
-  color: #dc3545;
+  color: var(--color-danger);
   opacity: 1;
   animation: none;
 }

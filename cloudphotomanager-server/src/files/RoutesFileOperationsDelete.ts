@@ -1,11 +1,7 @@
-import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { OTelLogger } from "../OTelContext";
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
-
-const logger = OTelLogger().createModuleLogger("FileOperationsDeleteRoutes");
 
 export class RoutesFileOperationsDelete {
   //

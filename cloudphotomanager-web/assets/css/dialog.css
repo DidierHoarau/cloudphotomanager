@@ -16,7 +16,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-overlay);
 }
 
 /* ── Dialog article container ─────────────────────────────── */
@@ -57,13 +57,13 @@
 /* ── Thumbnail preview inside dialog ─────────────────────── */
 .dialog-thumbnail {
   text-align: center;
-  margin-bottom: 0.75em;
+  margin-bottom: var(--space-md);
 }
 .dialog-thumbnail img {
   max-width: 100%;
   max-height: 12em;
   object-fit: contain;
-  border-radius: 0.35em;
+  border-radius: var(--radius-md);
 }
 
 /* ── Info key/value table ─────────────────────────────────── */
@@ -72,14 +72,14 @@
   border-collapse: collapse;
 }
 .dialog-info-table td {
-  padding: 0.3em 0;
+  padding: var(--space-xs) 0;
   vertical-align: top;
   word-break: break-all;
 }
 .dialog-info-label {
   font-weight: 600;
   white-space: nowrap;
-  padding-right: 1em;
+  padding-right: var(--space-base);
   width: 5em;
 }
 
@@ -87,7 +87,7 @@
 .dialog-files-table {
   max-width: 100%;
   overflow-x: hidden;
-  margin-top: 0.5em;
+  margin-top: var(--space-sm);
 }
 .dialog-files-table table {
   width: 100%;
@@ -98,7 +98,7 @@
 .dialog-files-table th {
   word-break: break-all;
   overflow-wrap: anywhere;
-  padding: 0.3em 0.4em;
+  padding: var(--space-xs) var(--space-sm);
   vertical-align: middle;
 }
 .dialog-files-table th:last-child,
@@ -112,15 +112,15 @@
 .dialog-delete-btn {
   background: transparent;
   border: none;
-  color: #dc3545;
+  color: var(--color-danger);
   cursor: pointer;
-  padding: 0.2em 0.4em;
-  font-size: 0.9em;
-  border-radius: 0.25em;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-body);
+  border-radius: var(--radius-sm);
   transition: background 0.15s;
 }
 .dialog-delete-btn:hover:not(:disabled) {
-  background: rgba(220, 53, 69, 0.15);
+  background: var(--color-danger-bg);
 }
 .dialog-delete-btn:disabled {
   opacity: 0.3;
@@ -148,7 +148,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 1rem;
+  padding: var(--space-base);
 }
 
 .dialog-standard-footer {
@@ -157,10 +157,10 @@
   z-index: 2;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5em;
+  gap: var(--space-sm);
   justify-content: flex-end;
   margin: 0;
-  padding: 1rem;
-  border-top: 1px solid rgba(127, 127, 127, 0.25);
+  padding: var(--space-base);
+  border-top: 1px solid var(--color-border-light);
   background: var(--pico-card-background-color);
 }

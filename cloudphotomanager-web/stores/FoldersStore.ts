@@ -4,82 +4,185 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import axios from "axios";
 import { find, findIndex, sortBy } from "lodash";
 import { PreferencesFolders } from "~~/services/PreferencesFolders";
+import { localCache, TTL } from "~~/services/LocalCache";
+
+const CACHE_KEY = "all";
 
 export const FoldersStore = defineStore("FoldersStore", {
   state: () => ({
-    folders: [],
+    folders: [] as any[],
     loading: false,
+    _hydrated: false,
+    _loadPromise: null as Promise<void> | null,
   }),
 
   getters: {},
 
   actions: {
+    /** Hydrate folders from IndexedDB for instant display on revisit. */
+    async _hydrateFromCache() {
+      if (this._hydrated) return;
+      const cached = await localCache.get<any[]>(
+        "folders",
+        CACHE_KEY,
+        TTL.FOLDERS,
+      );
+      if (cached && cached.length > 0 && this.folders.length === 0) {
+        this.folders = cached;
+        // Only mark hydrated when we actually got valid data
+        this._hydrated = true;
+      }
+    },
+
+    /**
+     * Single entry point for loading folders. Idempotent and deduplicated:
+     * 1. Hydrates from IndexedDB cache (instant display)
+     * 2. Ensures accounts are loaded
+     * 3. Fetches fresh folder tree from the API
+     * 4. Shows the tree immediately, then fetches counts in the background
+     *
+     * Multiple callers calling `ensureLoaded()` concurrently will share the
+     * same in-flight promise — no duplicate network requests.
+     */
+    async ensureLoaded() {
+      if (this._loadPromise) return this._loadPromise;
+
+      this._loadPromise = (async () => {
+        // 1. Instant hydration from cache
+        await this._hydrateFromCache();
+
+        // 2. Ensure accounts are loaded (deduplicated internally)
+        await AccountsStore().fetch();
+
+        // 3. Fetch fresh folder tree from API
+        await this._fetchFromApi();
+      })()
+        .catch(handleError)
+        .finally(() => {
+          this._loadPromise = null;
+        });
+
+      return this._loadPromise;
+    },
+
+    /** Backward-compatible alias for ensureLoaded(). */
     async fetch() {
+      return this.ensureLoaded();
+    },
+
+    /**
+     * Fetch the folder tree from the API, process it, and display it
+     * immediately. Counts are fetched in the background.
+     */
+    async _fetchFromApi() {
+      const accounts = AccountsStore().accounts;
+      if (accounts.length === 0) {
+        // No accounts yet — don't touch folders or cache.
+        return;
+      }
+
       if (this.folders.length === 0) {
         this.loading = true;
       }
-      const folders: any[] = [];
-      for (const accountIn of AccountsStore().accounts) {
-        const account: any = accountIn;
-        await axios
-          .get(
-            `${(await Config.get()).SERVER_URL}/accounts/${account.id}/folders`,
+
+      // Fire folder API calls for all accounts in parallel
+      const folderResults = await Promise.allSettled(
+        accounts.map(async (accountIn: any) => {
+          const account = accountIn;
+          const res = await axios.get(
+            `${Config.sync.SERVER_URL}/accounts/${account.id}/folders`,
             await AuthService.getAuthHeader(),
-          )
-          .then((res) => {
-            for (const folder of sortBy(res.data.folders, ["folderpath"])) {
-              if (folder.folderpath === "/") {
-                folders.push({
-                  id: folder.id,
-                  name: account.name,
-                  accountId: account.id,
-                  folderpath: "/",
-                  depth: 0,
-                  parentIndex: -1,
-                  indentation: "",
-                  isCollapsed: PreferencesFolders.isCollapsed(
-                    folder.accountId,
-                    folder.id,
-                  ),
-                  isVisible: true,
-                  children: 0,
-                });
-              } else {
-                let parentPath = getParentFolderPath(folder.folderpath);
-                if (parentPath === "") {
-                  parentPath = "/";
-                }
-                const parentIndex = findIndex(folders, {
-                  folderpath: parentPath,
-                  accountId: account.id,
-                });
-                folders.push({
-                  id: folder.id,
-                  name: folder.folderpath.split("/").pop(),
-                  type: "folder",
-                  accountId: account.id,
-                  folderpath: formatFolderPath(folder.folderpath),
-                  childrenCount: folder.childrenCount,
-                  indentation: this.getIndentation(folder.folderpath),
-                  isCollapsed: PreferencesFolders.isCollapsed(
-                    folder.accountId,
-                    folder.id,
-                  ),
-                  isVisible: true,
-                  parentIndex,
-                  children: 0,
-                });
-                folders[parentIndex].children++;
-              }
+          );
+          return { account, folders: res.data.folders };
+        }),
+      );
+
+      const folders: any[] = [];
+      for (const result of folderResults) {
+        if (result.status !== "fulfilled") {
+          handleError(result.reason);
+          continue;
+        }
+        const { account } = result.value;
+        for (const folder of sortBy(result.value.folders, ["folderpath"])) {
+          if (folder.folderpath === "/") {
+            folders.push({
+              id: folder.id,
+              name: account.name,
+              accountId: account.id,
+              folderpath: "/",
+              depth: 0,
+              parentIndex: -1,
+              indentation: "",
+              isCollapsed: PreferencesFolders.isCollapsed(
+                folder.accountId,
+                folder.id,
+              ),
+              isVisible: true,
+              children: 0,
+            });
+          } else {
+            let parentPath = getParentFolderPath(folder.folderpath);
+            if (parentPath === "") {
+              parentPath = "/";
             }
-          })
-          .catch(handleError);
+            const parentIndex = findIndex(folders, {
+              folderpath: parentPath,
+              accountId: account.id,
+            });
+            folders.push({
+              id: folder.id,
+              name: folder.folderpath.split("/").pop(),
+              type: "folder",
+              accountId: account.id,
+              folderpath: formatFolderPath(folder.folderpath),
+              childrenCount: folder.childrenCount,
+              indentation: this.getIndentation(folder.folderpath),
+              isCollapsed: PreferencesFolders.isCollapsed(
+                folder.accountId,
+                folder.id,
+              ),
+              isVisible: true,
+              parentIndex,
+              children: 0,
+            });
+            if (parentIndex >= 0) {
+              folders[parentIndex].children++;
+            }
+          }
+        }
         this.checkVisibility(folders, account.id);
-        await this.fetchCounts(folders, account.id);
       }
-      (this.folders as any[]) = folders;
+
+      // Display the folder tree immediately — don't wait for counts
+      if (folders.length > 0) {
+        this.folders = folders;
+      }
       this.loading = false;
+
+      // Persist processed folder tree to IndexedDB (never cache empty results)
+      if (folders.length > 0) {
+        await localCache.put("folders", CACHE_KEY, folders);
+      }
+
+      // Fetch counts in the background — don't block the tree display
+      this._fetchCountsInBackground(folders, accounts);
     },
+
+    /**
+     * Fetch folder counts without blocking the tree display.
+     * Updates individual folder objects reactively as counts arrive.
+     */
+    _fetchCountsInBackground(folders: any[], accounts: any[]) {
+      Promise.allSettled(
+        accounts.map((accountIn: any) =>
+          this.fetchCounts(folders, accountIn.id),
+        ),
+      ).catch(() => {
+        /* counts are non-critical */
+      });
+    },
+
     getIndentation(folderpath: string) {
       let indent = "";
       for (let i = 1; i < folderpath.split("/").length; i++) {
@@ -110,7 +213,7 @@ export const FoldersStore = defineStore("FoldersStore", {
     async fetchCounts(folders: any[], accountId: string) {
       const counts = (
         await axios.get(
-          `${(await Config.get()).SERVER_URL}/accounts/${accountId}/folders/counts`,
+          `${Config.sync.SERVER_URL}/accounts/${accountId}/folders/counts`,
           await AuthService.getAuthHeader(),
         )
       ).data.counts;
@@ -158,6 +261,12 @@ export const FoldersStore = defineStore("FoldersStore", {
     },
     getParentFolder(folder: any) {
       return this.folders[folder.parentIndex];
+    },
+
+    /** Invalidate the cached folder tree (called on sync events). */
+    async invalidateCache() {
+      this._hydrated = false;
+      await localCache.delete("folders", CACHE_KEY);
     },
   },
 });

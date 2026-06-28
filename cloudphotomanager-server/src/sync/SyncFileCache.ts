@@ -1,8 +1,7 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
-import exifReader from "exif-reader";
+import * as exifr from "exifr";
 import * as fs from "fs-extra";
 import { find } from "lodash";
-import * as probe from "node-ffprobe";
 import * as path from "path";
 import sharp from "sharp";
 import { AnalysisImagesGetLabels } from "../analysis/AnalysisImages";
@@ -17,6 +16,7 @@ import {
   FileDataUpdateInfo,
   FileDataUpdateKeywords,
 } from "../files/FileData";
+import { extractGps } from "../files/ExifGpsExtractor";
 import { Account } from "../model/Account";
 import { File } from "../model/File";
 import { FileMediaType } from "../model/FileMediaType";
@@ -280,7 +280,9 @@ export async function syncVideoFromFull(account: Account, file: File) {
     span.setStatus({ code: 2, message: errSync.message });
     span.recordException(errSync);
     span.end();
-    throw new Error("syncVideoFromFull Failed");
+    const err = new Error("syncVideoFromFull Failed");
+    err.cause = errSync;
+    throw err;
   }
 }
 
@@ -316,11 +318,26 @@ export async function syncPhotoFromFull(account: Account, file: File) {
           );
           tmpFileName += "_raw.jpg";
         }
-        // Extract and store EXIF from the source file before rotating
+        // Extract full EXIF and GPS (including Xiaomi maker-note fallback) from
+        // the raw source file using exifr — handles all IFDs, maker notes, and
+        // GPS IFD natively. Falls back to Xiaomi city-tag geocoding when the
+        // standard GPS IFD is absent.
         try {
-          const srcMeta = await sharp(`${tmpDir}/${tmpFileName}`).metadata();
-          if (srcMeta && srcMeta.exif) {
-            file.info.exif = exifReader(srcMeta.exif);
+          const filePath = `${tmpDir}/${tmpFileName}`;
+          const exifData = await exifr.parse(filePath, {
+            gps: true,
+            tiff: true,
+            exif: true,
+          });
+          if (exifData) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            file.info.exif = exifData as Record<string, any>;
+            const gpsResult = await extractGps(filePath);
+            if (gpsResult.gpsInfo) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (file.info.exif as Record<string, any>).GPSInfo =
+                gpsResult.gpsInfo;
+            }
           }
         } catch (_) {
           logger.info(
@@ -349,7 +366,9 @@ export async function syncPhotoFromFull(account: Account, file: File) {
     span.setStatus({ code: 2, message: errSync.message });
     span.recordException(errSync);
     span.end();
-    throw new Error("syncPhotoFromFull Failed");
+    const err = new Error("syncPhotoFromFull Failed");
+    err.cause = errSync;
+    throw err;
   }
 }
 
@@ -382,20 +401,36 @@ export async function syncPhotoKeyWords(account: Account, file: File) {
       .withMetadata()
       .toFile(`${tmpDir}/${tmpFileName}.jpeg`)
       .then(async () => {
-        try {
-          const metadata = await sharp(`${cacheDir}/preview.webp`).metadata();
-          if (metadata && metadata.exif) {
-            const exif = exifReader(
-              (await sharp(`${cacheDir}/preview.webp`).metadata()).exif,
+        // Only re-extract EXIF from preview if not already populated by
+        // syncPhotoFromFull (which has access to the original file and
+        // therefore better GPS / maker-note data).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const existingGps = (file.info.exif as Record<string, any> | undefined)
+          ?.GPSInfo;
+        if (!existingGps) {
+          try {
+            const previewPath = `${cacheDir}/preview.webp`;
+            const previewExif = await exifr.parse(previewPath, {
+              gps: true,
+              tiff: true,
+              exif: true,
+            });
+            if (previewExif) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              file.info.exif = previewExif as Record<string, any>;
+              const gpsResult = await extractGps(previewPath);
+              if (gpsResult.gpsInfo) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (file.info.exif as Record<string, any>).GPSInfo =
+                  gpsResult.gpsInfo;
+              }
+            }
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          } catch (err) {
+            logger.info(
+              `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
             );
-
-            file.info.exif = exif;
           }
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (err) {
-          logger.info(
-            `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
-          );
         }
         const classificationResults = await AnalysisImagesGetLabels(
           span,
@@ -437,25 +472,104 @@ export async function syncThumbnail(account: Account, file: File) {
       `Caching thumbnail ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
       span,
     );
-    await account
-      .downloadThumbnail(span, file, `${tmpDir}/tmp_tumbnail`, tmpFileName)
-      .then(async () => {
-        await sharp(`${tmpDir}/tmp_tumbnail/${tmpFileName}`)
-          .rotate()
-          .withMetadata()
-          .resize({ width: 300 })
-          .toFile(`${cacheDir}/thumbnail.webp`);
-      })
-      .catch((err) => {
-        logger.error("Error Synchronizing Thumbnail", err, span);
-      });
-    await fs.remove(`${tmpDir}/tmp_tumbnail`);
+    // HEIC and other raw image formats can trigger a fatal SIGSEGV in sharp's
+    // bundled libheif (GObject class-init bug). Download the full file and
+    // convert via ImageMagick (which uses the system libheif) before creating
+    // the thumbnail with sharp.
+    const fileExtension = file.filename.split(".").pop()?.toLowerCase() ?? "";
+    const rawExtensions = [
+      "heic",
+      "heif",
+      "dng",
+      "cr2",
+      "nef",
+      "arw",
+      "raf",
+      "rw2",
+      "orf",
+      "pef",
+      "srw",
+    ];
+    if (rawExtensions.includes(fileExtension)) {
+      await account
+        .downloadFile(span, file, tmpDir, tmpFileName)
+        .then(async () => {
+          await SystemCommand.execute(
+            `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`,
+          );
+          await sharp(`${tmpDir}/${tmpFileName}_raw.jpg`)
+            .rotate()
+            .withMetadata()
+            .resize({ width: 300 })
+            .toFile(`${cacheDir}/thumbnail.webp`);
+        })
+        .catch((err) => {
+          logger.error("Error Synchronizing Thumbnail for raw file", err, span);
+        });
+    } else {
+      // Also handle files that have HEIC/HEIF content despite a non-HEIC
+      // extension (e.g. Samsung MVIMG_*.jpg which contains a HEIC stream).
+      // Quick magic-byte check avoids triggering sharp's libheif GObject
+      // SIGSEGV (see above).
+      let isHeicContent = false;
+      try {
+        const fd = fs.openSync(`${tmpDir}/tmp_tumbnail/${tmpFileName}`, "r");
+        const buf = Buffer.alloc(12);
+        fs.readSync(fd, buf, 0, 12, 0);
+        fs.closeSync(fd);
+        const brand = buf.toString("ascii", 4, 12);
+        isHeicContent =
+          brand.startsWith("ftyp") &&
+          ["heic", "heix", "mif1", "msf1"].includes(
+            buf.toString("ascii", 8, 12),
+          );
+      } catch {
+        // If we can't read the file, proceed and let sharp handle it
+      }
+      if (isHeicContent) {
+        await account
+          .downloadFile(span, file, tmpDir, tmpFileName)
+          .then(async () => {
+            await SystemCommand.execute(
+              `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`,
+            );
+            await sharp(`${tmpDir}/${tmpFileName}_raw.jpg`)
+              .rotate()
+              .withMetadata()
+              .resize({ width: 300 })
+              .toFile(`${cacheDir}/thumbnail.webp`);
+          })
+          .catch((err) => {
+            logger.error(
+              "Error Synchronizing Thumbnail for HEIC content file",
+              err,
+              span,
+            );
+          });
+      } else {
+        await account
+          .downloadThumbnail(span, file, `${tmpDir}/tmp_tumbnail`, tmpFileName)
+          .then(async () => {
+            await sharp(`${tmpDir}/tmp_tumbnail/${tmpFileName}`)
+              .rotate()
+              .withMetadata()
+              .resize({ width: 300 })
+              .toFile(`${cacheDir}/thumbnail.webp`);
+          })
+          .catch((err) => {
+            logger.error("Error Synchronizing Thumbnail", err, span);
+          });
+      }
+    }
+    await fs.remove(tmpDir);
     span.end();
   } catch (errSync) {
     span.setStatus({ code: 2, message: errSync.message });
     span.recordException(errSync);
     span.end();
-    throw new Error("syncThumbnail Failed");
+    const err = new Error("syncThumbnail Failed");
+    err.cause = errSync;
+    throw err;
   }
 }
 
@@ -501,7 +615,9 @@ export async function syncThumbnailFromVideoPreview(
     span.setStatus({ code: 2, message: errSync.message });
     span.recordException(errSync);
     span.end();
-    throw new Error("syncThumbnailFromVideoPreview Failed");
+    const err = new Error("syncThumbnailFromVideoPreview Failed");
+    err.cause = errSync;
+    throw err;
   }
 }
 

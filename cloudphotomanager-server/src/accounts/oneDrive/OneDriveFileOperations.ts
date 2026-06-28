@@ -18,19 +18,21 @@ export async function OneDriveFileOperationsDownloadFile(
   folder: string,
   filename: string,
 ): Promise<void> {
-  return new Promise(async (resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const span = OTelTracer().startSpan(
       "OneDriveFileOperations_downloadFile",
       context,
     );
-    axios({
-      url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/content`,
-      method: "GET",
-      responseType: "stream",
-      headers: {
-        Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-      },
-    })
+    (async () => {
+      return axios({
+        url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/content`,
+        method: "GET",
+        responseType: "stream",
+        headers: {
+          Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+        },
+      });
+    })()
       .then((response) => {
         const writer = fs.createWriteStream(`${folder}/${filename}`);
         response.data.pipe(writer);
@@ -57,45 +59,35 @@ export async function OneDriveFileOperationsDownloadThumbnail(
   folder: string,
   filename: string,
 ): Promise<void> {
-  return new Promise(async (resolve, reject) => {
-    const span = OTelTracer().startSpan(
-      "OneDriveFileOperations_downloadFile",
-      context,
-    );
-    axios({
+  const span = OTelTracer().startSpan(
+    "OneDriveFileOperations_downloadFile",
+    context,
+  );
+  try {
+    const response1 = await axios({
       url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/thumbnails`,
       method: "GET",
       headers: {
         Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
       },
-    })
-      .then(async (response) => {
-        return axios({
-          url: `${response.data.value[0].large.url}`,
-          method: "GET",
-          responseType: "stream",
-          headers: {
-            Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-          },
-        });
-      })
-      .then((response) => {
-        const writer = fs.createWriteStream(`${folder}/${filename}`);
-        response.data.pipe(writer);
-        writer.on("finish", () => {
-          resolve();
-        });
-        writer.on("error", (error) => {
-          reject(error);
-        });
-      })
-      .catch((error) => {
-        reject(error);
-      })
-      .finally(() => {
-        span.end();
-      });
-  });
+    });
+    const response2 = await axios({
+      url: `${response1.data.value[0].large.url}`,
+      method: "GET",
+      responseType: "stream",
+      headers: {
+        Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+      },
+    });
+    const writer = fs.createWriteStream(`${folder}/${filename}`);
+    response2.data.pipe(writer);
+    await new Promise<void>((resolve, reject) => {
+      writer.on("finish", () => resolve());
+      writer.on("error", (error) => reject(error));
+    });
+  } finally {
+    span.end();
+  }
 }
 
 export async function OneDriveFileOperationsMoveFile(

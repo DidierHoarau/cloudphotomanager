@@ -115,20 +115,20 @@ export default {
 <style scoped>
 fieldset {
   border: none;
-  padding: 0.3em 0;
+  padding: var(--space-xs) 0;
 }
 button {
   display: block;
-  margin-bottom: 0.5em;
+  margin-bottom: var(--space-sm);
   width: 100%;
 }
 .rename-form input {
   width: 100%;
-  margin-bottom: 0.5em;
+  margin-bottom: var(--space-sm);
 }
 .rename-actions {
   display: flex;
-  gap: 0.5em;
+  gap: var(--space-sm);
 }
 .rename-actions button {
   flex: 1;
@@ -136,8 +136,8 @@ button {
 }
 footer {
   display: flex;
-  gap: 0.5em;
+  gap: var(--space-sm);
   justify-content: flex-end;
-  margin-top: 1em;
+  margin-top: var(--space-base);
 }
 </style>

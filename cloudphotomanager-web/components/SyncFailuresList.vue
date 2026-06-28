@@ -323,7 +323,7 @@ export default {
 .failures-panel {
   display: flex;
   flex-direction: column;
-  gap: 1em;
+  gap: var(--space-base);
 }
 
 .confirm-overlay {
@@ -333,43 +333,43 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-overlay);
 }
 
 .failures-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75em;
+  gap: var(--space-md);
   align-items: center;
   justify-content: space-between;
-  padding: 0.5em 0;
+  padding: var(--space-sm) 0;
 }
 .failures-toolbar-info {
-  font-size: 0.95em;
+  font-size: var(--font-body);
 }
 .retention-hint {
   opacity: 0.6;
-  margin-left: 0.4em;
+  margin-left: var(--space-xs);
 }
 .failures-toolbar-actions {
   display: flex;
-  gap: 0.5em;
+  gap: var(--space-sm);
   flex-wrap: wrap;
 }
 .failures-toolbar-actions button {
-  padding: 0.35em 0.9em;
-  font-size: 0.9em;
+  padding: var(--space-xs) var(--space-base);
+  font-size: var(--font-body);
 }
 
 .empty-state {
   text-align: center;
-  padding: 3em 1em;
+  padding: var(--space-3xl) var(--space-base);
   opacity: 0.6;
 }
 .empty-state i {
   font-size: 3em;
-  margin-bottom: 0.4em;
-  color: #198754;
+  margin-bottom: var(--space-sm);
+  color: var(--color-success);
 }
 
 .failures-list {
@@ -378,84 +378,85 @@ export default {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75em;
+  gap: var(--space-md);
 }
 
 .failure-card {
-  border-radius: 0.4em;
-  padding: 0.85em 1em;
+  border-radius: var(--radius-md);
+  padding: var(--space-base) var(--space-base);
   border: 1px solid rgba(128, 128, 128, 0.25);
   background: rgba(128, 128, 128, 0.04);
 }
 .failure-card-conflict {
-  border-left: 4px solid #fd7e14;
+  border-left: 4px solid var(--color-warning);
 }
 .failure-card-error {
-  border-left: 4px solid #dc3545;
+  border-left: 4px solid var(--color-danger);
 }
 
 .failure-header {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6em;
+  gap: var(--space-md);
   align-items: center;
-  margin-bottom: 0.5em;
-  font-size: 0.85em;
+  margin-bottom: var(--space-sm);
+  font-size: var(--font-base);
 }
 .failure-header .badge {
   display: inline-block;
-  padding: 0.2em 0.6em;
-  border-radius: 0.25em;
-  font-size: 0.75em;
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
   font-weight: 600;
 }
 .kind-conflict {
   background: rgba(253, 126, 20, 0.2);
-  color: #fd7e14;
+  color: var(--color-warning);
 }
 .kind-error {
   background: rgba(220, 53, 69, 0.2);
-  color: #dc3545;
+  color: var(--color-danger);
 }
 .failure-function {
   background: rgba(0, 0, 0, 0.08);
-  padding: 0.1em 0.4em;
-  border-radius: 0.2em;
-  font-size: 0.85em;
+  padding: var(--space-xs) var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-base);
 }
 .failure-date {
   margin-left: auto;
   opacity: 0.65;
-  font-size: 0.8em;
+  font-size: var(--font-base);
 }
 
 .conflict-pair {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  gap: 0.75em;
+  gap: var(--space-md);
   align-items: stretch;
 }
 .conflict-side {
   display: flex;
   flex-direction: column;
-  gap: 0.4em;
-  padding: 0.6em;
+  gap: var(--space-sm);
+  padding: var(--space-md);
   background: rgba(0, 0, 0, 0.04);
-  border-radius: 0.35em;
+  border-radius: var(--radius-md);
   min-width: 0;
 }
 .conflict-side-label {
-  font-size: 0.8em;
+  font-size: var(--font-base);
   opacity: 0.7;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 .conflict-thumb {
   position: relative;
-  width: 100%;
-  aspect-ratio: 1;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
   background: rgba(128, 128, 128, 0.15);
-  border-radius: 0.25em;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .conflict-thumb-placeholder {
@@ -470,7 +471,7 @@ export default {
 .conflict-meta {
   display: flex;
   flex-direction: column;
-  gap: 0.2em;
+  gap: var(--space-xs);
   min-width: 0;
 }
 .conflict-meta-name {
@@ -478,15 +479,15 @@ export default {
   word-break: break-all;
 }
 .conflict-meta-path {
-  font-size: 0.85em;
+  font-size: var(--font-base);
   opacity: 0.75;
   word-break: break-all;
 }
 .conflict-meta-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75em;
-  font-size: 0.8em;
+  gap: var(--space-md);
+  font-size: var(--font-base);
   opacity: 0.75;
 }
 .conflict-arrow {
@@ -494,23 +495,23 @@ export default {
   align-items: center;
   justify-content: center;
   opacity: 0.4;
-  font-size: 1.3em;
+  font-size: var(--font-xl);
 }
 
 .error-body {
   display: flex;
   flex-direction: column;
-  gap: 0.4em;
+  gap: var(--space-sm);
 }
 .error-label {
   font-weight: 500;
 }
 .error-message {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.85em;
-  background: rgba(220, 53, 69, 0.08);
-  padding: 0.4em 0.6em;
-  border-radius: 0.3em;
+  font-size: var(--font-base);
+  background: var(--color-danger-bg);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
   word-break: break-word;
   white-space: pre-wrap;
 }
@@ -518,13 +519,13 @@ export default {
 .failure-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5em;
-  margin-top: 0.75em;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
 }
 .action-btn {
-  padding: 0.35em 0.9em;
-  font-size: 0.9em;
-  border-radius: 0.3em;
+  padding: var(--space-xs) var(--space-base);
+  font-size: var(--font-body);
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 .action-btn:disabled {
@@ -532,22 +533,20 @@ export default {
   cursor: not-allowed;
 }
 .action-replace {
-  background: #fd7e14;
-  color: #fff;
-  border-color: #fd7e14;
+  background: var(--color-warning);
+  color: var(--color-text-inverse);
+  border-color: var(--color-warning);
 }
 .action-delete-source {
-  background: #dc3545;
-  color: #fff;
-  border-color: #dc3545;
+  background: var(--color-danger);
+  color: var(--color-text-inverse);
+  border-color: var(--color-danger);
 }
 
 @media (max-width: 640px) {
-  .conflict-pair {
-    grid-template-columns: 1fr;
-  }
-  .conflict-arrow {
-    transform: rotate(90deg);
+  .conflict-thumb {
+    width: 80px;
+    height: 80px;
   }
   .failure-date {
     margin-left: 0;

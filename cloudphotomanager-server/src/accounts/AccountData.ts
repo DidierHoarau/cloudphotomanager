@@ -4,18 +4,18 @@ import { FolderDataRefreshCacheFolders } from "../folders/FolderData";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
-} from "../utils-std-ts/SqlDbUtils";
+} from "@devopsplaybook.io/common-utils";
 import { OTelTracer } from "../OTelContext";
 
 export async function AccountDataGet(
   context: Span,
-  accountId: string
+  accountId: string,
 ): Promise<AccountDefinition> {
   const span = OTelTracer().startSpan("AccountDataGet", context);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM accounts WHERE id = ? ",
-    [accountId]
+    [accountId],
   );
   if (rawData.length === 0) {
     throw new Error("Account Not Found");
@@ -26,7 +26,7 @@ export async function AccountDataGet(
 }
 
 export async function AccountDataList(
-  context: Span
+  context: Span,
 ): Promise<AccountDefinition[]> {
   const span = OTelTracer().startSpan("AccountDataList", context);
   const rawData = await SqlDbUtilsQuerySQL(span, "SELECT * FROM accounts");
@@ -40,7 +40,7 @@ export async function AccountDataList(
 
 export async function AccountDataAdd(
   context: Span,
-  accountDefinition: AccountDefinition
+  accountDefinition: AccountDefinition,
 ): Promise<void> {
   const span = OTelTracer().startSpan("AccountDataAdd", context);
   await SqlDbUtilsExecSQL(
@@ -52,7 +52,7 @@ export async function AccountDataAdd(
       accountDefinition.rootpath,
       JSON.stringify(accountDefinition.info),
       JSON.stringify(accountDefinition.infoPrivate),
-    ]
+    ],
   );
   FolderDataRefreshCacheFolders(span);
   span.end();
@@ -60,7 +60,7 @@ export async function AccountDataAdd(
 
 export async function AccountDataUpdate(
   context: Span,
-  accountDefinition: AccountDefinition
+  accountDefinition: AccountDefinition,
 ): Promise<void> {
   const span = OTelTracer().startSpan("AccountDataUpdate", context);
   await SqlDbUtilsExecSQL(
@@ -72,7 +72,7 @@ export async function AccountDataUpdate(
       JSON.stringify(accountDefinition.info),
       JSON.stringify(accountDefinition.infoPrivate),
       accountDefinition.id,
-    ]
+    ],
   );
   FolderDataRefreshCacheFolders(span);
   span.end();
@@ -80,7 +80,7 @@ export async function AccountDataUpdate(
 
 export async function AccountDataDelete(
   context: Span,
-  accountId: string
+  accountId: string,
 ): Promise<void> {
   const span = OTelTracer().startSpan("AccountDataDelete", context);
   await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [
@@ -94,7 +94,7 @@ export async function AccountDataDelete(
 
 export async function AccountDataDeleteAllFilesAndFolders(
   context: Span,
-  accountId: string
+  accountId: string,
 ): Promise<void> {
   const span = OTelTracer().startSpan("AccountDataDeleteAllFiles", context);
   await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [

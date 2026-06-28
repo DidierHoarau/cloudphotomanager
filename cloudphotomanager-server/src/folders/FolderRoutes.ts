@@ -18,6 +18,7 @@ import {
   FileDataListByFolderPaginated,
   FileDataListByFolderRecursivePaginated,
 } from "../files/FileData";
+import { File } from "../model/File";
 
 export class FolderRoutes {
   //
@@ -87,7 +88,7 @@ export class FolderRoutes {
         req.query.sortOrder === "asc" ? "asc" : "desc";
       const page = parseInt(req.query.page || "0", 10);
       const pageSize = parseInt(req.query.pageSize || "60", 10);
-      let result: { files: any[]; total: number };
+      let result: { files: File[]; total: number };
       if (includeSubFolders) {
         result = await FileDataListByFolderRecursivePaginated(
           span,

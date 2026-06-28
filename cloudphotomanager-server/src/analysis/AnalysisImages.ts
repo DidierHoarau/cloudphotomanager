@@ -54,10 +54,10 @@ export async function AnalysisImagesGetLabels(
 
     // Ask the pipeline for only the top-K labels to avoid retaining a long
     // result array (some models default to the full label space).
-    const raw = (await pipe(imagePath, { top_k: TOP_K_LABELS })) as Array<{
+    const raw = (await pipe(imagePath, { top_k: TOP_K_LABELS })) as {
       label: string;
       score: number;
-    }>;
+    }[];
 
     // Copy out only the fields the caller uses so nothing in the returned
     // array keeps a reference to the pipeline's internal objects.

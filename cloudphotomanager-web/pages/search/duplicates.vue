@@ -1,119 +1,125 @@
 <template>
-  <div class="duplicate-gallery-layout page">
-    <NavigationSearch
-      class="duplicate-gallery-layout-navigation"
-      @onAccountSelected="onAccountSelected"
-    />
-    <div class="duplicate-toolbar">
-      <input
-        v-model="analysisFilter"
-        type="search"
-        placeholder="Filter duplicates by filename or path…"
-        class="duplicate-filter-input"
-        @input="onSearchFilterChanged"
-      />
-      <kbd v-if="!loading && filteredFiles.length > 0"
-        >Set Found: {{ filteredFiles.length }}</kbd
-      >
-    </div>
-    <div class="analysis-item-list">
-      <Loading v-if="loading" />
-      <template v-else>
-        <div class="duplicate-card-grid">
-          <div
-            v-for="file in visibleFiles"
-            :key="file.id"
-            class="duplicate-card"
+  <SearchLayout @onAccountSelected="onAccountSelected">
+    <div class="duplicate-gallery-content">
+      <template v-if="loading || hasLoaded">
+        <div class="duplicate-toolbar">
+          <input
+            v-model="analysisFilter"
+            type="search"
+            placeholder="Filter duplicates by filename or path…"
+            class="duplicate-filter-input"
+            @input="onSearchFilterChanged"
+          />
+          <kbd v-if="!loading && filteredFiles.length > 0"
+            >Set Found: {{ filteredFiles.length }}</kbd
           >
-            <div class="duplicate-card-thumb">
-              <LazyMediaThumbnail
-                :file="file"
-                :duplicateCount="file.duplicates.files.length"
-                @click="focusGalleryItem(file)"
-              />
-            </div>
-            <div class="duplicate-card-paths">
+        </div>
+        <div class="analysis-item-list">
+          <Loading v-if="loading" />
+          <template v-else>
+            <div class="duplicate-card-grid">
               <div
-                v-for="dup in file.duplicates.files"
-                :key="dup.id"
-                class="duplicate-card-path"
+                v-for="file in visibleFiles"
+                :key="file.id"
+                class="duplicate-card"
               >
-                {{ getFolderPath(dup.folderId) }}/{{ dup.filename }}
+                <div class="duplicate-card-thumb">
+                  <LazyMediaThumbnail
+                    :file="file"
+                    :duplicateCount="file.duplicates.files.length"
+                    @click="focusGalleryItem(file)"
+                  />
+                </div>
+                <div class="duplicate-card-paths">
+                  <div
+                    v-for="dup in file.duplicates.files"
+                    :key="dup.id"
+                    class="duplicate-card-path"
+                  >
+                    {{ getFolderPath(dup.folderId) }}/{{ dup.filename }}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+            <div ref="sentinel" class="sentinel"></div>
+            <Loading v-if="loadingMore" />
+          </template>
         </div>
-        <div ref="sentinel" class="sentinel"></div>
-        <Loading v-if="loadingMore" />
       </template>
-    </div>
-
-    <!-- Detail dialog -->
-    <div
-      v-if="selectedFile"
-      class="dialog-overlay"
-      @click.self="clickedClose()"
-    >
-      <article class="dialog-article">
-        <header>
-          <a
-            href="#close"
-            aria-label="Close"
-            class="close"
-            @click.prevent="clickedClose()"
-          ></a>
-          Duplicate Group
-        </header>
-        <div class="dialog-thumbnail">
-          <LazyMediaThumbnail :file="selectedFile" />
+      <template v-else>
+        <div class="duplicate-empty-state">
+          <i class="bi bi-files"></i>
+          <p>Select an account to search for duplicate photos</p>
         </div>
-        <table class="dialog-info-table">
-          <tbody>
-            <tr>
-              <td class="dialog-info-label">Count</td>
-              <td>{{ selectedFile.duplicates.files.length }} copies</td>
-            </tr>
-          </tbody>
-        </table>
-        <hr />
-        <strong>Files in this group</strong>
-        <div class="dialog-files-table">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Folder</th>
-                <th scope="col">File</th>
-                <th scope="col"></th>
-              </tr>
-            </thead>
+      </template>
+
+      <!-- Detail dialog -->
+      <div
+        v-if="selectedFile"
+        class="dialog-overlay"
+        @click.self="clickedClose()"
+      >
+        <article class="dialog-article">
+          <header>
+            <a
+              href="#close"
+              aria-label="Close"
+              class="close"
+              @click.prevent="clickedClose()"
+            ></a>
+            Duplicate Group
+          </header>
+          <div class="dialog-thumbnail">
+            <LazyMediaThumbnail :file="selectedFile" />
+          </div>
+          <table class="dialog-info-table">
             <tbody>
-              <tr v-for="dup in selectedFile.duplicates.files" :key="dup.id">
-                <td>{{ getFolderPath(dup.folderId) }}</td>
-                <td>{{ dup.filename }}</td>
-                <td>
-                  <button
-                    class="dialog-delete-btn"
-                    @click="deleteDuplicate(dup)"
-                    title="Delete this file"
-                  >
-                    <i class="bi bi-trash"></i>
-                  </button>
-                </td>
+              <tr>
+                <td class="dialog-info-label">Count</td>
+                <td>{{ selectedFile.duplicates.files.length }} copies</td>
               </tr>
             </tbody>
           </table>
-        </div>
-      </article>
-    </div>
+          <hr />
+          <strong>Files in this group</strong>
+          <div class="dialog-files-table">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Folder</th>
+                  <th scope="col">File</th>
+                  <th scope="col"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="dup in selectedFile.duplicates.files" :key="dup.id">
+                  <td>{{ getFolderPath(dup.folderId) }}</td>
+                  <td>{{ dup.filename }}</td>
+                  <td>
+                    <button
+                      class="dialog-delete-btn"
+                      @click="deleteDuplicate(dup)"
+                      title="Delete this file"
+                    >
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </div>
 
-    <DialogConfirm
-      v-if="showConfirmDialog"
-      :title="confirmDialogTitle"
-      :message="confirmDialogMessage"
-      @onConfirm="onConfirmDialog"
-      @onCancel="showConfirmDialog = false"
-    />
-  </div>
+      <DialogConfirm
+        v-if="showConfirmDialog"
+        :title="confirmDialogTitle"
+        :message="confirmDialogMessage"
+        @onConfirm="onConfirmDialog"
+        @onCancel="showConfirmDialog = false"
+      />
+    </div>
+  </SearchLayout>
 </template>
 
 <script>
@@ -126,6 +132,7 @@ import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 export default {
   data() {
     return {
+      files: [],
       analysis: [],
       menuOpened: true,
       serverUrl: "",
@@ -143,6 +150,7 @@ export default {
       confirmDialogTitle: "",
       confirmDialogMessage: "",
       confirmDialogCallback: null,
+      hasLoaded: false,
     };
   },
   async created() {
@@ -230,6 +238,7 @@ export default {
         .then((res) => {
           if (this.requestEtag === requestEtag) {
             this.analysis = res.data.duplicates;
+            this.hasLoaded = true;
             return this.loadAccountDuplicateProcess();
           }
         })
@@ -337,12 +346,10 @@ export default {
 </script>
 
 <style scoped>
-/* ── Page layout ─────────────────────────────────────────── */
-.duplicate-gallery-layout {
-  display: grid;
-  grid-template-rows: auto auto 1fr;
-  grid-template-columns: 1fr;
-  gap: 1em;
+/* ── Content wrapper (prevents grid row overflow) ───── */
+.duplicate-gallery-content {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* ── Toolbar: count badge + filter input ─────────────────── */
@@ -350,7 +357,7 @@ export default {
   display: grid;
   grid-template-columns: 3fr 1fr;
   align-items: center;
-  gap: 0.75em;
+  gap: var(--space-md);
 }
 
 /* ── Duplicate card grid ─────────────────────────────────── */
@@ -358,29 +365,29 @@ export default {
   width: 100%;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(11em, 1fr));
-  gap: 1em;
+  gap: var(--space-base);
   align-items: start;
 }
 .duplicate-card {
   display: flex;
   flex-direction: column;
-  gap: 0.35em;
+  gap: var(--space-xs);
   cursor: default;
 }
 .duplicate-card-thumb {
   position: relative;
   cursor: pointer;
   height: 8em;
-  border-radius: 0.3em;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 .duplicate-card-paths {
   display: flex;
   flex-direction: column;
-  gap: 0.15em;
+  gap: var(--space-xs);
 }
 .duplicate-card-path {
-  font-size: 0.62em;
+  font-size: var(--font-xs);
   opacity: 0.65;
   word-break: break-all;
   line-height: 1.3;
@@ -394,5 +401,20 @@ export default {
 .sentinel {
   height: 1px;
   width: 100%;
+}
+
+/* ── Empty state ──────────────────────────────────── */
+.duplicate-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-base);
+  padding: var(--space-3xl) var(--space-2xl);
+  opacity: 0.6;
+  text-align: center;
+}
+.duplicate-empty-state i {
+  font-size: 3em;
 }
 </style>

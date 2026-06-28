@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { AuthGetUserSession } from "../users/Auth";
-import { FileDataGet, FileDataGetFileCacheDir } from "./FileData";
+import { FileDataGetFileCacheDir } from "./FileData";
 import * as fs from "fs-extra";
 import { SyncFileCacheCheckAsync } from "../sync/SyncFileCache";
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
@@ -28,14 +28,14 @@ export class FileRoutes {
       const cacheDir = await FileDataGetFileCacheDir(
         span,
         req.params.accountId,
-        req.params.fileId
+        req.params.fileId,
       );
       const filepath = `${cacheDir}/thumbnail.webp`;
       if (!fs.existsSync(filepath)) {
         SyncFileCacheCheckAsync(
           req.params.accountId,
           req.params.fileId,
-          SyncQueueItemPriority.INTERACTIVE
+          SyncQueueItemPriority.INTERACTIVE,
         ).catch((error) => {
           logger.error("Error getting file for thumbnail sync", error);
         });
@@ -45,7 +45,7 @@ export class FileRoutes {
       const stats = await fs.statSync(filepath);
       res.header(
         "Content-Disposition",
-        `attachment; filename=${req.params.fileId}.webp`
+        `attachment; filename=${req.params.fileId}.webp`,
       );
       res.header("Content-Length", stats.size);
       res.header("Content-Type", "application/octet-stream");
@@ -67,14 +67,14 @@ export class FileRoutes {
       const cacheDir = await FileDataGetFileCacheDir(
         span,
         req.params.accountId,
-        req.params.fileId
+        req.params.fileId,
       );
       const filepath = `${cacheDir}/preview.webp`;
       if (!fs.existsSync(filepath)) {
         SyncFileCacheCheckAsync(
           req.params.accountId,
           req.params.fileId,
-          SyncQueueItemPriority.INTERACTIVE
+          SyncQueueItemPriority.INTERACTIVE,
         ).catch((error) => {
           logger.error("Error getting file for thumbnail sync", error);
         });
@@ -84,7 +84,7 @@ export class FileRoutes {
       const stats = await fs.statSync(filepath);
       res.header(
         "Content-Disposition",
-        `attachment; filename=${req.params.accountId}.webp`
+        `attachment; filename=${req.params.accountId}.webp`,
       );
       res.header("Content-Length", stats.size);
       res.header("Content-Type", "application/octet-stream");
@@ -98,7 +98,7 @@ export class FileRoutes {
         SyncFileCacheCheckAsync(
           fileIdMatch[1],
           fileIdMatch[2],
-          SyncQueueItemPriority.INTERACTIVE
+          SyncQueueItemPriority.INTERACTIVE,
         ).catch((error) => {
           logger.error("Error getting file for thumbnail sync", error);
         });

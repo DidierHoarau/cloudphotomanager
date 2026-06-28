@@ -47,12 +47,12 @@ export default {
 <style scoped>
 .confirm-message {
   white-space: pre-line;
-  margin: 1em 0;
+  margin: var(--space-base) 0;
 }
 footer {
   display: flex;
-  gap: 0.5em;
+  gap: var(--space-sm);
   justify-content: flex-end;
-  margin-top: 1em;
+  margin-top: var(--space-base);
 }
 </style>

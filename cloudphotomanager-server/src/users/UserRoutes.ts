@@ -143,7 +143,7 @@ export class UserRoutes {
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      if (!(await UserDataGetByName(span, req.params.userId))) {
+      if (!(await UserDataGet(span, req.params.userId))) {
         return res.status(404).send({ error: "Not Found" });
       }
       await UserDataDelete(span, req.params.userId);
@@ -186,7 +186,7 @@ export class UserRoutes {
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      if (!(await UserDataGetByName(span, req.params.userId))) {
+      if (!(await UserDataGet(span, req.params.userId))) {
         return res.status(404).send({ error: "Not Found" });
       }
       res
@@ -208,28 +208,28 @@ export class UserRoutes {
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      if (!(await UserDataGetByName(span, req.params.userId))) {
+      if (!(await UserDataGet(span, req.params.userId))) {
         return res.status(404).send({ error: "Not Found" });
       }
       const permissions = await UserPermissionDataGetForUser(
         span,
-        req.params.userId
+        req.params.userId,
       );
       permissions.info = req.body.info;
       await UserPermissionDataUpdateForUser(
         span,
         req.params.userId,
-        permissions
+        permissions,
       );
       res.status(201).send({});
     });
 
     fastify.get("/access/validate", async (req, res) => {
-      let tokenCokkie = null;
+      let tokenCokkie;
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tokenCokkie = (fastify as any).unsignCookie((req as any).cookies.token);
-      } catch (err) {
+      } catch {
         tokenCokkie = null;
       }
       if (

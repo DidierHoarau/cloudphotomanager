@@ -1,0 +1,153 @@
+/* ============================================================
+   Shared Component Styles
+   ============================================================ */
+
+/* ---------- Layout ---------- */
+
+.page {
+  overflow-y: auto;
+  height: 100%;
+  padding: 0;
+}
+
+#page-layout {
+  width: auto;
+  height: var(--app-height, 100dvh);
+  display: grid;
+  overflow: hidden;
+  grid-template-rows: auto 1fr;
+}
+
+header {
+  padding: var(--space-xs) var(--space-sm);
+}
+
+main {
+  padding: var(--space-sm);
+  overflow: hidden;
+}
+
+#page-alert-messages {
+  position: fixed;
+  right: var(--space-base);
+  bottom: 5em;
+  max-width: 80vw;
+}
+
+/* ---------- Common Component ---------- */
+
+.actions i {
+  font-size: 1.5em;
+  cursor: pointer;
+  margin-left: var(--space-sm);
+  margin-right: var(--space-sm);
+}
+
+.actions,
+.actions-secondary {
+  text-align: right;
+}
+
+.actions-secondary,
+.actions-secondary i {
+  font-size: var(--font-body);
+  cursor: pointer;
+  margin-left: var(--space-sm);
+  margin-right: var(--space-sm);
+}
+
+:root[data-theme="dark"] .actions i {
+  color: var(--color-text);
+}
+
+:root[data-theme="light"] .actions i {
+  color: var(--color-text);
+}
+
+/* ---------- Animations ---------- */
+
+.fade-in-slow {
+  animation: fadeIn 2s;
+}
+.fade-in-fast {
+  animation: fadeIn 0.5s;
+}
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.blink {
+  transition: all 1s ease-in-out;
+  animation: blink normal 3s infinite ease-in-out;
+}
+@keyframes blink {
+  0% {
+    color: inherit;
+  }
+  50% {
+    color: var(--color-primary);
+  }
+  100% {
+    color: inherit;
+  }
+}
+
+/* ---------- Loading ---------- */
+
+:root[data-theme="dark"] .loading-indicator {
+  --c: no-repeat linear-gradient(var(--color-text) 0 0);
+}
+:root[data-theme="light"] .loading-indicator {
+  --c: no-repeat linear-gradient(var(--color-text) 0 0);
+}
+.loading-indicator {
+  width: 3rem;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: var(--space-3xl);
+  margin-bottom: var(--space-3xl);
+  aspect-ratio: 1;
+  background:
+    var(--c) 0% 50%,
+    var(--c) 50% 50%,
+    var(--c) 100% 50%;
+  background-size: 20% 100%;
+  animation: l1 2s infinite linear;
+}
+@keyframes l1 {
+  0% {
+    background-size:
+      20% 100%,
+      20% 100%,
+      20% 100%;
+  }
+  33% {
+    background-size:
+      20% 10%,
+      20% 100%,
+      20% 100%;
+  }
+  50% {
+    background-size:
+      20% 100%,
+      20% 10%,
+      20% 100%;
+  }
+  66% {
+    background-size:
+      20% 100%,
+      20% 100%,
+      20% 10%;
+  }
+  100% {
+    background-size:
+      20% 100%,
+      20% 100%,
+      20% 100%;
+  }
+}

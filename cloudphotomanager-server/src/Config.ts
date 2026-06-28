@@ -1,35 +1,15 @@
-import { ConfigOTelInterface } from "@devopsplaybook.io/otel-utils";
-import * as fse from "fs-extra";
-import { v4 as uuidv4 } from "uuid";
+import { ConfigBase } from "@devopsplaybook.io/common-utils";
 import { OTelLogger } from "./OTelContext";
-import path from "path";
 
 const logger = OTelLogger().createModuleLogger("config");
 
-export class Config implements ConfigOTelInterface {
-  //
-  public CONFIG_FILE =
-    process.env.CONFIG_FILE || "/etc/cloudphotomanager/config.json";
-  public readonly SERVICE_ID = "cloudphotomanager-server";
-  public VERSION = "1";
-  public readonly API_PORT: number = 8080;
-  public JWT_VALIDITY_DURATION: number = 31 * 24 * 3600;
-  public CORS_POLICY_ORIGIN = "*";
-  public DATA_DIR = process.env.DATA_DIR || "/data";
+export class Config extends ConfigBase {
+  // Project-specific fields
   public TOOLS_DIR =
     process.env.TOOLS_DIR || "/opt/app/cloudphotomanager/tools";
   public TMP_DIR = process.env.TMP_DIR || "/tmp";
-  public JWT_KEY: string = uuidv4();
-  public LOG_LEVEL = "info";
   public SOURCE_FETCH_FREQUENCY = 30 * 60 * 1000;
   public SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR = 6;
-  public OPENTELEMETRY_COLLECTOR_HTTP_TRACES = "";
-  public OPENTELEMETRY_COLLECTOR_HTTP_METRICS = "";
-  public OPENTELEMETRY_COLLECTOR_HTTP_LOGS = "";
-  public OPENTELEMETRY_COLLECTOR_AWS = false;
-  public OPENTELEMETRY_COLLECTOR_EXPORT_LOGS_INTERVAL_SECONDS = 60;
-  public OPENTELEMETRY_COLLECTOR_EXPORT_METRICS_INTERVAL_SECONDS = 60;
-  public OPENTELEMETRY_COLLECT_AUTHORIZATION_HEADER = "";
   public AUTO_SYNC = process.env.AUTO_SYNC !== "N";
   public DATABASE_ASYNC_WRITE = false;
   public VIDEO_PREVIEW_WIDTH = 900;
@@ -45,61 +25,22 @@ export class Config implements ConfigOTelInterface {
   public CRON_SCAN_DEEP = "0 0 * * *"; // every day at midnight
 
   constructor() {
-    let version = "1";
-    try {
-      const pkg = fse.readJsonSync(path.resolve(__dirname, "../package.json"));
-      if (pkg && pkg.version) {
-        version = pkg.version;
-      }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (e) {
-      // fallback to default "1"
-    }
-    this.VERSION = version;
+    super("cloudphotomanager-server");
+    this.addConfigField({ field: "TOOLS_DIR" });
+    this.addConfigField({ field: "TMP_DIR" });
+    this.addConfigField({ field: "SOURCE_FETCH_FREQUENCY" });
+    this.addConfigField({
+      field: "SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR",
+    });
+    this.addConfigField({ field: "DATABASE_ASYNC_WRITE" });
+    this.addConfigField({ field: "VIDEO_PREVIEW_WIDTH" });
+    this.addConfigField({ field: "IMAGE_CLASSIFICATION_ENABLED" });
+    this.addConfigField({ field: "IMAGE_CLASSIFICATION_MODEL" });
+    this.addConfigField({ field: "CRON_METRIC_REFRESH" });
+    this.addConfigField({ field: "CRON_SCAN_DEEP" });
   }
 
   public async reload(): Promise<void> {
-    const content = await fse.readJson(this.CONFIG_FILE);
-    const setIfSet = (field: string, displayLog = true) => {
-      let fromEnv = "defaults";
-      if (process.env[field]) {
-        this[field] = process.env[field];
-        fromEnv = "environment";
-      } else if (field in content) {
-        this[field] = content[field];
-        fromEnv = "config";
-      }
-      if (displayLog) {
-        logger.info(
-          `Configuration Value: ${field}: ${this[field]} (from ${fromEnv})`,
-        );
-      } else {
-        logger.info(
-          `Configuration Value: ${field}: ******************** (from ${fromEnv})`,
-        );
-      }
-    };
-    logger.info(`Configuration Value: CONFIG_FILE: ${this.CONFIG_FILE}`);
-    logger.info(`Configuration Value: VERSION: ${this.VERSION}`);
-    setIfSet("JWT_VALIDITY_DURATION");
-    setIfSet("CORS_POLICY_ORIGIN");
-    setIfSet("DATA_DIR");
-    setIfSet("JWT_KEY", false);
-    setIfSet("LOG_LEVEL");
-    setIfSet("SOURCE_FETCH_FREQUENCY");
-    setIfSet("SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR");
-    setIfSet("OPENTELEMETRY_COLLECTOR_HTTP_TRACES");
-    setIfSet("OPENTELEMETRY_COLLECTOR_HTTP_METRICS");
-    setIfSet("OPENTELEMETRY_COLLECTOR_HTTP_LOGS");
-    setIfSet("OPENTELEMETRY_COLLECTOR_EXPORT_LOGS_INTERVAL_SECONDS");
-    setIfSet("OPENTELEMETRY_COLLECTOR_EXPORT_METRICS_INTERVAL_SECONDS");
-    setIfSet("OPENTELEMETRY_COLLECTOR_AWS");
-    setIfSet("OPENTELEMETRY_COLLECT_AUTHORIZATION_HEADER", false);
-    setIfSet("DATABASE_ASYNC_WRITE");
-    setIfSet("VIDEO_PREVIEW_WIDTH");
-    setIfSet("IMAGE_CLASSIFICATION_ENABLED");
-    setIfSet("IMAGE_CLASSIFICATION_MODEL");
-    setIfSet("CRON_METRIC_REFRESH");
-    setIfSet("CRON_SCAN_DEEP");
+    await super.reload((msg) => logger.info(msg));
   }
 }

@@ -21,6 +21,6 @@ export default {
 
 <style>
 .page button {
-  margin-right: 1em;
+  margin-right: var(--space-base);
 }
 </style>

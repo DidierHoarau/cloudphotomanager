@@ -1,4 +1,7 @@
 @import "@picocss/pico/css/pico.min.css";
 @import "bootstrap-icons/font/bootstrap-icons.css";
-@import "@vuepic/vue-datepicker/dist/main.css";
+
+@import "./variables.css";
+@import "./shared.css";
 @import "./dialog.css";
+@import "./tab-navigation.css";

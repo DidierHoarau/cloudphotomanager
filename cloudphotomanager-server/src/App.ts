@@ -24,7 +24,6 @@ import { SyncFileCacheInit } from "./sync/SyncFileCache";
 import { SyncRoutes } from "./sync/SyncRoutes";
 import { AuthInit } from "./users/Auth";
 import { UserRoutes } from "./users/UserRoutes";
-import { SqlDbUtilsInit } from "./utils-std-ts/SqlDbUtils";
 import {
   OTelLogger,
   OTelSetMeter,
@@ -36,6 +35,10 @@ import { FolderRoutes } from "./folders/FolderRoutes";
 import { SyncQueueInit } from "./sync/SyncQueue";
 import { SyncFailuresInit } from "./sync/SyncFailures";
 import { SyncFailureRoutes } from "./sync/SyncFailureRoutes";
+import {
+  SqlDbUtilsSetOTel,
+  SqlDbUtilsInit,
+} from "@devopsplaybook.io/common-utils";
 
 const logger = OTelLogger().createModuleLogger("App");
 
@@ -53,10 +56,11 @@ Promise.resolve().then(async () => {
   OTelSetTracer(new StandardTracer(config));
   OTelSetMeter(new StandardMeter(config));
   OTelLogger().initOTel(config);
+  SqlDbUtilsSetOTel(OTelTracer(), OTelLogger());
 
   const span = OTelTracer().startSpan("init");
 
-  await SqlDbUtilsInit(span, config);
+  await SqlDbUtilsInit(span, config, path.resolve(__dirname, "../sql"));
   await SyncQueueInit(span);
   await SyncFailuresInit(span);
   await SyncFileCacheInit(span, config);

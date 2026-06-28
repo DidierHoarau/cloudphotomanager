@@ -158,37 +158,41 @@ export class AwsS3Account implements Account {
 
   // Non Supported Features
 
-  updateFileMetadata(context: Span, file: File): Promise<void> {
+  updateFileMetadata(_context: Span, _file: File): Promise<void> {
     throw new Error("Method not implemented.");
   }
 
   downloadPreview(
-    context: Span,
-    file: File,
-    folder: string,
-    filename: string,
+    _context: Span,
+    _file: File,
+    _folder: string,
+    _filename: string,
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }
 
   downloadThumbnail(
-    context: Span,
-    file: File,
-    folder: string,
-    filename: string,
+    _context: Span,
+    _file: File,
+    _folder: string,
+    _filename: string,
   ): Promise<void> {
     throw new Error("Method not implemented.");
   }
 
-  listFolders(context: Span): Promise<Folder[]> {
+  listFolders(_context: Span): Promise<Folder[]> {
     throw new Error("Method not implemented.");
   }
 
-  deleteFolder(context: Span, folder: Folder): Promise<void> {
+  deleteFolder(_context: Span, _folder: Folder): Promise<void> {
     throw new Error("Method not implemented.");
   }
 
-  renameFolder(context: Span, folder: Folder, newName: string): Promise<void> {
+  renameFolder(
+    _context: Span,
+    _folder: Folder,
+    _newName: string,
+  ): Promise<void> {
     throw new Error("Method not implemented.");
   }
 }

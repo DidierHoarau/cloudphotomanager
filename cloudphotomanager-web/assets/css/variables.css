@@ -1,0 +1,110 @@
+/* ============================================================
+   CSS Custom Properties — Design Tokens
+   ============================================================ */
+
+:root {
+  /* ---------- Colors: Primary ---------- */
+  --color-primary: #1976d2;
+  --color-primary-hover: #1565c0;
+  --color-primary-focus-ring: rgba(25, 118, 210, 0.15);
+  --color-primary-light: #e3f2fd;
+  --color-primary-text: #1565c0;
+  --color-primary-dark: #0d47a1;
+
+  /* ---------- Colors: Accent (duplicate badges, selection) ---------- */
+  --color-accent: #aaf;
+  --color-accent-bg: rgba(20, 20, 40, 0.75);
+
+  /* ---------- Colors: Text ---------- */
+  --color-text: #1d2832;
+  --color-text-secondary: #455a64;
+  --color-text-muted: #78909c;
+  --color-text-placeholder: #b0bec5;
+  --color-text-inverse: #fff;
+
+  /* ---------- Colors: Border ---------- */
+  --color-border: #cfd8dc;
+  --color-border-hover: #90a4ae;
+  --color-border-light: #eceff1;
+
+  /* ---------- Colors: Background ---------- */
+  --color-bg: #fff;
+  --color-bg-secondary: #f5f7f8;
+  --color-bg-hover: #eceff1;
+
+  /* ---------- Colors: Status ---------- */
+  --color-success: #43a047;
+  --color-warning: #fd7e14;
+  --color-danger: #dc3545;
+  --color-danger-hover: #b71c1c;
+  --color-danger-bg: rgba(220, 53, 69, 0.15);
+  --color-error: #bf360c;
+  --color-error-bg: #fff3e0;
+  --color-error-border: #ffccbc;
+
+  /* ---------- Colors: Overlay & Shadow ---------- */
+  --color-overlay: rgba(0, 0, 0, 0.5);
+  --color-shadow-sm: rgba(0, 0, 0, 0.06);
+  --color-shadow-md: rgba(0, 0, 0, 0.1);
+  --color-shadow-lg: rgba(0, 0, 0, 0.2);
+
+  /* ---------- Font sizes (em) ---------- */
+  --font-xs: 0.7em;
+  --font-sm: 0.75em;
+  --font-base: 0.85em;
+  --font-body: 0.9em;
+  --font-lg: 1em;
+  --font-xl: 1.2em;
+
+  /* ---------- Spacing (em) ---------- */
+  --space-xs: 0.25em;
+  --space-sm: 0.5em;
+  --space-md: 0.75em;
+  --space-base: 1em;
+  --space-xl: 1.5em;
+  --space-2xl: 2em;
+  --space-3xl: 3em;
+
+  /* ---------- Border radius (px) ---------- */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 999px;
+}
+
+/* ============================================================
+   Dark mode — color overrides only
+   ============================================================ */
+:root[data-theme="dark"] {
+  --color-primary: #64b5f6;
+  --color-primary-hover: #82b1ff;
+  --color-primary-focus-ring: rgba(100, 181, 246, 0.2);
+  --color-primary-light: #1a3a5c;
+  --color-primary-text: #82b1ff;
+  --color-primary-dark: #82b1ff;
+
+  --color-accent: #aaf;
+  --color-accent-bg: rgba(20, 20, 40, 0.75);
+
+  --color-text: #bcc6ce;
+  --color-text-secondary: #b0bec5;
+  --color-text-muted: #90a4ae;
+  --color-text-placeholder: #546e7a;
+  --color-text-inverse: #1e2a32;
+
+  --color-border: #455a64;
+  --color-border-hover: #607d8b;
+  --color-border-light: #37474f;
+
+  --color-bg: #1e2a32;
+  --color-bg-secondary: #263238;
+  --color-bg-hover: #263238;
+
+  --color-success: #66bb6a;
+  --color-warning: #fd7e14;
+  --color-danger: #ef5350;
+  --color-danger-hover: #ff8a80;
+  --color-error: #ffab91;
+  --color-error-bg: #3e2723;
+  --color-error-border: #5d4037;
+}

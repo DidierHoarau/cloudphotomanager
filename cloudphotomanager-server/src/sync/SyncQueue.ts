@@ -27,7 +27,7 @@ import { FileDataGet, FileDataUpdateKeywords } from "../files/FileData";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
-} from "../utils-std-ts/SqlDbUtils";
+} from "@devopsplaybook.io/common-utils";
 import {
   MoveConflictError,
   SyncFailuresAdd,
@@ -633,7 +633,7 @@ function SyncQueueRegisterFunction(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToItem(row: any): SyncQueueItem {
-  let data: unknown = {};
+  let data: unknown;
   try {
     data = row.data ? JSON.parse(row.data) : {};
   } catch {

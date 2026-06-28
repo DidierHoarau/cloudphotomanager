@@ -6,7 +6,7 @@ import { OTelTracer } from "../OTelContext";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
-} from "../utils-std-ts/SqlDbUtils";
+} from "@devopsplaybook.io/common-utils";
 
 let config: Config;
 
@@ -225,7 +225,7 @@ export async function FileDataListByFolderPaginated(
     [accountId, folderId, pageSize, offset],
   );
   const files: File[] = [];
-  rawData.forEach((fileRaw: any) => {
+  rawData.forEach((fileRaw) => {
     files.push(fromRaw(fileRaw));
   });
   span.end();
@@ -259,7 +259,7 @@ export async function FileDataListByFolderRecursivePaginated(
     [accountId, accountId, folderpath, folderpathSubPattern, pageSize, offset],
   );
   const files: File[] = [];
-  rawData.forEach((fileRaw: any) => {
+  rawData.forEach((fileRaw) => {
     files.push(fromRaw(fileRaw));
   });
   span.end();
@@ -307,7 +307,7 @@ export async function FileDataListForAccountPaginated(
     [accountId, pageSize, offset],
   );
   const files: File[] = [];
-  rawData.forEach((fileRaw: any) => {
+  rawData.forEach((fileRaw) => {
     files.push(fromRaw(fileRaw));
   });
   span.end();

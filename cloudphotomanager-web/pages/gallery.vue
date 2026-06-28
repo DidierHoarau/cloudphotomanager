@@ -148,6 +148,7 @@ import { AuthService } from "~~/services/AuthService";
 import { DuplicateCountService } from "~~/services/DuplicateCountService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import { FileUtils } from "~~/services/FileUtils";
+import { localCache, TTL } from "~~/services/LocalCache";
 
 export default {
   data() {
@@ -192,7 +193,7 @@ export default {
     };
   },
   async created() {
-    this.serverUrl = (await Config.get()).SERVER_URL;
+    this.serverUrl = Config.sync.SERVER_URL;
     try {
       const saved = localStorage.getItem("galleryOptions");
       if (saved) {
@@ -207,10 +208,8 @@ export default {
     } catch (e) {
       // ignore
     }
-    await AccountsStore().fetch();
-    if (AccountsStore().accounts.length > 0) {
-      await FoldersStore().fetch();
-    }
+    // FolderList.vue triggers ensureLoaded() — no need to duplicate here.
+    // We only await it when there's no route target below.
     this._onFolderUpdated = (message) => {
       if (
         message.accountId === this.currentAccountId &&
@@ -226,7 +225,8 @@ export default {
       this.fetchFiles(message.accountId, message.folderId, true);
     };
     this._onFolderCacheUpdated = () => {
-      FoldersStore().fetch();
+      FoldersStore().invalidateCache();
+      FoldersStore().ensureLoaded();
     };
     this._onOperationComplete = (message) => {
       if (!this.currentAccountId || !this.currentFolderId) return;
@@ -286,19 +286,17 @@ export default {
     EventBus.on(EventTypes.FOLDER_SELECTED, this._onFolderSelected);
     EventBus.on(EventTypes.FOLDER_CACHE_UPDATED, this._onFolderCacheUpdated);
     EventBus.on(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
-    if (
-      useRoute().query.accountId &&
-      useRoute().query.folderId &&
-      useRoute().query.fileId
-    ) {
-      await this.fetchFiles(
-        useRoute().query.accountId,
-        useRoute().query.folderId,
-      );
-      this.focusGalleryItem(find(this.files, { id: useRoute().query.fileId }));
-    } else if (useRoute().query.accountId && useRoute().query.folderId) {
-      this.fetchFiles(useRoute().query.accountId, useRoute().query.folderId);
+    const route = useRoute();
+    if (route.query.accountId && route.query.folderId && route.query.fileId) {
+      // Route has explicit target — fetch files immediately
+      await this.fetchFiles(route.query.accountId, route.query.folderId);
+      this.focusGalleryItem(find(this.files, { id: route.query.fileId }));
+    } else if (route.query.accountId && route.query.folderId) {
+      // Route has folder — fetch files immediately
+      this.fetchFiles(route.query.accountId, route.query.folderId);
     } else {
+      // No route target — ensure folders are loaded then navigate to first root
+      await FoldersStore().ensureLoaded();
       const firstRoot = FoldersStore().folders.find(
         (f) => f.parentIndex === -1,
       );
@@ -389,8 +387,12 @@ export default {
       }
       return count;
     },
+    /** Build a deterministic cache key for a files-page request. */
+    _filesPageKey(accountId, folderId, page, pageSize) {
+      return `${accountId}:${folderId}:${this.includeSubFolders}:${this.sortOrder}:${page}:${pageSize}`;
+    },
     async _requestFilesPage({ accountId, folderId, page, pageSize }) {
-      const serverUrl = (await Config.get()).SERVER_URL;
+      const serverUrl = Config.sync.SERVER_URL;
       const params = new URLSearchParams({
         includeSubFolders: String(this.includeSubFolders),
         sortOrder: this.sortOrder,
@@ -401,10 +403,19 @@ export default {
         `${serverUrl}/accounts/${accountId}/folders/${folderId}/files-recursive?${params}`,
         await AuthService.getAuthHeader(),
       );
-      return {
+      const result = {
         files: res.data.files || [],
         total: res.data.total || 0,
       };
+      // Persist page to IndexedDB for instant revisit
+      localCache
+        .put(
+          "fileMetadata",
+          this._filesPageKey(accountId, folderId, page, pageSize),
+          result,
+        )
+        .catch(() => {});
+      return result;
     },
     scheduleDuplicateCountLoad(newFiles) {
       if (!this.currentAccountId || !newFiles || newFiles.length === 0) {
@@ -449,11 +460,10 @@ export default {
     },
     async fetchFiles(accountId, folderId, forceLoading = false) {
       const requestEtag = new Date().toISOString();
-      if (
-        forceLoading ||
+      const isFolderChange =
         this.currentAccountId !== accountId ||
-        this.currentFolderId !== folderId
-      ) {
+        this.currentFolderId !== folderId;
+      if (forceLoading || isFolderChange) {
         this.currentAccountId = accountId;
         this.currentFolderId = folderId;
         this.selectedFiles = [];
@@ -464,13 +474,39 @@ export default {
         this.loading = true;
       }
       this.requestEtag = requestEtag;
+
+      // Fire API request immediately — don't block on IndexedDB
+      const apiPromise = this._requestFilesPage({
+        accountId,
+        folderId,
+        page: 0,
+        pageSize: this.pageSize,
+      });
+
+      // Race: hydrate from IDB cache in parallel (instant display if cached)
+      if (isFolderChange || forceLoading) {
+        const cached = await localCache.get(
+          "fileMetadata",
+          this._filesPageKey(accountId, folderId, 0, this.pageSize),
+          TTL.FILE_METADATA,
+        );
+        if (
+          cached &&
+          this.requestEtag === requestEtag &&
+          this.files.length === 0
+        ) {
+          this.outtakesCount = this._markOuttakes(cached.files);
+          this.files = cached.files;
+          this.currentPage = 0;
+          this.hasMore = cached.total > this.pageSize;
+          this.loading = false; // show cached files immediately
+          this.scheduleDuplicateCountLoad(cached.files);
+        }
+      }
+
+      // Wait for the API to finish (fresh data overwrites cache)
       try {
-        const { files: newFiles, total } = await this._requestFilesPage({
-          accountId,
-          folderId,
-          page: 0,
-          pageSize: this.pageSize,
-        });
+        const { files: newFiles, total } = await apiPromise;
         if (this.requestEtag === requestEtag) {
           this.outtakesCount = this._markOuttakes(newFiles);
           this.files = newFiles;
@@ -534,7 +570,7 @@ export default {
     async clickedRefresh() {
       await axios
         .put(
-          `${(await Config.get()).SERVER_URL}/accounts/${
+          `${Config.sync.SERVER_URL}/accounts/${
             this.currentAccountId
           }/folders/${this.currentFolderId}/sync`,
           {},
@@ -597,7 +633,9 @@ export default {
     },
     onFolderActionsDone(result) {
       this.activeOperation = "";
-      if (result && result.action === "deep-refresh") {
+      if (result && result.action === "refresh") {
+        this.executeRefresh();
+      } else if (result && result.action === "deep-refresh") {
         this.executeDeepRefresh();
       } else if (result && result.action === "rename" && result.newName) {
         this.executeRenameFolder(result.newName);
@@ -653,7 +691,7 @@ export default {
       SyncStore().markOperationInProgress();
       await axios
         .post(
-          `${(await Config.get()).SERVER_URL}/accounts/${
+          `${Config.sync.SERVER_URL}/accounts/${
             this.currentAccountId
           }/files/batch/operations/fileDelete`,
           {
@@ -676,11 +714,30 @@ export default {
       ).id;
       this.activeOperation = "confirm-delete-folder";
     },
+    async executeRefresh() {
+      SyncStore().markOperationInProgress();
+      await axios
+        .put(
+          `${Config.sync.SERVER_URL}/accounts/${
+            this.currentAccountId
+          }/folders/${this.currentFolderId}/sync`,
+          {},
+          await AuthService.getAuthHeader(),
+        )
+        .then(() => {
+          EventBus.emit(EventTypes.ALERT_MESSAGE, {
+            text: "Folder refresh queued — running in background",
+          });
+        })
+        .catch(handleError);
+      this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
+      EventBus.emit(EventTypes.FOLDER_UPDATED, {});
+    },
     async executeDeepRefresh() {
       SyncStore().markOperationInProgress();
       await axios
         .put(
-          `${(await Config.get()).SERVER_URL}/accounts/${
+          `${Config.sync.SERVER_URL}/accounts/${
             this.currentAccountId
           }/folders/${this.currentFolderId}/deep-sync`,
           {},
@@ -703,7 +760,7 @@ export default {
       SyncStore().markOperationInProgress();
       await axios
         .put(
-          `${(await Config.get()).SERVER_URL}/accounts/${
+          `${Config.sync.SERVER_URL}/accounts/${
             this.folder.accountId
           }/folders/${this.folder.id}/operations/rename`,
           { newName },
@@ -736,7 +793,7 @@ export default {
       SyncStore().markOperationInProgress();
       await axios
         .delete(
-          `${(await Config.get()).SERVER_URL}/accounts/${
+          `${Config.sync.SERVER_URL}/accounts/${
             this.folder.accountId
           }/folders/${this.folder.id}/operations/delete`,
           await AuthService.getAuthHeader(),
@@ -765,13 +822,13 @@ export default {
 
 <style scoped>
 .gallery-files-actions {
-  padding-bottom: 0.3em;
+  padding-bottom: var(--space-xs);
 }
 .gallery-files-actions button,
 .gallery-files-actions kbd {
-  padding: 0.3em 0.7em;
-  margin-right: 0.5em;
-  font-size: 0.8em;
+  padding: var(--space-xs) var(--space-sm);
+  margin-right: var(--space-sm);
+  font-size: var(--font-base);
 }
 
 .gallery-files-actions kbd {
@@ -789,11 +846,11 @@ export default {
     display: grid;
     grid-template-rows: auto auto 1fr;
     grid-template-columns: auto 1fr 1fr;
-    column-gap: 1em;
+    column-gap: var(--space-base);
     overflow: hidden;
   }
   .gallery-files-actions {
-    padding-top: 0.5em;
+    padding-top: var(--space-sm);
     grid-row: 1;
     grid-column-start: 2;
     grid-column-end: span 2;
@@ -837,7 +894,7 @@ export default {
     display: grid;
     grid-template-rows: auto auto auto 1fr;
     grid-template-columns: 1fr;
-    column-gap: 1em;
+    column-gap: var(--space-base);
     overflow: hidden;
   }
   .gallery-folders-mobile-wrapper {
@@ -852,13 +909,14 @@ export default {
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    padding: 0.5em 0.75em;
-    font-size: 0.85em;
+    padding: var(--space-sm) var(--space-md);
+    font-size: var(--font-base);
     font-weight: 600;
+    color: var(--color-text);
     cursor: pointer;
     user-select: none;
     border: 1px solid transparent;
-    border-radius: 0.4em;
+    border-radius: var(--radius-md);
     opacity: 0.85;
     box-sizing: border-box;
     margin: 0;
@@ -878,7 +936,7 @@ export default {
     font-size: 1em;
   }
   .gallery-files-actions {
-    padding-top: 0.5em;
+    padding-top: var(--space-sm);
     grid-row: 2;
     grid-column: 1;
   }
@@ -907,33 +965,28 @@ export default {
 }
 
 @media (prefers-color-scheme: dark) {
-  .source-active {
-    background-color: #333;
-  }
   .gallery-folders-toggle {
-    background-color: #4a4a4a55;
-    border-color: #6a6a6a66;
+    background-color: var(--color-bg-secondary);
+    border-color: var(--color-border);
   }
   .gallery-folders-toggle:hover {
-    background-color: #5a5a5a66;
+    background-color: var(--color-bg-hover);
   }
   .gallery-folders {
-    background-color: #33333333;
+    background-color: var(--color-bg);
+    border-right: 1px solid var(--color-border-light);
   }
 }
 @media (prefers-color-scheme: light) {
-  .source-active {
-    background-color: #bbb;
-  }
   .gallery-folders-toggle {
-    background-color: #bdbdbd4d;
-    border-color: #a0a0a066;
+    background-color: var(--color-bg-secondary);
+    border-color: var(--color-border);
   }
   .gallery-folders-toggle:hover {
-    background-color: #b0b0b066;
+    background-color: var(--color-bg-hover);
   }
   .gallery-folders {
-    background-color: #aaaaaa33;
+    background-color: var(--color-bg-secondary);
   }
 }
 .gallery-item-focus {
@@ -946,21 +999,21 @@ export default {
 }
 
 .gallery-files-actions kbd {
-  margin-right: 1em;
+  margin-right: var(--space-base);
 }
 
 .gallery-outtakes-section {
   display: flex;
   align-items: center;
-  padding: 0.5em 0.5em;
-  font-size: 0.8em;
+  padding: var(--space-sm) var(--space-sm);
+  font-size: var(--font-base);
   opacity: 0.85;
 }
 
 .outtakes-checkbox {
   display: flex;
   align-items: center;
-  gap: 0.5em;
+  gap: var(--space-sm);
   cursor: pointer;
   user-select: none;
 }

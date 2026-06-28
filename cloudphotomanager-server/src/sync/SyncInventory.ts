@@ -1,4 +1,3 @@
-import { Span } from "@opentelemetry/sdk-trace-base";
 import {
   FileDataAdd,
   FileDataDelete,

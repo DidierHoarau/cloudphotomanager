@@ -36,8 +36,6 @@ RUN cd cloudphotomanager-web && \
 # RUN
 FROM ubuntu
 
-COPY docker-config/entrypoint.sh /entrypoint.sh
-
 RUN apt-get update && apt-get install -y \
         curl \
         ca-certificates \
@@ -56,12 +54,13 @@ RUN apt-get update && apt-get install -y \
         libfftw3-dev \
         libgif-dev \
         libheif-dev \
+        libheif-examples \
+        libheif-plugin-libde265 \
         libjpeg-dev \
         libpng-dev \
         libraw-bin \
         libraw-dev \
         libtiff-dev \
-        libvips-dev \
         libwebp-dev \
         libxml2-dev \
         make \
@@ -73,7 +72,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g pm2
 
-COPY docker-config/default.conf /etc/nginx/http.d/default.conf
+COPY docker-config/connection-upgrade.conf /etc/nginx/conf.d/connection-upgrade.conf
 COPY docker-config/default.conf /etc/nginx/sites-enabled/default
 COPY docker-config/ecosystem.config.js /opt/app/cloudphotomanager/ecosystem.config.js
 
@@ -89,4 +88,4 @@ WORKDIR /opt/app/cloudphotomanager
 
 EXPOSE 80
 
-ENTRYPOINT [ "/entrypoint.sh" ]
+CMD ["pm2-runtime", "ecosystem.config.js"]
