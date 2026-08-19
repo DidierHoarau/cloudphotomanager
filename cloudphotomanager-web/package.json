@@ -1,6 +1,6 @@
 {
   "name": "cloudphotomanager-web",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "",
   "license": "MIT",
   "private": true,
@@ -14,19 +14,19 @@
     "test": "echo TODO"
   },
   "devDependencies": {
-    "@types/lodash": "^4.17.24",
+    "@types/lodash": "^4.17.25",
     "@vite-pwa/nuxt": "^1.1.1",
-    "nuxt": "^4.4.8"
+    "nuxt": "^4.5.2"
   },
   "dependencies": {
     "@picocss/pico": "^2.1.1",
-    "@pinia/nuxt": "^0.11.3",
-    "axios": "^1.18.1",
+    "@pinia/nuxt": "^1.0.2",
+    "axios": "^1.19.0",
     "bootstrap-icons": "^1.13.1",
     "hammerjs": "^2.0.8",
     "jwt-decode": "^4.0.0",
     "lodash": "^4.18.1",
     "mitt": "^3.0.1",
-    "pinia": "^3.0.4"
+    "pinia": "^4.0.3"
   }
 }
