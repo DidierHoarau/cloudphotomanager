@@ -1,7 +1,7 @@
 // https://learn.microsoft.com/en-us/onedrive/developer/?view=odsp-graph-online
 
 import { Span } from "@opentelemetry/sdk-trace-base";
-import axios from "axios";
+import axios, { AxiosResponse } from "axios";
 import * as fs from "fs-extra";
 import { File } from "../../model/File";
 import { Folder } from "../../model/Folder";
@@ -11,6 +11,97 @@ import { OneDriveInventoryGetFolderByPath } from "./OneDriveInventory";
 
 const logger = OTelLogger().createModuleLogger("OneDriveFileOperations");
 
+const DOWNLOAD_REQUEST_TIMEOUT_MS = 30000;
+const DOWNLOAD_STREAM_TIMEOUT_MS = 300000;
+const DOWNLOAD_MAX_ATTEMPTS = 3;
+const DOWNLOAD_RETRY_BASE_DELAY_MS = 1000;
+const RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504];
+
+export class ItemNotFoundError extends Error {
+  public constructor(idCloud: string) {
+    super(`Item not found in OneDrive: ${idCloud}`);
+    this.name = "ItemNotFoundError";
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pipeResponseToFileAndVerify(
+  response: AxiosResponse,
+  filePath: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const writer = fs.createWriteStream(filePath);
+    let receivedBytes = 0;
+    const contentLengthHeader = response.headers["content-length"];
+    const expectedBytes = Number(contentLengthHeader);
+    const hasExpectedBytes =
+      contentLengthHeader !== undefined && Number.isFinite(expectedBytes);
+
+    const fail = async (error: Error) => {
+      response.data.destroy();
+      writer.destroy();
+      try {
+        await fs.unlink(filePath);
+      } catch (unlinkError) {
+        logger.warn(
+          `Could not delete partial download ${filePath}: ${unlinkError}`,
+        );
+      }
+      reject(error);
+    };
+
+    response.data.on("data", (chunk: Buffer) => {
+      receivedBytes += chunk.length;
+    });
+    response.data.on("error", (error: Error) => {
+      void fail(error);
+    });
+    writer.on("error", (error: Error) => {
+      void fail(error);
+    });
+    writer.on("finish", () => {
+      if (hasExpectedBytes && receivedBytes !== expectedBytes) {
+        void fail(
+          new Error(
+            `Truncated download of ${filePath}: expected ${expectedBytes} bytes, received ${receivedBytes}`,
+          ),
+        );
+        return;
+      }
+      resolve();
+    });
+    response.data.pipe(writer);
+  });
+}
+
+async function requestStreamAndPipeToFile(
+  url: string,
+  headers: Record<string, string> | undefined,
+  filePath: string,
+): Promise<void> {
+  const abortController = new AbortController();
+  const abortTimeout = setTimeout(
+    () => abortController.abort(),
+    DOWNLOAD_STREAM_TIMEOUT_MS,
+  );
+  try {
+    const response: AxiosResponse = await axios({
+      url,
+      method: "GET",
+      responseType: "stream",
+      headers,
+      timeout: DOWNLOAD_REQUEST_TIMEOUT_MS,
+      signal: abortController.signal,
+    });
+    await pipeResponseToFileAndVerify(response, filePath);
+  } finally {
+    clearTimeout(abortTimeout);
+  }
+}
+
 export async function OneDriveFileOperationsDownloadFile(
   context: Span,
   oneDriveAccount: OneDriveAccount,
@@ -18,38 +109,46 @@ export async function OneDriveFileOperationsDownloadFile(
   folder: string,
   filename: string,
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const span = OTelTracer().startSpan(
-      "OneDriveFileOperations_downloadFile",
-      context,
-    );
-    (async () => {
-      return axios({
-        url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/content`,
-        method: "GET",
-        responseType: "stream",
-        headers: {
-          Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-        },
-      });
-    })()
-      .then((response) => {
-        const writer = fs.createWriteStream(`${folder}/${filename}`);
-        response.data.pipe(writer);
-        writer.on("finish", () => {
-          resolve();
-        });
-        writer.on("error", (error) => {
-          reject(error);
-        });
-      })
-      .catch((error) => {
-        reject(error);
-      })
-      .finally(() => {
-        span.end();
-      });
-  });
+  const span = OTelTracer().startSpan(
+    "OneDriveFileOperations_downloadFile",
+    context,
+  );
+  const filePath = `${folder}/${filename}`;
+  try {
+    let attempt = 1;
+    for (;;) {
+      try {
+        await requestStreamAndPipeToFile(
+          `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/content`,
+          { Authorization: `Bearer ${await oneDriveAccount.getToken(context)}` },
+          filePath,
+        );
+        return;
+      } catch (error) {
+        const status = axios.isAxiosError(error)
+          ? error.response?.status
+          : undefined;
+        if (status === 404) {
+          throw new ItemNotFoundError(file.idCloud);
+        }
+        if (
+          status === undefined ||
+          !RETRYABLE_STATUS_CODES.includes(status) ||
+          attempt >= DOWNLOAD_MAX_ATTEMPTS
+        ) {
+          throw error;
+        }
+        const delayMs = DOWNLOAD_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+        logger.warn(
+          `Download of ${filePath} failed with HTTP ${status} (attempt ${attempt}/${DOWNLOAD_MAX_ATTEMPTS}), retrying in ${delayMs}ms`,
+        );
+        attempt += 1;
+        await sleep(delayMs);
+      }
+    }
+  } finally {
+    span.end();
+  }
 }
 
 export async function OneDriveFileOperationsDownloadThumbnail(
@@ -63,6 +162,7 @@ export async function OneDriveFileOperationsDownloadThumbnail(
     "OneDriveFileOperations_downloadFile",
     context,
   );
+  const filePath = `${folder}/${filename}`;
   try {
     const response1 = await axios({
       url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/thumbnails`,
@@ -71,20 +171,26 @@ export async function OneDriveFileOperationsDownloadThumbnail(
         Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
       },
     });
-    const response2 = await axios({
-      url: `${response1.data.value[0].large.url}`,
-      method: "GET",
-      responseType: "stream",
-      headers: {
-        Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-      },
-    });
-    const writer = fs.createWriteStream(`${folder}/${filename}`);
-    response2.data.pipe(writer);
-    await new Promise<void>((resolve, reject) => {
-      writer.on("finish", () => resolve());
-      writer.on("error", (error) => reject(error));
-    });
+    const thumbnailUrl = response1.data?.value?.[0]?.large?.url;
+    if (!thumbnailUrl) {
+      throw new Error(
+        `OneDrive returned no large thumbnail URL for item ${file.idCloud}`,
+      );
+    }
+    // The pre-authenticated CDN URL rejects requests carrying an Authorization header (HTTP 406)
+    try {
+      await requestStreamAndPipeToFile(thumbnailUrl, undefined, filePath);
+      return;
+    } catch (cdnError) {
+      logger.warn(
+        `Thumbnail CDN download failed for item ${file.idCloud}, falling back to the Graph API: ${cdnError}`,
+      );
+    }
+    await requestStreamAndPipeToFile(
+      `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/thumbnails/0/large/content`,
+      { Authorization: `Bearer ${await oneDriveAccount.getToken(context)}` },
+      filePath,
+    );
   } finally {
     span.end();
   }
