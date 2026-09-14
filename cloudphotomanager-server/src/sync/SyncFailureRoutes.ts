@@ -1,6 +1,7 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
-import { OTelLogger } from "../OTelContext";
+import { OTelLogger, OTelTracer } from "../OTelContext";
+import { FileDataRecordSyncSuccess } from "../files/FileData";
 import {
   SyncFailure,
   SyncFailuresClearAll,
@@ -158,6 +159,15 @@ export class SyncFailureRoutes {
 
 function requeueFailure(failure: SyncFailure): void {
   try {
+    // A manual retry grants the files a fresh set of automatic attempts,
+    // so reset the poison-file retry counter.
+    const span = OTelTracer().startSpan("SyncFailureRoutesRetryResetFailCount");
+    for (const fileId of failure.fileIds || []) {
+      FileDataRecordSyncSuccess(span, fileId).catch((err) => {
+        logger.error("Error resetting sync failure count", err);
+      });
+    }
+    span.end();
     SyncQueueQueueItem(
       failure.accountId,
       `${failure.functionName}:retry:${failure.id}`,

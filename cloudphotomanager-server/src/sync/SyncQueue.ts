@@ -23,7 +23,7 @@ import {
   SyncFileCacheCheckFile,
   SyncFileCacheRemoveFile,
 } from "./SyncFileCache";
-import { FileDataGet, FileDataUpdateKeywords } from "../files/FileData";
+import { FileDataGet, FileDataUpdateKeywords, FileDataRecordSyncFailure, FileDataRecordSyncSuccess } from "../files/FileData";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
@@ -66,6 +66,21 @@ const RECORDABLE_OPS = new Set<string>([
   "folderMove",
   "fileRename",
   "fileCacheRebuild",
+  "syncPhotoFromFull",
+  "syncThumbnail",
+  "syncVideoFromFull",
+  "syncPhotoKeyWords",
+  "syncThumbnailFromVideoPreview",
+]);
+
+// Thumbnail/preview sync ops whose per-file failure count drives the
+// poison-file retry cap (see SyncFileCache SYNC_FAIL_MAX_AUTO_RETRY).
+const FILE_CACHE_OPS = new Set<string>([
+  "syncPhotoFromFull",
+  "syncThumbnail",
+  "syncVideoFromFull",
+  "syncPhotoKeyWords",
+  "syncThumbnailFromVideoPreview",
 ]);
 
 type QueueFunction = (
@@ -481,8 +496,21 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
         }, timeoutMs);
       });
       await Promise.race([work, timeout]);
+      if (FILE_CACHE_OPS.has(item.functionName)) {
+        const successSpan = OTelTracer().startSpan("SyncQueueFileSyncSuccess");
+        try {
+          for (const fid of item.fileIds || []) {
+            await FileDataRecordSyncSuccess(successSpan, fid);
+          }
+        } catch (resetErr) {
+          logger.error("Error resetting file sync failure count", resetErr);
+        } finally {
+          successSpan.end();
+        }
+      }
     } catch (err) {
       logger.error("Error Processing Queue Item", err);
+      const errorMessage = buildErrorMessage(err);
       if (RECORDABLE_OPS.has(item.functionName)) {
         try {
           if (err instanceof MoveConflictError) {
@@ -497,9 +525,6 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
               conflict: err.conflict,
             });
           } else {
-            const errorMessage =
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (err as any)?.message || String(err);
             SyncFailuresAdd({
               accountId: item.accountId,
               functionName: item.functionName,
@@ -512,6 +537,25 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
           }
         } catch (addErr) {
           logger.error("Error recording sync failure", addErr);
+        }
+      }
+      if (FILE_CACHE_OPS.has(item.functionName)) {
+        const failSpan = OTelTracer().startSpan("SyncQueueFileSyncFailure");
+        try {
+          for (const fid of item.fileIds || []) {
+            await FileDataRecordSyncFailure(failSpan, fid, errorMessage);
+          }
+          if (isMissingInCloudError(err)) {
+            await queueFolderResyncForMissingFiles(
+              failSpan,
+              item.accountId,
+              item.fileIds || [],
+            );
+          }
+        } catch (failErr) {
+          logger.error("Error recording file sync failure", failErr);
+        } finally {
+          failSpan.end();
         }
       }
     } finally {
@@ -534,12 +578,70 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
   pool.add(itemProcess);
 }
 
+function buildErrorMessage(err: unknown): string {
+  let message = err instanceof Error ? err.message : String(err);
+  let cause: unknown = err instanceof Error ? err.cause : undefined;
+  const seen = new Set<unknown>();
+  while (cause instanceof Error && !seen.has(cause)) {
+    seen.add(cause);
+    if (cause.message && !message.includes(cause.message)) {
+      message += `: ${cause.message}`;
+    }
+    cause = cause.cause;
+  }
+  return message;
+}
+
+function isMissingInCloudError(err: unknown): boolean {
+  let current: unknown = err;
+  const seen = new Set<unknown>();
+  while (current instanceof Error && !seen.has(current)) {
+    seen.add(current);
+    if (current.name === "ItemNotFoundError") {
+      return true;
+    }
+    const response = (current as { response?: { status?: number } }).response;
+    if (response?.status === 404) {
+      return true;
+    }
+    current = current.cause;
+  }
+  return false;
+}
+
+async function queueFolderResyncForMissingFiles(
+  context: Span,
+  accountId: string,
+  fileIds: string[],
+): Promise<void> {
+  for (const fileId of fileIds) {
+    const file = await FileDataGet(context, fileId);
+    if (!file) {
+      continue;
+    }
+    const folder = await FolderDataGet(context, file.folderId);
+    if (!folder) {
+      continue;
+    }
+    logger.warn(
+      `File ${fileId} (${file.filename}) not found in cloud, queueing folder re-sync ${folder.folderpath}`,
+    );
+    SyncQueueQueueItem(
+      accountId,
+      folder.id,
+      { folderId: folder.id },
+      "SyncInventorySyncFolder",
+      SyncQueueItemPriority.NORMAL,
+    );
+  }
+}
+
 let stuckActiveSweeperStarted = false;
 
 function startStuckActiveSweeper(): void {
   if (stuckActiveSweeperStarted) return;
   stuckActiveSweeperStarted = true;
-  setInterval(() => {
+  const sweeperTimer = setInterval(() => {
     const span = OTelTracer().startSpan("SyncQueueSweepStuckActive");
     try {
       const maxTimeoutMs = Math.max(
@@ -576,6 +678,9 @@ function startStuckActiveSweeper(): void {
       span.end();
     }
   }, STUCK_ACTIVE_SWEEP_INTERVAL);
+  // The sweeper must not keep the process alive on its own (the HTTP server
+  // and scheduler do); this also allows test workers to exit cleanly.
+  sweeperTimer.unref();
 }
 
 function scheduleBroadcastQueueUpdate(): void {
@@ -928,6 +1033,9 @@ async function fileCacheRebuildOperation(
     // Reset keywords so syncPhotoKeyWords is re-queued to re-extract EXIF
     file.keywords = null;
     await FileDataUpdateKeywords(spanSubProcess, file);
+    // A manual rebuild is an explicit user action: reset the failure count
+    // so the file is not blocked by the poison-file retry cap.
+    await FileDataRecordSyncSuccess(spanSubProcess, file.id);
     SyncFileCacheCheckFile(spanSubProcess, account, file);
   } finally {
     spanSubProcess.end();

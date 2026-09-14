@@ -14,6 +14,11 @@ export class File {
   public hash: string;
   public keywords: string;
 
+  // Consecutive thumbnail/preview sync failures (reset on success or manual retry)
+  public syncFailCount: number;
+  public lastSyncError: string;
+  public lastSyncAttempt: Date;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public info: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,6 +31,9 @@ export class File {
     this.filename = filename;
     this.info = {};
     this.metadata = {};
+    this.syncFailCount = 0;
+    this.lastSyncError = null;
+    this.lastSyncAttempt = null;
   }
 
   public static getMediaType(name: string): FileMediaType {

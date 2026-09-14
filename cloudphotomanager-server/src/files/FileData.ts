@@ -188,6 +188,38 @@ export async function FileDataDelete(context: Span, id: string): Promise<void> {
   span.end();
 }
 
+export async function FileDataRecordSyncFailure(
+  context: Span,
+  fileId: string,
+  errorMessage: string,
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataRecordSyncFailure", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files " +
+      " SET syncFailCount = COALESCE(syncFailCount, 0) + 1, lastSyncError = ?, lastSyncAttempt = ?" +
+      " WHERE id = ? ",
+    [errorMessage, new Date().toISOString(), fileId],
+  );
+  span.end();
+}
+
+export async function FileDataRecordSyncSuccess(
+  context: Span,
+  fileId: string,
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataRecordSyncSuccess", context);
+  // Only touch rows that previously recorded a failure, to avoid a write on
+  // every successful sync.
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET syncFailCount = 0, lastSyncError = NULL, lastSyncAttempt = ? " +
+      " WHERE id = ? AND COALESCE(syncFailCount, 0) > 0",
+    [new Date().toISOString(), fileId],
+  );
+  span.end();
+}
+
 export async function FileDataGetCount(context: Span): Promise<number> {
   const span = OTelTracer().startSpan("FileDataGetCount", context);
   const countRaw = await SqlDbUtilsQuerySQL(
@@ -328,5 +360,10 @@ function fromRaw(fileRaw: any): File {
   file.dateMedia = new Date(fileRaw.dateMedia);
   file.info = JSON.parse(fileRaw.info);
   file.metadata = JSON.parse(fileRaw.metadata);
+  file.syncFailCount = fileRaw.syncFailCount ?? 0;
+  file.lastSyncError = fileRaw.lastSyncError ?? null;
+  file.lastSyncAttempt = fileRaw.lastSyncAttempt
+    ? new Date(fileRaw.lastSyncAttempt)
+    : null;
   return file;
 }
