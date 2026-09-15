@@ -1,4 +1,6 @@
 import { ConfigBase } from "@devopsplaybook.io/common-utils";
+import * as fse from "fs-extra";
+import path from "path";
 import { OTelLogger } from "./OTelContext";
 
 const logger = OTelLogger().createModuleLogger("config");
@@ -26,6 +28,18 @@ export class Config extends ConfigBase {
 
   constructor() {
     super("cloudphotomanager-server");
+
+    // Override VERSION with the app package.json shipped next to dist/ in the
+    // container (ConfigBase's own detection cannot find it inside node_modules)
+    try {
+      const pkg = fse.readJsonSync(path.resolve(__dirname, "../package.json"));
+      if (pkg && pkg.version) {
+        this.VERSION = pkg.version;
+      }
+    } catch (_e) {
+      // keep default
+    }
+
     this.addConfigField({ field: "TOOLS_DIR" });
     this.addConfigField({ field: "TMP_DIR" });
     this.addConfigField({ field: "SOURCE_FETCH_FREQUENCY" });
