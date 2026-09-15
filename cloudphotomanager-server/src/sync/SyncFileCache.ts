@@ -31,6 +31,11 @@ import { SyncQueueGetBatchWaitingCount } from "./SyncQueue";
 const logger = OTelLogger().createModuleLogger("SyncFileCache");
 let config: Config;
 
+// Number of consecutive sync failures after which a file is no longer
+// auto re-queued by SyncFileCacheCheckFile / the nightly check. The counter
+// is reset by a successful sync or a manual retry from the Sync Failures UI.
+const SYNC_FAIL_MAX_AUTO_RETRY = 5;
+
 export async function SyncFileCacheInit(context: Span, configIn: Config) {
   const span = OTelTracer().startSpan("SyncFileCacheInit", context);
   config = configIn;
@@ -95,6 +100,16 @@ export async function SyncFileCacheCheckFile(
   priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL,
 ) {
   const span = OTelTracer().startSpan("SyncFileCacheCheckFile", context);
+  if ((file.syncFailCount ?? 0) >= SYNC_FAIL_MAX_AUTO_RETRY) {
+    logger.warn(
+      `Skipping auto re-queue of file ${file.id} (${file.filename}): ` +
+        `${file.syncFailCount} consecutive sync failures reached the retry cap` +
+        `(${SYNC_FAIL_MAX_AUTO_RETRY}). Use the Sync Failures UI to retry manually.`,
+      span,
+    );
+    span.end();
+    return;
+  }
   const cacheDir = await FileDataGetFileCacheDir(
     span,
     account.getAccountDefinition().id,
@@ -223,13 +238,14 @@ async function getVideoWidthWithFfprobe(
 
 export async function syncVideoFromFull(account: Account, file: File) {
   const span = OTelTracer().startSpan("syncVideoFromFull");
+  let tmpDir: string = null;
   try {
     const cacheDir = await FileDataGetFileCacheDir(
       span,
       account.getAccountDefinition().id,
       file.id,
     );
-    const tmpDir = await FileDataGetFileTmpDir(
+    tmpDir = await FileDataGetFileTmpDir(
       span,
       account.getAccountDefinition().id,
       file.id,
@@ -272,9 +288,9 @@ export async function syncVideoFromFull(account: Account, file: File) {
         );
       })
       .catch((err) => {
-        logger.error("Error Synchronizing Video", err, span);
+        logger.warn(`Error Synchronizing Video: ${err?.message ?? err}`, span);
+        throw err;
       });
-    await fs.remove(tmpDir);
     span.end();
   } catch (errSync) {
     span.setStatus({ code: 2, message: errSync.message });
@@ -283,18 +299,23 @@ export async function syncVideoFromFull(account: Account, file: File) {
     const err = new Error("syncVideoFromFull Failed");
     err.cause = errSync;
     throw err;
+  } finally {
+    if (tmpDir) {
+      await fs.remove(tmpDir);
+    }
   }
 }
 
 export async function syncPhotoFromFull(account: Account, file: File) {
   const span = OTelTracer().startSpan("syncPhotoFromFull");
+  let tmpDir: string = null;
   try {
     const cacheDir = await FileDataGetFileCacheDir(
       span,
       account.getAccountDefinition().id,
       file.id,
     );
-    const tmpDir = await FileDataGetFileTmpDir(
+    tmpDir = await FileDataGetFileTmpDir(
       span,
       account.getAccountDefinition().id,
       file.id,
@@ -358,9 +379,9 @@ export async function syncPhotoFromFull(account: Account, file: File) {
           .toFile(`${cacheDir}/preview.webp`);
       })
       .catch((err) => {
-        logger.error("Error Synchronizing Photo", err, span);
+        logger.warn(`Error Synchronizing Photo: ${err?.message ?? err}`, span);
+        throw err;
       });
-    await fs.remove(tmpDir);
     span.end();
   } catch (errSync) {
     span.setStatus({ code: 2, message: errSync.message });
@@ -369,98 +390,119 @@ export async function syncPhotoFromFull(account: Account, file: File) {
     const err = new Error("syncPhotoFromFull Failed");
     err.cause = errSync;
     throw err;
+  } finally {
+    if (tmpDir) {
+      await fs.remove(tmpDir);
+    }
   }
 }
 
 export async function syncPhotoKeyWords(account: Account, file: File) {
   const span = OTelTracer().startSpan("syncPhotoKeyWords");
-  const cacheDir = await FileDataGetFileCacheDir(
-    span,
-    account.getAccountDefinition().id,
-    file.id,
-  );
-  const tmpDir =
-    (await FileDataGetFileTmpDir(
-      span,
-      account.getAccountDefinition().id,
-      file.id,
-    )) + "_image_classification";
-  const hasImagePreview = fs.existsSync(`${cacheDir}/preview.webp`);
-  file.keywords = file.filename;
-
-  if (config.IMAGE_CLASSIFICATION_ENABLED) {
-    if (!hasImagePreview) {
-      await syncPhotoFromFull(account, file);
-    }
-    await fs.ensureDir(tmpDir);
-    const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
-    logger.info(
-      `Generating Keywords for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
-    );
-    await sharp(`${cacheDir}/preview.webp`)
-      .withMetadata()
-      .toFile(`${tmpDir}/${tmpFileName}.jpeg`)
-      .then(async () => {
-        // Only re-extract EXIF from preview if not already populated by
-        // syncPhotoFromFull (which has access to the original file and
-        // therefore better GPS / maker-note data).
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const existingGps = (file.info.exif as Record<string, any> | undefined)
-          ?.GPSInfo;
-        if (!existingGps) {
-          try {
-            const previewPath = `${cacheDir}/preview.webp`;
-            const previewExif = await exifr.parse(previewPath, {
-              gps: true,
-              tiff: true,
-              exif: true,
-            });
-            if (previewExif) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              file.info.exif = previewExif as Record<string, any>;
-              const gpsResult = await extractGps(previewPath);
-              if (gpsResult.gpsInfo) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (file.info.exif as Record<string, any>).GPSInfo =
-                  gpsResult.gpsInfo;
-              }
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          } catch (err) {
-            logger.info(
-              `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
-            );
-          }
-        }
-        const classificationResults = await AnalysisImagesGetLabels(
-          span,
-          `${tmpDir}/${tmpFileName}.jpeg`,
-        );
-        classificationResults.forEach((result) => {
-          if (result.score > 0.5) {
-            file.keywords += " " + result.label;
-          }
-        });
-        file.keywords = file.keywords.toLowerCase();
-      })
-      .catch((err) => {
-        logger.error(err);
-      });
-    await fs.remove(tmpDir);
-  }
-  await FileDataUpdateKeywords(span, file);
-  span.end();
-}
-
-export async function syncThumbnail(account: Account, file: File) {
-  const span = OTelTracer().startSpan("syncThumbnail");
+  let tmpDir: string = null;
   try {
     const cacheDir = await FileDataGetFileCacheDir(
       span,
       account.getAccountDefinition().id,
       file.id,
     );
-    const tmpDir = await FileDataGetFileTmpDir(
+    tmpDir =
+      (await FileDataGetFileTmpDir(
+        span,
+        account.getAccountDefinition().id,
+        file.id,
+      )) + "_image_classification";
+    const hasImagePreview = fs.existsSync(`${cacheDir}/preview.webp`);
+    file.keywords = file.filename;
+
+    if (config.IMAGE_CLASSIFICATION_ENABLED) {
+      if (!hasImagePreview) {
+        await syncPhotoFromFull(account, file);
+      }
+      await fs.ensureDir(tmpDir);
+      const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
+      logger.info(
+        `Generating Keywords for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
+      );
+      await sharp(`${cacheDir}/preview.webp`)
+        .withMetadata()
+        .toFile(`${tmpDir}/${tmpFileName}.jpeg`)
+        .then(async () => {
+          // Only re-extract EXIF from preview if not already populated by
+          // syncPhotoFromFull (which has access to the original file and
+          // therefore better GPS / maker-note data).
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const existingGps = (file.info.exif as Record<string, any> | undefined)
+            ?.GPSInfo;
+          if (!existingGps) {
+            try {
+              const previewPath = `${cacheDir}/preview.webp`;
+              const previewExif = await exifr.parse(previewPath, {
+                gps: true,
+                tiff: true,
+                exif: true,
+              });
+              if (previewExif) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                file.info.exif = previewExif as Record<string, any>;
+                const gpsResult = await extractGps(previewPath);
+                if (gpsResult.gpsInfo) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (file.info.exif as Record<string, any>).GPSInfo =
+                    gpsResult.gpsInfo;
+                }
+              }
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            } catch (err) {
+              logger.info(
+                `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
+              );
+            }
+          }
+          const classificationResults = await AnalysisImagesGetLabels(
+            span,
+            `${tmpDir}/${tmpFileName}.jpeg`,
+          );
+          classificationResults.forEach((result) => {
+            if (result.score > 0.5) {
+              file.keywords += " " + result.label;
+            }
+          });
+          file.keywords = file.keywords.toLowerCase();
+        })
+        .catch((err) => {
+          logger.warn(
+            `Error Generating Keywords for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}: ${err?.message ?? err}`,
+          );
+          throw err;
+        });
+    }
+    await FileDataUpdateKeywords(span, file);
+    span.end();
+  } catch (errSync) {
+    span.setStatus({ code: 2, message: errSync.message });
+    span.recordException(errSync);
+    span.end();
+    const err = new Error("syncPhotoKeyWords Failed");
+    err.cause = errSync;
+    throw err;
+  } finally {
+    if (tmpDir) {
+      await fs.remove(tmpDir);
+    }
+  }
+}
+
+export async function syncThumbnail(account: Account, file: File) {
+  const span = OTelTracer().startSpan("syncThumbnail");
+  let tmpDir: string = null;
+  try {
+    const cacheDir = await FileDataGetFileCacheDir(
+      span,
+      account.getAccountDefinition().id,
+      file.id,
+    );
+    tmpDir = await FileDataGetFileTmpDir(
       span,
       account.getAccountDefinition().id,
       file.id,
@@ -504,7 +546,11 @@ export async function syncThumbnail(account: Account, file: File) {
             .toFile(`${cacheDir}/thumbnail.webp`);
         })
         .catch((err) => {
-          logger.error("Error Synchronizing Thumbnail for raw file", err, span);
+          logger.warn(
+            `Error Synchronizing Thumbnail for raw file: ${err?.message ?? err}`,
+            span,
+          );
+          throw err;
         });
     } else {
       // Also handle files that have HEIC/HEIF content despite a non-HEIC
@@ -540,11 +586,11 @@ export async function syncThumbnail(account: Account, file: File) {
               .toFile(`${cacheDir}/thumbnail.webp`);
           })
           .catch((err) => {
-            logger.error(
-              "Error Synchronizing Thumbnail for HEIC content file",
-              err,
+            logger.warn(
+              `Error Synchronizing Thumbnail for HEIC content file: ${err?.message ?? err}`,
               span,
             );
+            throw err;
           });
       } else {
         await account
@@ -557,11 +603,11 @@ export async function syncThumbnail(account: Account, file: File) {
               .toFile(`${cacheDir}/thumbnail.webp`);
           })
           .catch((err) => {
-            logger.error("Error Synchronizing Thumbnail", err, span);
+            logger.warn(`Error Synchronizing Thumbnail: ${err?.message ?? err}`, span);
+            throw err;
           });
       }
     }
-    await fs.remove(tmpDir);
     span.end();
   } catch (errSync) {
     span.setStatus({ code: 2, message: errSync.message });
@@ -570,6 +616,10 @@ export async function syncThumbnail(account: Account, file: File) {
     const err = new Error("syncThumbnail Failed");
     err.cause = errSync;
     throw err;
+  } finally {
+    if (tmpDir) {
+      await fs.remove(tmpDir);
+    }
   }
 }
 
@@ -578,13 +628,14 @@ export async function syncThumbnailFromVideoPreview(
   file: File,
 ) {
   const span = OTelTracer().startSpan("syncThumbnailFromVideoPreview");
+  let tmpDir: string = null;
   try {
     const cacheDir = await FileDataGetFileCacheDir(
       span,
       account.getAccountDefinition().id,
       file.id,
     );
-    const tmpDir = await FileDataGetFileTmpDir(
+    tmpDir = await FileDataGetFileTmpDir(
       span,
       account.getAccountDefinition().id,
       file.id,
@@ -607,9 +658,9 @@ export async function syncThumbnailFromVideoPreview(
           .toFile(`${cacheDir}/thumbnail.webp`);
       })
       .catch((err) => {
-        logger.error("Error Generating Video Thumbnail", err, span);
+        logger.warn(`Error Generating Video Thumbnail: ${err?.message ?? err}`, span);
+        throw err;
       });
-    await fs.remove(tmpDir);
     span.end();
   } catch (errSync) {
     span.setStatus({ code: 2, message: errSync.message });
@@ -618,6 +669,10 @@ export async function syncThumbnailFromVideoPreview(
     const err = new Error("syncThumbnailFromVideoPreview Failed");
     err.cause = errSync;
     throw err;
+  } finally {
+    if (tmpDir) {
+      await fs.remove(tmpDir);
+    }
   }
 }
 
