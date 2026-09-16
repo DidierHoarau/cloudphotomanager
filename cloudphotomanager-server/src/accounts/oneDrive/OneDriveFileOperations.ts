@@ -28,6 +28,10 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isNotFoundError(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 404;
+}
+
 async function pipeResponseToFileAndVerify(
   response: AxiosResponse,
   filePath: string,
@@ -170,6 +174,11 @@ export async function OneDriveFileOperationsDownloadThumbnail(
       headers: {
         Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
       },
+    }).catch((error) => {
+      if (isNotFoundError(error)) {
+        throw new ItemNotFoundError(file.idCloud);
+      }
+      throw error;
     });
     const thumbnailUrl = response1.data?.value?.[0]?.large?.url;
     if (!thumbnailUrl) {
@@ -190,7 +199,12 @@ export async function OneDriveFileOperationsDownloadThumbnail(
       `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/thumbnails/0/large/content`,
       { Authorization: `Bearer ${await oneDriveAccount.getToken(context)}` },
       filePath,
-    );
+    ).catch((error) => {
+      if (isNotFoundError(error)) {
+        throw new ItemNotFoundError(file.idCloud);
+      }
+      throw error;
+    });
   } finally {
     span.end();
   }

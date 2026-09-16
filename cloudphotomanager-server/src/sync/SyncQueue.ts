@@ -348,10 +348,14 @@ export function SyncQueueQueueItem(
   fileIds?: string[],
 ): void {
   const span = OTelTracer().startSpan("SyncQueueQueueItem");
+  // The row id includes the function name so several distinct operations on
+  // the same file/folder can be queued at once, while duplicate requests for
+  // the same operation still coalesce.
+  const rowId = `${id}:${functionName}`;
   const existing = SqlDbUtilsQuerySQL(
     span,
     "SELECT 1 FROM sync_queue WHERE id = ? LIMIT 1",
-    [id],
+    [rowId],
   );
   if (existing.length > 0) {
     span.end();
@@ -365,7 +369,7 @@ export function SyncQueueQueueItem(
       "(id, accountId, functionName, priority, status, data, fileIds, dateCreated) " +
       "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     [
-      id,
+      rowId,
       accountId,
       functionName,
       priority,
