@@ -14,6 +14,7 @@ export const FoldersStore = defineStore("FoldersStore", {
     loading: false,
     _hydrated: false,
     _loadPromise: null as Promise<void> | null,
+    _cacheGeneration: 0,
   }),
 
   getters: {},
@@ -166,21 +167,35 @@ export const FoldersStore = defineStore("FoldersStore", {
       }
 
       // Fetch counts in the background — don't block the tree display
-      this._fetchCountsInBackground(folders, accounts);
+      this._fetchCountsInBackground(accounts);
     },
 
     /**
      * Fetch folder counts without blocking the tree display.
-     * Updates individual folder objects reactively as counts arrive.
+     * Updates the live store state reactively as counts arrive, then
+     * re-persists the tree so cache hydration includes counts.
      */
-    _fetchCountsInBackground(folders: any[], accounts: any[]) {
+    _fetchCountsInBackground(accounts: any[]) {
+      const tree = this.folders;
+      const generation = this._cacheGeneration;
       Promise.allSettled(
-        accounts.map((accountIn: any) =>
-          this.fetchCounts(folders, accountIn.id),
-        ),
-      ).catch(() => {
-        /* counts are non-critical */
-      });
+        accounts.map((accountIn: any) => this.fetchCounts(accountIn.id)),
+      )
+        .then(async () => {
+          // Skip when the cache was invalidated or the tree was replaced
+          // mid-flight, to avoid resurrecting stale data.
+          if (
+            generation !== this._cacheGeneration ||
+            this.folders !== tree ||
+            this.folders.length === 0
+          ) {
+            return;
+          }
+          await localCache.put("folders", CACHE_KEY, this.folders);
+        })
+        .catch(() => {
+          /* counts are non-critical */
+        });
     },
 
     getIndentation(folderpath: string) {
@@ -210,15 +225,18 @@ export const FoldersStore = defineStore("FoldersStore", {
         folder.isVisible = true;
       }
     },
-    async fetchCounts(folders: any[], accountId: string) {
+    async fetchCounts(accountId: string) {
       const counts = (
         await axios.get(
           `${Config.sync.SERVER_URL}/accounts/${accountId}/folders/counts`,
           await AuthService.getAuthHeader(),
         )
       ).data.counts;
+      if (!Array.isArray(counts)) return;
       for (let element of counts) {
-        const folder = find(folders, { accountId, id: element.folderId });
+        // Look up the live store state: mutating the raw objects of a local
+        // tree bypasses the Pinia proxy, so no re-render would be triggered.
+        const folder = find(this.folders, { accountId, id: element.folderId });
         if (folder) {
           folder.counts = element.counts;
         }
@@ -266,6 +284,7 @@ export const FoldersStore = defineStore("FoldersStore", {
     /** Invalidate the cached folder tree (called on sync events). */
     async invalidateCache() {
       this._hydrated = false;
+      this._cacheGeneration++;
       await localCache.delete("folders", CACHE_KEY);
     },
   },
