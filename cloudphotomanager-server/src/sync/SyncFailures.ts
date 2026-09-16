@@ -33,6 +33,11 @@ export interface SyncFailure {
   data: any;
   fileIds: string[];
   errorMessage?: string;
+  // Cloud path (folderpath/filename) of the first impacted file and account
+  // display name, resolved best-effort when the failure is recorded so error
+  // cards in the web UI can show what failed and where.
+  filePath?: string;
+  accountName?: string;
   dateCreated: string;
   conflict?: SyncFailureConflict;
 }
@@ -97,6 +102,8 @@ export function SyncFailuresAdd(
     data: failure.data,
     fileIds: failure.fileIds || [],
     errorMessage: failure.errorMessage,
+    filePath: failure.filePath,
+    accountName: failure.accountName,
     dateCreated: failure.dateCreated || new Date().toISOString(),
     conflict: failure.conflict,
   };

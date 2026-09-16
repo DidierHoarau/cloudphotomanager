@@ -252,11 +252,82 @@ describe("SyncFileCache poison-file retry loop", () => {
     expect(failure.kind).toBe("error");
     expect(failure.errorMessage).toContain("syncPhotoFromFull Failed");
     expect(failure.errorMessage).toContain("Download failed");
+    expect(failure.filePath).toBe("photos-fail/remote.jpg");
+    expect(failure.accountName).toBe("acct-fail");
 
     const updated = await fileData.FileDataGet(span, file.id);
     expect(updated.syncFailCount).toBe(1);
     expect(updated.lastSyncError).toContain("syncPhotoFromFull Failed");
     expect(updated.lastSyncAttempt).toBeTruthy();
+  });
+
+  it("records a failure without filePath when the file row is gone", async () => {
+    const accountDefinition = await createAccount("acct-missing-file");
+    syncQueue.SyncQueueQueueItem(
+      accountDefinition.id,
+      "test-op:missing-file",
+      { fileId: "no-such-file" },
+      "fileDelete",
+      SyncQueueItemPriority.NORMAL,
+      ["no-such-file"],
+    );
+    await waitForQueueDrain("test-op:missing-file", "fileDelete");
+
+    const failure = syncFailures
+      .SyncFailuresList()
+      .find(
+        (f) =>
+          f.functionName === "fileDelete" &&
+          f.fileIds.includes("no-such-file"),
+      );
+    expect(failure).toBeDefined();
+    expect(failure.kind).toBe("error");
+    expect(failure.errorMessage).toContain("no-such-file");
+    expect(failure.filePath).toBeUndefined();
+    expect(failure.accountName).toBe("acct-missing-file");
+  });
+
+  it("records a failure with the bare filename when the folder row is gone", async () => {
+    const accountDefinition = await createAccount("acct-missing-folder");
+    const folder = await createFolder(
+      accountDefinition.id,
+      "photos-missing-folder",
+    );
+    const file = await createImageFile(
+      accountDefinition.id,
+      folder,
+      "orphan.jpg",
+      true,
+    );
+    const account =
+      await accountFactory.AccountFactoryGetAccountImplementation(
+        accountDefinition.id,
+      );
+    jest.spyOn(account, "deleteFile").mockRejectedValue(
+      new Error("Delete failed"),
+    );
+    SqlDbUtilsExecSQL(span, "DELETE FROM folders WHERE id = ?", [folder.id]);
+
+    syncQueue.SyncQueueQueueItem(
+      accountDefinition.id,
+      `test-op:${file.id}`,
+      { fileId: file.id },
+      "fileDelete",
+      SyncQueueItemPriority.NORMAL,
+      [file.id],
+    );
+    await waitForQueueDrain(`test-op:${file.id}`, "fileDelete");
+
+    const failure = syncFailures
+      .SyncFailuresList()
+      .find(
+        (f) =>
+          f.functionName === "fileDelete" && f.fileIds.includes(file.id),
+      );
+    expect(failure).toBeDefined();
+    expect(failure.errorMessage).toContain("Delete failed");
+    expect(failure.filePath).toBe("orphan.jpg");
+    expect(failure.accountName).toBe("acct-missing-folder");
   });
 
   it("resets the failure counter after a successful sync", async () => {
