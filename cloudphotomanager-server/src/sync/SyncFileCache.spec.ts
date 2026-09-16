@@ -90,9 +90,13 @@ describe("SyncFileCache poison-file retry loop", () => {
     }
   }
 
-  async function waitForQueueDrain(opId: string): Promise<void> {
+  async function waitForQueueDrain(
+    opId: string,
+    functionName: string,
+  ): Promise<void> {
+    // Queue rows are stored with the function name appended to the base id.
     await waitUntil(`queue op ${opId} processed`, () =>
-      queueRows().every((row) => row.id !== opId),
+      queueRows().every((row) => row.id !== `${opId}:${functionName}`),
     );
   }
 
@@ -235,7 +239,7 @@ describe("SyncFileCache poison-file retry loop", () => {
       .mockRejectedValue(new Error("Download failed"));
 
     queueFileSyncOp(accountDefinition.id, file, "syncPhotoFromFull");
-    await waitForQueueDrain(`test-op:${file.id}`);
+    await waitForQueueDrain(`test-op:${file.id}`, "syncPhotoFromFull");
 
     const failure = syncFailures
       .SyncFailuresList()
@@ -271,7 +275,7 @@ describe("SyncFileCache poison-file retry loop", () => {
     );
 
     queueFileSyncOp(accountDefinition.id, file, "syncPhotoFromFull");
-    await waitForQueueDrain(`test-op:${file.id}`);
+    await waitForQueueDrain(`test-op:${file.id}`, "syncPhotoFromFull");
 
     const updated = await fileData.FileDataGet(span, file.id);
     expect(updated.syncFailCount).toBe(0);
@@ -305,7 +309,7 @@ describe("SyncFileCache poison-file retry loop", () => {
     jest.spyOn(account, "downloadFile").mockRejectedValue(notFoundError);
 
     queueFileSyncOp(accountDefinition.id, file, "syncPhotoFromFull");
-    await waitForQueueDrain(`test-op:${file.id}`);
+    await waitForQueueDrain(`test-op:${file.id}`, "syncPhotoFromFull");
 
     const updated = await fileData.FileDataGet(span, file.id);
     expect(updated.syncFailCount).toBe(1);
@@ -338,7 +342,7 @@ describe("SyncFileCache poison-file retry loop", () => {
     );
 
     queueFileSyncOp(accountDefinition.id, file, "syncThumbnail");
-    await waitForQueueDrain(`test-op:${file.id}`);
+    await waitForQueueDrain(`test-op:${file.id}`, "syncThumbnail");
 
     const failure = syncFailures
       .SyncFailuresList()
@@ -412,6 +416,46 @@ describe("SyncFileCache poison-file retry loop", () => {
 
     const rows = rowsForFile(pendingFile.id);
     expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((row) => row.functionName === "syncPhotoFromFull")).toBe(
+      true,
+    );
+  });
+
+  it("queues syncPhotoFromFull even when another op for the same file is in flight", async () => {
+    const accountDefinition = await createAccount("acct-dedup");
+    const folder = await createFolder(accountDefinition.id, "photos-dedup");
+    const file = await createImageFile(
+      accountDefinition.id,
+      folder,
+      "dedup.jpg",
+      true,
+    );
+    const account =
+      await accountFactory.AccountFactoryGetAccountImplementation(
+        accountDefinition.id,
+      );
+    // Hold the thumbnail op in flight so its queue row stays observable;
+    // released in afterAll like the other held ops.
+    jest.spyOn(account, "downloadThumbnail").mockImplementation(mockHoldPromise);
+
+    syncQueue.SyncQueueQueueItem(
+      accountDefinition.id,
+      file.id,
+      { fileId: file.id },
+      "syncThumbnail",
+      SyncQueueItemPriority.NORMAL,
+      [file.id],
+    );
+    await waitUntil("thumbnail op dispatched", () =>
+      rowsForFile(file.id).some((row) => row.status === "ACTIVE"),
+    );
+
+    // A different operation on the same file must not be blocked by the
+    // in-flight one.
+    await syncFileCache.SyncFileCacheCheckFile(span, account, file);
+
+    const rows = rowsForFile(file.id);
+    expect(rows.some((row) => row.functionName === "syncThumbnail")).toBe(true);
     expect(rows.some((row) => row.functionName === "syncPhotoFromFull")).toBe(
       true,
     );

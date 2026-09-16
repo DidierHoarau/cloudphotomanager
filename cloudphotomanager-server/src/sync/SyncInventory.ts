@@ -2,6 +2,9 @@ import {
   FileDataAdd,
   FileDataDelete,
   FileDataListByFolder,
+  FileDataRecordSyncSuccess,
+  FileDataUpdate,
+  FileDataUpdateKeywords,
 } from "../files/FileData";
 import {
   FolderDataAdd,
@@ -11,13 +14,17 @@ import {
   FolderDataUpdate,
 } from "../folders/FolderData";
 import { Account } from "../model/Account";
+import { File } from "../model/File";
 import { Folder } from "../model/Folder";
 import { SyncEventActions } from "../model/SyncEventActions";
 import { SyncEventObjectTypes } from "../model/SyncEventObjectTypes";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SyncEventHistoryAdd } from "./SyncEventHistory";
-import { SyncFileCacheCheckFolder } from "./SyncFileCache";
+import {
+  SyncFileCacheCheckFolder,
+  SyncFileCacheRemoveFile,
+} from "./SyncFileCache";
 import { SyncQueueQueueItem } from "./SyncQueue";
 
 const logger = OTelLogger().createModuleLogger("SyncInventory");
@@ -51,20 +58,56 @@ export async function SyncInventorySyncFolder(
     for (const f of cloudSubFolders) cloudSubFolderIds.add(f.id);
     const knownSubFileIds = new Set<string>();
     for (const f of knownSubFilesFull) knownSubFileIds.add(f.id);
-    const cloudSubFileIds = new Set<string>();
-    for (const f of cloudSubFiles) cloudSubFileIds.add(f.id);
-
-    // Precompute IDs of known files to delete, then release the full known
-    // file objects. They hold parsed info/metadata JSON and are otherwise
-    // unused from here on, so this is the biggest memory win of the sync.
-    const fileIdsToDelete: string[] = [];
-    for (const f of knownSubFilesFull) {
-      if (!cloudSubFileIds.has(f.id)) fileIdsToDelete.push(f.id);
-    }
-    knownSubFilesFull.length = 0;
+    // Cloud files keyed by id, for reconciliation and stale-reference repair.
+    const cloudSubFilesById = new Map<string, File>();
+    for (const f of cloudSubFiles) cloudSubFilesById.set(f.id, f);
 
     let updated = false;
     let folderStructureChanged = false;
+
+    // Reconcile known vs cloud files: record deletions for files gone from
+    // the cloud, and repair stale provider item references on files that
+    // still match by id. Full known file objects are released afterwards
+    // (they hold parsed info/metadata JSON, so keep this loop tight).
+    const fileIdsToDelete: string[] = [];
+    for (const knownFile of knownSubFilesFull) {
+      const cloudFile = cloudSubFilesById.get(knownFile.id);
+      if (!cloudFile) {
+        fileIdsToDelete.push(knownFile.id);
+        continue;
+      }
+      if (
+        cloudFile.idCloud === knownFile.idCloud &&
+        cloudFile.hash === knownFile.hash
+      ) {
+        continue;
+      }
+      // The cloud item kept the same id (path/name) but its provider item
+      // reference and/or content changed. Without this refresh, every
+      // download keeps failing with "item not found" until the record is
+      // repaired here.
+      const contentChanged = Boolean(
+        knownFile.hash && cloudFile.hash && knownFile.hash !== cloudFile.hash,
+      );
+      knownFile.idCloud = cloudFile.idCloud;
+      knownFile.hash = cloudFile.hash;
+      knownFile.dateUpdated = cloudFile.dateUpdated;
+      knownFile.dateSync = new Date();
+      await FileDataUpdate(span, knownFile);
+      updated = true;
+      if (contentChanged) {
+        // Content was replaced under the same name: cached previews and
+        // extracted keywords are stale and must be regenerated from the
+        // new content. Reset the failure counter so regeneration is not
+        // blocked by the retry cap; the cache check at the end of the sync
+        // re-queues the missing previews/thumbnails.
+        await SyncFileCacheRemoveFile(span, account, knownFile);
+        knownFile.keywords = null;
+        await FileDataUpdateKeywords(span, knownFile);
+        await FileDataRecordSyncSuccess(span, knownFile.id);
+      }
+    }
+    knownSubFilesFull.length = 0;
 
     // New folders: persist and queue each for its own sync.
     for (const cloudSubFolder of cloudSubFolders) {
@@ -108,7 +151,6 @@ export async function SyncInventorySyncFolder(
       }
     }
     knownSubFileIds.clear();
-    cloudSubFileIds.clear();
 
     // Deleted files (uses precomputed ID list, not the freed File objects).
     if (fileIdsToDelete.length > 0) {
