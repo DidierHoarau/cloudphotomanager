@@ -132,6 +132,46 @@ describe("OneDriveFileOperations", () => {
       expect(mockedAxios).toHaveBeenCalledTimes(1);
     });
 
+    it("maps a 404 on the thumbnail metadata endpoint to ItemNotFoundError", async () => {
+      mockedAxios.mockRejectedValueOnce(axiosErrorWithStatus(404));
+
+      const error = await OneDriveFileOperationsDownloadThumbnail(
+        mockSpan,
+        oneDriveAccount as never,
+        file,
+        tempDir,
+        "thumb.jpg",
+      ).catch((caught) => caught);
+
+      expect(error).toBeInstanceOf(ItemNotFoundError);
+      expect(error.name).toBe("ItemNotFoundError");
+      expect(error.message).toContain("item-123");
+      expect(mockedAxios).toHaveBeenCalledTimes(1);
+    });
+
+    it("maps a 404 on the Graph fallback thumbnail download to ItemNotFoundError", async () => {
+      const metadataResponse = {
+        data: { value: [{ large: { url: THUMBNAIL_CDN_URL } }] },
+      };
+      mockedAxios
+        .mockResolvedValueOnce(metadataResponse)
+        .mockRejectedValueOnce(axiosErrorWithStatus(406))
+        .mockRejectedValueOnce(axiosErrorWithStatus(404));
+
+      const error = await OneDriveFileOperationsDownloadThumbnail(
+        mockSpan,
+        oneDriveAccount as never,
+        file,
+        tempDir,
+        "thumb.jpg",
+      ).catch((caught) => caught);
+
+      expect(error).toBeInstanceOf(ItemNotFoundError);
+      expect(error.name).toBe("ItemNotFoundError");
+      expect(error.message).toContain("item-123");
+      expect(mockedAxios).toHaveBeenCalledTimes(3);
+    });
+
     it("falls back to the Graph API thumbnail content endpoint when the CDN download fails", async () => {
       const metadataResponse = {
         data: { value: [{ large: { url: THUMBNAIL_CDN_URL } }] },
