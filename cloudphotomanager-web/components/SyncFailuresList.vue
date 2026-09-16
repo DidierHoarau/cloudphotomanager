@@ -166,6 +166,9 @@
         <!-- Error layout -->
         <div v-else class="error-body">
           <div class="error-label">{{ describeError(failure) }}</div>
+          <div v-if="failure.accountName" class="error-context">
+            Account: {{ failure.accountName }}
+          </div>
           <div v-if="failure.errorMessage" class="error-message">
             {{ failure.errorMessage }}
           </div>
@@ -242,11 +245,25 @@ export default {
     describeError(failure) {
       const d = failure.data || {};
       const fn = failure.functionName;
-      if (fn === "fileDelete") return `Delete: ${d.fileId || ""}`;
-      if (fn === "fileRename") return `Rename: ${d.filename || d.fileId || ""}`;
+      const FILE_SYNC_OPS = [
+        "syncPhotoFromFull",
+        "syncThumbnail",
+        "syncVideoFromFull",
+        "syncPhotoKeyWords",
+        "syncThumbnailFromVideoPreview",
+      ];
+      if (FILE_SYNC_OPS.includes(fn)) {
+        const target = failure.filePath || d.fileId || "";
+        return target ? `Sync: ${target}` : fn;
+      }
+      if (fn === "fileDelete")
+        return `Delete: ${failure.filePath || d.fileId || ""}`;
+      if (fn === "fileRename")
+        return `Rename: ${failure.filePath || d.filename || d.fileId || ""}`;
       if (fn === "folderMove")
-        return `Move: ${d.fileId || ""}${d.folderpath ? " \u2192 " + d.folderpath : ""}`;
-      if (fn === "fileCacheRebuild") return `Rebuild cache: ${d.fileId || ""}`;
+        return `Move: ${failure.filePath || d.fileId || ""}${d.folderpath ? " \u2192 " + d.folderpath : ""}`;
+      if (fn === "fileCacheRebuild")
+        return `Rebuild cache: ${failure.filePath || d.fileId || ""}`;
       return fn;
     },
     askConfirm(title, message, action) {
@@ -505,6 +522,12 @@ export default {
 }
 .error-label {
   font-weight: 500;
+  word-break: break-all;
+}
+.error-context {
+  font-size: var(--font-base);
+  opacity: 0.75;
+  word-break: break-all;
 }
 .error-message {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;

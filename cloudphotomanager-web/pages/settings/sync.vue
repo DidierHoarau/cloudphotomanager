@@ -182,7 +182,17 @@ export default {
         : this.httpTruncated;
     },
     failuresList() {
-      return SyncStore().failures || [];
+      const accounts = AccountsStore().accounts || [];
+      return (SyncStore().failures || []).map((failure) => {
+        if (failure.accountName) return failure;
+        // Records written before the server resolved the account name:
+        // fall back to the accounts list so the card still shows it.
+        const account = find(accounts, { id: failure.accountId });
+        return {
+          ...failure,
+          accountName: account ? account.name : failure.accountId,
+        };
+      });
     },
     failuresCount() {
       return SyncStore().failuresCount || 0;

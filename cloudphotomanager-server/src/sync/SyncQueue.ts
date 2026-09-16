@@ -24,6 +24,7 @@ import {
   SyncFileCacheRemoveFile,
 } from "./SyncFileCache";
 import { FileDataGet, FileDataUpdateKeywords, FileDataRecordSyncFailure, FileDataRecordSyncSuccess } from "../files/FileData";
+import { AccountDataGet } from "../accounts/AccountData";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
@@ -529,6 +530,7 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
               conflict: err.conflict,
             });
           } else {
+            const { filePath, accountName } = await resolveFailureContext(item);
             SyncFailuresAdd({
               accountId: item.accountId,
               functionName: item.functionName,
@@ -537,6 +539,8 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
               data: item.data,
               fileIds: item.fileIds || [],
               errorMessage,
+              filePath,
+              accountName,
             });
           }
         } catch (addErr) {
@@ -594,6 +598,43 @@ function buildErrorMessage(err: unknown): string {
     cause = cause.cause;
   }
   return message;
+}
+
+// Best-effort enrichment of error-kind failure records with the cloud path of
+// the first impacted file and the account display name, so failure cards in
+// the web UI show which file and account are at the origin of the issue.
+// Lookups must never prevent the failure itself from being recorded.
+async function resolveFailureContext(
+  item: SyncQueueItem,
+): Promise<{ filePath?: string; accountName?: string }> {
+  const details: { filePath?: string; accountName?: string } = {};
+  const span = OTelTracer().startSpan("SyncQueueResolveFailureContext");
+  try {
+    const fileId =
+      item.fileIds && item.fileIds.length > 0 ? item.fileIds[0] : null;
+    if (fileId) {
+      try {
+        const file = await FileDataGet(span, fileId);
+        if (file) {
+          const folder = await FolderDataGet(span, file.folderId);
+          details.filePath = folder
+            ? `${folder.folderpath ? `${folder.folderpath}/` : ""}${file.filename}`
+            : file.filename;
+        }
+      } catch (err) {
+        logger.error("Error resolving file path for sync failure", err);
+      }
+    }
+    try {
+      const account = await AccountDataGet(span, item.accountId);
+      details.accountName = account.name;
+    } catch (err) {
+      logger.error("Error resolving account name for sync failure", err);
+    }
+  } finally {
+    span.end();
+  }
+  return details;
 }
 
 function isMissingInCloudError(err: unknown): boolean {
