@@ -142,7 +142,7 @@ export async function FileDataUpdate(context: Span, file: File): Promise<void> {
       file.accountId,
       file.filename,
       file.folderId,
-      file.hash,
+      file.hash || "",
       file.dateUpdated.toISOString(),
       file.dateSync.toISOString(),
       file.dateMedia.toISOString(),

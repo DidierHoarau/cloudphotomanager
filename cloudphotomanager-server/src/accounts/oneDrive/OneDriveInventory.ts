@@ -171,6 +171,8 @@ function fileFromRaw(data: any, folderId: string, oneDriveAccount: OneDriveAccou
   if (data.image) {
     file.metadata.image = data.image;
   }
-  file.hash = data.file.hashes.sha256Hash;
+  // Graph v1.0 no longer returns sha256Hash; quickXorHash is the only hash
+  // guaranteed for both OneDrive Personal and Business.
+  file.hash = data.file?.hashes?.quickXorHash || data.file?.hashes?.sha256Hash || "";
   return file;
 }
