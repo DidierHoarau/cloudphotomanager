@@ -88,14 +88,14 @@
                 <tr>
                   <th scope="col">Folder</th>
                   <th scope="col">File</th>
-                  <th scope="col"></th>
+                  <th scope="col" class="dialog-files-action-col"></th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="dup in selectedFile.duplicates.files" :key="dup.id">
                   <td>{{ getFolderPath(dup.folderId) }}</td>
                   <td>{{ dup.filename }}</td>
-                  <td>
+                  <td class="dialog-files-action-col">
                     <button
                       class="dialog-delete-btn"
                       @click="deleteDuplicate(dup)"

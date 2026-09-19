@@ -59,7 +59,7 @@
               <tr>
                 <th scope="col">Folder</th>
                 <th scope="col">File</th>
-                <th v-if="isAdmin" scope="col"></th>
+                <th v-if="isAdmin" scope="col" class="dialog-files-action-col"></th>
               </tr>
             </thead>
             <tbody>
@@ -73,7 +73,7 @@
                   </NuxtLink>
                 </td>
                 <td>{{ dup.filename }}</td>
-                <td v-if="isAdmin">
+                <td v-if="isAdmin" class="dialog-files-action-col">
                   <button
                     class="dialog-delete-btn"
                     @click="clickedDeleteDuplicate(dup)"

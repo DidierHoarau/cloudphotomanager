@@ -96,16 +96,13 @@
 }
 .dialog-files-table td,
 .dialog-files-table th {
-  word-break: break-all;
   overflow-wrap: anywhere;
   padding: var(--space-xs) var(--space-sm);
   vertical-align: middle;
 }
-.dialog-files-table th:last-child,
-.dialog-files-table td:last-child {
+.dialog-files-table .dialog-files-action-col {
   width: 2.5em;
   text-align: center;
-  word-break: normal;
 }
 
 /* ── Danger (delete) action button ───────────────────────── */
