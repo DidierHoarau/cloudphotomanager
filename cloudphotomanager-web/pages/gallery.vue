@@ -66,7 +66,7 @@
         <span>OutTakes ({{ outtakesCount }})</span>
       </label>
     </div>
-    <div class="gallery-file-list">
+    <div ref="fileList" class="gallery-file-list">
       <Loading v-if="loading" />
       <template v-else>
         <Gallery
@@ -472,6 +472,9 @@ export default {
         this.currentPage = 0;
         this.hasMore = false;
         this.loading = true;
+        if (this.$refs.fileList) {
+          this.$refs.fileList.scrollTop = 0;
+        }
       }
       this.requestEtag = requestEtag;
 
