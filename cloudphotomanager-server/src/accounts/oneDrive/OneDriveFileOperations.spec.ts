@@ -9,6 +9,7 @@ import {
   ItemNotFoundError,
   OneDriveFileOperationsDownloadFile,
   OneDriveFileOperationsDownloadThumbnail,
+  ThumbnailNotAvailableError,
 } from "./OneDriveFileOperations";
 
 jest.mock("axios", () => {
@@ -112,6 +113,7 @@ describe("OneDriveFileOperations", () => {
       const cdnConfig = mockedAxios.mock.calls[1][0];
       expect(cdnConfig.url).toBe(THUMBNAIL_CDN_URL);
       expect(cdnConfig.headers?.Authorization).toBeUndefined();
+      expect(cdnConfig.headers.Accept).toBe("*/*");
       expect(
         fs.readFileSync(path.join(tempDir, "thumb.jpg"), "utf-8"),
       ).toBe("thumbnail-bytes");
@@ -199,6 +201,105 @@ describe("OneDriveFileOperations", () => {
         fs.readFileSync(path.join(tempDir, "thumb.jpg"), "utf-8"),
       ).toBe("fallback-bytes");
     });
+
+    it("retries a transient 406 on the thumbnail metadata request", async () => {
+      const metadataResponse = {
+        data: { value: [{ large: { url: THUMBNAIL_CDN_URL } }] },
+      };
+      const cdnResponse = streamResponse();
+      cdnResponse.data.end("thumbnail-bytes");
+      mockedAxios
+        .mockRejectedValueOnce(axiosErrorWithStatus(406))
+        .mockResolvedValueOnce(metadataResponse)
+        .mockResolvedValueOnce(cdnResponse);
+
+      await OneDriveFileOperationsDownloadThumbnail(
+        mockSpan,
+        oneDriveAccount as never,
+        file,
+        tempDir,
+        "thumb.jpg",
+      );
+
+      expect(mockedAxios).toHaveBeenCalledTimes(3);
+      expect(
+        fs.readFileSync(path.join(tempDir, "thumb.jpg"), "utf-8"),
+      ).toBe("thumbnail-bytes");
+    }, 10000);
+
+    it("falls back to the Graph content endpoint when the metadata request keeps returning 406", async () => {
+      const fallbackResponse = streamResponse();
+      fallbackResponse.data.end("fallback-bytes");
+      mockedAxios
+        .mockRejectedValueOnce(axiosErrorWithStatus(406))
+        .mockRejectedValueOnce(axiosErrorWithStatus(406))
+        .mockRejectedValueOnce(axiosErrorWithStatus(406))
+        .mockResolvedValueOnce(fallbackResponse);
+
+      await OneDriveFileOperationsDownloadThumbnail(
+        mockSpan,
+        oneDriveAccount as never,
+        file,
+        tempDir,
+        "thumb.jpg",
+      );
+
+      expect(mockedAxios).toHaveBeenCalledTimes(4);
+      const fallbackConfig = mockedAxios.mock.calls[3][0];
+      expect(fallbackConfig.url).toBe(GRAPH_FALLBACK_THUMBNAIL_URL);
+      expect(fallbackConfig.headers.Authorization).toBe("Bearer test-token");
+      expect(
+        fs.readFileSync(path.join(tempDir, "thumb.jpg"), "utf-8"),
+      ).toBe("fallback-bytes");
+    }, 15000);
+
+    it("throws ThumbnailNotAvailableError when metadata and the Graph fallback keep returning 406", async () => {
+      for (let i = 0; i < 3; i++) {
+        mockedAxios.mockRejectedValueOnce(axiosErrorWithStatus(406));
+      }
+      for (let i = 0; i < 3; i++) {
+        mockedAxios.mockRejectedValueOnce(axiosErrorWithStatus(406));
+      }
+
+      const error = await OneDriveFileOperationsDownloadThumbnail(
+        mockSpan,
+        oneDriveAccount as never,
+        file,
+        tempDir,
+        "thumb.jpg",
+      ).catch((caught) => caught);
+
+      expect(error).toBeInstanceOf(ThumbnailNotAvailableError);
+      expect(error.name).toBe("ThumbnailNotAvailableError");
+      expect(error.message).toContain("item-123");
+      expect(error.message).toContain("406");
+      expect(mockedAxios).toHaveBeenCalledTimes(6);
+    }, 20000);
+
+    it("throws ThumbnailNotAvailableError when the Graph fallback keeps returning 416", async () => {
+      mockedAxios
+        .mockResolvedValueOnce({
+          data: { value: [{ large: { url: THUMBNAIL_CDN_URL } }] },
+        })
+        .mockRejectedValueOnce(axiosErrorWithStatus(500))
+        .mockRejectedValueOnce(axiosErrorWithStatus(416))
+        .mockRejectedValueOnce(axiosErrorWithStatus(416))
+        .mockRejectedValueOnce(axiosErrorWithStatus(416));
+
+      const error = await OneDriveFileOperationsDownloadThumbnail(
+        mockSpan,
+        oneDriveAccount as never,
+        file,
+        tempDir,
+        "thumb.jpg",
+      ).catch((caught) => caught);
+
+      expect(error).toBeInstanceOf(ThumbnailNotAvailableError);
+      expect(error.name).toBe("ThumbnailNotAvailableError");
+      expect(error.message).toContain("item-123");
+      expect(error.message).toContain("416");
+      expect(mockedAxios).toHaveBeenCalledTimes(5);
+    }, 20000);
   });
 
   describe("OneDriveFileOperationsDownloadFile", () => {
