@@ -1,7 +1,7 @@
 // https://learn.microsoft.com/en-us/onedrive/developer/?view=odsp-graph-online
 
 import { Span } from "@opentelemetry/sdk-trace-base";
-import axios, { AxiosResponse } from "axios";
+import axios, { AxiosError, AxiosResponse } from "axios";
 import * as fs from "fs-extra";
 import { File } from "../../model/File";
 import { Folder } from "../../model/Folder";
@@ -16,11 +16,26 @@ const DOWNLOAD_STREAM_TIMEOUT_MS = 300000;
 const DOWNLOAD_MAX_ATTEMPTS = 3;
 const DOWNLOAD_RETRY_BASE_DELAY_MS = 1000;
 const RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504];
+// The Graph thumbnail endpoints intermittently answer 406 (SubStreamCached
+// failures) and 416 from the server side; unlike whole-file downloads these
+// are transient there and worth retrying.
+const THUMBNAIL_RETRYABLE_STATUS_CODES = [406, 416, ...RETRYABLE_STATUS_CODES];
+const THUMBNAIL_UNAVAILABLE_STATUS_CODES = [406, 416];
 
 export class ItemNotFoundError extends Error {
   public constructor(idCloud: string) {
     super(`Item not found in OneDrive: ${idCloud}`);
     this.name = "ItemNotFoundError";
+  }
+}
+
+export class ThumbnailNotAvailableError extends Error {
+  public constructor(idCloud: string, status?: number) {
+    super(
+      `Thumbnail not available in OneDrive for item ${idCloud}` +
+        (status ? ` (HTTP ${status})` : ""),
+    );
+    this.name = "ThumbnailNotAvailableError";
   }
 }
 
@@ -30,6 +45,44 @@ function sleep(ms: number): Promise<void> {
 
 function isNotFoundError(error: unknown): boolean {
   return axios.isAxiosError(error) && error.response?.status === 404;
+}
+
+function isThumbnailUnavailableError(error: unknown): error is AxiosError {
+  return (
+    axios.isAxiosError(error) &&
+    error.response !== undefined &&
+    THUMBNAIL_UNAVAILABLE_STATUS_CODES.includes(error.response.status)
+  );
+}
+
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  label: string,
+  retryableStatusCodes: number[] = RETRYABLE_STATUS_CODES,
+): Promise<T> {
+  let attempt = 1;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (error) {
+      const status = axios.isAxiosError(error)
+        ? error.response?.status
+        : undefined;
+      if (
+        status === undefined ||
+        !retryableStatusCodes.includes(status) ||
+        attempt >= DOWNLOAD_MAX_ATTEMPTS
+      ) {
+        throw error;
+      }
+      const delayMs = DOWNLOAD_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+      logger.warn(
+        `${label} failed with HTTP ${status} (attempt ${attempt}/${DOWNLOAD_MAX_ATTEMPTS}), retrying in ${delayMs}ms`,
+      );
+      attempt += 1;
+      await sleep(delayMs);
+    }
+  }
 }
 
 async function pipeResponseToFileAndVerify(
@@ -119,37 +172,20 @@ export async function OneDriveFileOperationsDownloadFile(
   );
   const filePath = `${folder}/${filename}`;
   try {
-    let attempt = 1;
-    for (;;) {
-      try {
-        await requestStreamAndPipeToFile(
+    await retryWithBackoff(
+      async () =>
+        requestStreamAndPipeToFile(
           `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/content`,
           { Authorization: `Bearer ${await oneDriveAccount.getToken(context)}` },
           filePath,
-        );
-        return;
-      } catch (error) {
-        const status = axios.isAxiosError(error)
-          ? error.response?.status
-          : undefined;
-        if (status === 404) {
-          throw new ItemNotFoundError(file.idCloud);
-        }
-        if (
-          status === undefined ||
-          !RETRYABLE_STATUS_CODES.includes(status) ||
-          attempt >= DOWNLOAD_MAX_ATTEMPTS
-        ) {
-          throw error;
-        }
-        const delayMs = DOWNLOAD_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
-        logger.warn(
-          `Download of ${filePath} failed with HTTP ${status} (attempt ${attempt}/${DOWNLOAD_MAX_ATTEMPTS}), retrying in ${delayMs}ms`,
-        );
-        attempt += 1;
-        await sleep(delayMs);
+        ),
+      `Download of ${filePath}`,
+    ).catch((error) => {
+      if (isNotFoundError(error)) {
+        throw new ItemNotFoundError(file.idCloud);
       }
-    }
+      throw error;
+    });
   } finally {
     span.end();
   }
@@ -168,40 +204,73 @@ export async function OneDriveFileOperationsDownloadThumbnail(
   );
   const filePath = `${folder}/${filename}`;
   try {
-    const response1 = await axios({
-      url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/thumbnails`,
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
-      },
-    }).catch((error) => {
-      if (isNotFoundError(error)) {
+    let thumbnailUrl: string | undefined;
+    let metadataFailed = false;
+    try {
+      const response1 = await retryWithBackoff(
+        async () =>
+          axios({
+            url: `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/thumbnails`,
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${await oneDriveAccount.getToken(context)}`,
+            },
+          }),
+        `Thumbnail metadata fetch for item ${file.idCloud}`,
+        THUMBNAIL_RETRYABLE_STATUS_CODES,
+      );
+      thumbnailUrl = response1.data?.value?.[0]?.large?.url;
+    } catch (metadataError) {
+      if (isNotFoundError(metadataError)) {
         throw new ItemNotFoundError(file.idCloud);
       }
-      throw error;
-    });
-    const thumbnailUrl = response1.data?.value?.[0]?.large?.url;
-    if (!thumbnailUrl) {
+      if (isThumbnailUnavailableError(metadataError)) {
+        metadataFailed = true;
+        logger.warn(
+          `Thumbnail metadata unavailable for item ${file.idCloud} (HTTP ${metadataError.response?.status}); trying the Graph content fallback`,
+        );
+      } else {
+        throw metadataError;
+      }
+    }
+    if (!metadataFailed && !thumbnailUrl) {
       throw new Error(
         `OneDrive returned no large thumbnail URL for item ${file.idCloud}`,
       );
     }
     // The pre-authenticated CDN URL rejects requests carrying an Authorization header (HTTP 406)
-    try {
-      await requestStreamAndPipeToFile(thumbnailUrl, undefined, filePath);
-      return;
-    } catch (cdnError) {
-      logger.warn(
-        `Thumbnail CDN download failed for item ${file.idCloud}, falling back to the Graph API: ${cdnError}`,
-      );
+    if (thumbnailUrl) {
+      try {
+        await requestStreamAndPipeToFile(
+          thumbnailUrl,
+          { Accept: "*/*" },
+          filePath,
+        );
+        return;
+      } catch (cdnError) {
+        logger.warn(
+          `Thumbnail CDN download failed for item ${file.idCloud}, falling back to the Graph API: ${cdnError}`,
+        );
+      }
     }
-    await requestStreamAndPipeToFile(
-      `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/thumbnails/0/large/content`,
-      { Authorization: `Bearer ${await oneDriveAccount.getToken(context)}` },
-      filePath,
+    await retryWithBackoff(
+      async () =>
+        requestStreamAndPipeToFile(
+          `https://graph.microsoft.com/v1.0/me/drive/items/${file.idCloud}/thumbnails/0/large/content`,
+          { Authorization: `Bearer ${await oneDriveAccount.getToken(context)}` },
+          filePath,
+        ),
+      `Graph thumbnail content download for item ${file.idCloud}`,
+      THUMBNAIL_RETRYABLE_STATUS_CODES,
     ).catch((error) => {
       if (isNotFoundError(error)) {
         throw new ItemNotFoundError(file.idCloud);
+      }
+      if (isThumbnailUnavailableError(error)) {
+        throw new ThumbnailNotAvailableError(
+          file.idCloud,
+          error.response?.status,
+        );
       }
       throw error;
     });

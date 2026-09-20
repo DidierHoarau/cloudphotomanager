@@ -24,6 +24,7 @@ import { Folder } from "../model/Folder";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { SystemCommand } from "../SystemCommand";
+import { ThumbnailNotAvailableError } from "../accounts/oneDrive/OneDriveFileOperations";
 import { SyncQueueQueueItem } from "./SyncQueue";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { SyncQueueGetBatchWaitingCount } from "./SyncQueue";
@@ -233,6 +234,65 @@ export async function SyncFileCacheCleanUp(context: Span, account: Account) {
 function isCorruptImageError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   return /VipsJpeg|Corrupt JPEG data|premature end/i.test(message);
+}
+
+// HEIC/HEIF content behind a non-HEIC extension (e.g. Samsung MVIMG_*.jpg)
+// must not reach sharp's bundled libheif (SIGSEGV risk); such files are
+// converted through ImageMagick (system libheif) instead.
+function isHeicContentFile(filePath: string): boolean {
+  try {
+    const fd = fs.openSync(filePath, "r");
+    const buf = Buffer.alloc(12);
+    fs.readSync(fd, buf, 0, 12, 0);
+    fs.closeSync(fd);
+    const brand = buf.toString("ascii", 4, 12);
+    return (
+      brand.startsWith("ftyp") &&
+      ["heic", "heix", "mif1", "msf1"].includes(buf.toString("ascii", 8, 12))
+    );
+  } catch {
+    // If we can't read the file, proceed and let sharp handle it
+    return false;
+  }
+}
+
+// The cloud thumbnail service can permanently answer 406/416 for some items
+// (videos without a poster frame, broken CDN entries). Videos skip cleanly:
+// syncThumbnailFromVideoPreview derives their thumbnail once preview.mp4 is
+// cached. Images fall back to a full-file download and local generation.
+async function generateThumbnailWhenCloudThumbnailUnavailable(
+  span: Span,
+  account: Account,
+  file: File,
+  cacheDir: string,
+  tmpDir: string,
+  tmpFileName: string,
+): Promise<void> {
+  if (File.getMediaType(file.filename) === FileMediaType.video) {
+    logger.info(
+      `Thumbnail unavailable from cloud for video ${account.getAccountDefinition().id} ${file.id} : ${file.filename}; will be derived from the video preview once cached`,
+      span,
+    );
+    return;
+  }
+  logger.info(
+    `Thumbnail unavailable from cloud for ${account.getAccountDefinition().id} ${file.id} : ${file.filename}; generating from the full file`,
+    span,
+  );
+  await account.downloadFile(span, file, tmpDir, tmpFileName);
+  const fullPath = `${tmpDir}/${tmpFileName}`;
+  let sourcePath = fullPath;
+  if (isHeicContentFile(fullPath)) {
+    await SystemCommand.execute(
+      `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${fullPath} ${fullPath}_raw.jpg`,
+    );
+    sourcePath = `${fullPath}_raw.jpg`;
+  }
+  await sharp(sourcePath)
+    .rotate()
+    .withMetadata()
+    .resize({ width: 300 })
+    .toFile(`${cacheDir}/thumbnail.webp`);
 }
 
 async function getVideoWidthWithFfprobe(
@@ -593,21 +653,9 @@ export async function syncThumbnail(account: Account, file: File) {
       // extension (e.g. Samsung MVIMG_*.jpg which contains a HEIC stream).
       // Quick magic-byte check avoids triggering sharp's libheif GObject
       // SIGSEGV (see above).
-      let isHeicContent = false;
-      try {
-        const fd = fs.openSync(`${tmpDir}/tmp_tumbnail/${tmpFileName}`, "r");
-        const buf = Buffer.alloc(12);
-        fs.readSync(fd, buf, 0, 12, 0);
-        fs.closeSync(fd);
-        const brand = buf.toString("ascii", 4, 12);
-        isHeicContent =
-          brand.startsWith("ftyp") &&
-          ["heic", "heix", "mif1", "msf1"].includes(
-            buf.toString("ascii", 8, 12),
-          );
-      } catch {
-        // If we can't read the file, proceed and let sharp handle it
-      }
+      const isHeicContent = isHeicContentFile(
+        `${tmpDir}/tmp_tumbnail/${tmpFileName}`,
+      );
       if (isHeicContent) {
         await account
           .downloadFile(span, file, tmpDir, tmpFileName)
@@ -638,7 +686,18 @@ export async function syncThumbnail(account: Account, file: File) {
               .resize({ width: 300 })
               .toFile(`${cacheDir}/thumbnail.webp`);
           })
-          .catch((err) => {
+          .catch(async (err) => {
+            if (err instanceof ThumbnailNotAvailableError) {
+              await generateThumbnailWhenCloudThumbnailUnavailable(
+                span,
+                account,
+                file,
+                cacheDir,
+                tmpDir,
+                tmpFileName,
+              );
+              return;
+            }
             logger.warn(`Error Synchronizing Thumbnail: ${err?.message ?? err}`, span);
             throw err;
           });

@@ -12,6 +12,7 @@ import {
 import sharp from "sharp";
 import { OTelSetTracer, OTelTracer } from "../OTelContext";
 import type { Config } from "../Config";
+import { ThumbnailNotAvailableError } from "../accounts/oneDrive/OneDriveFileOperations";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { File } from "../model/File";
 import { Folder } from "../model/Folder";
@@ -179,6 +180,22 @@ describe("SyncFileCache poison-file retry loop", () => {
       file.idCloud,
       jpeg.subarray(0, Math.floor(jpeg.length / 2)),
     );
+    await fileData.FileDataAdd(span, file);
+    return file;
+  }
+
+  async function createVideoFile(
+    accountId: string,
+    folder: Folder,
+    filename: string,
+  ): Promise<File> {
+    const file = new File(accountId, folder.id, filename);
+    file.idCloud = path.join(folder.idCloud, filename);
+    file.hash = "test-hash";
+    file.dateSync = new Date();
+    file.dateUpdated = new Date();
+    file.dateMedia = new Date();
+    await fs.writeFile(file.idCloud, "not a real video");
     await fileData.FileDataAdd(span, file);
     return file;
   }
@@ -560,6 +577,82 @@ describe("SyncFileCache poison-file retry loop", () => {
       ),
     ).toBe(false);
   });
+
+  it("falls back to a full-file download when the cloud thumbnail is unavailable", async () => {
+    const accountDefinition = await createAccount("acct-thumb-fallback");
+    const folder = await createFolder(
+      accountDefinition.id,
+      "photos-thumb-fallback",
+    );
+    const file = await createImageFile(
+      accountDefinition.id,
+      folder,
+      "fallback.jpg",
+      true,
+    );
+    const account =
+      await accountFactory.AccountFactoryGetAccountImplementation(
+        accountDefinition.id,
+      );
+    jest
+      .spyOn(account, "downloadThumbnail")
+      .mockRejectedValue(new ThumbnailNotAvailableError(file.idCloud, 406));
+
+    queueFileSyncOp(accountDefinition.id, file, "syncThumbnail");
+    await waitForQueueDrain(`test-op:${file.id}`, "syncThumbnail");
+
+    const cacheDir = await fileData.FileDataGetFileCacheDir(
+      span,
+      accountDefinition.id,
+      file.id,
+    );
+    expect(fs.existsSync(path.join(cacheDir, "thumbnail.webp"))).toBe(true);
+    const failure = syncFailures
+      .SyncFailuresList()
+      .find(
+        (f) =>
+          f.functionName === "syncThumbnail" && f.fileIds.includes(file.id),
+      );
+    expect(failure).toBeUndefined();
+    const updated = await fileData.FileDataGet(span, file.id);
+    expect(updated.syncFailCount).toBe(0);
+    expect(updated.lastSyncError).toBeNull();
+  }, 20000);
+
+  it("skips a video cleanly when the cloud thumbnail is unavailable", async () => {
+    const accountDefinition = await createAccount("acct-video-thumb");
+    const folder = await createFolder(
+      accountDefinition.id,
+      "photos-video-thumb",
+    );
+    const file = await createVideoFile(accountDefinition.id, folder, "clip.mp4");
+    const account =
+      await accountFactory.AccountFactoryGetAccountImplementation(
+        accountDefinition.id,
+      );
+    jest
+      .spyOn(account, "downloadThumbnail")
+      .mockRejectedValue(new ThumbnailNotAvailableError(file.idCloud, 406));
+
+    queueFileSyncOp(accountDefinition.id, file, "syncThumbnail");
+    await waitForQueueDrain(`test-op:${file.id}`, "syncThumbnail");
+
+    const failure = syncFailures
+      .SyncFailuresList()
+      .find(
+        (f) =>
+          f.functionName === "syncThumbnail" && f.fileIds.includes(file.id),
+      );
+    expect(failure).toBeUndefined();
+    const updated = await fileData.FileDataGet(span, file.id);
+    expect(updated.syncFailCount).toBe(0);
+    const cacheDir = await fileData.FileDataGetFileCacheDir(
+      span,
+      accountDefinition.id,
+      file.id,
+    );
+    expect(fs.existsSync(path.join(cacheDir, "thumbnail.webp"))).toBe(false);
+  }, 20000);
 
   it("skips auto re-queueing for files past the retry cap", async () => {
     const accountDefinition = await createAccount("acct-cap");
