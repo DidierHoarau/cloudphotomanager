@@ -1,5 +1,6 @@
 import {
   FileDataAdd,
+  FileDataClearSyncGone,
   FileDataDelete,
   FileDataListByFolder,
   FileDataRecordSyncSuccess,
@@ -80,6 +81,11 @@ export async function SyncInventorySyncFolder(
         cloudFile.idCloud === knownFile.idCloud &&
         cloudFile.hash === knownFile.hash
       ) {
+        // The item is present in the cloud listing: a false-positive gone
+        // tombstone self-heals from inventory truth.
+        if (knownFile.syncGone) {
+          await FileDataClearSyncGone(span, knownFile.id);
+        }
         continue;
       }
       // The cloud item kept the same id (path/name) but its provider item
@@ -94,6 +100,9 @@ export async function SyncInventorySyncFolder(
       knownFile.dateUpdated = cloudFile.dateUpdated;
       knownFile.dateSync = new Date();
       await FileDataUpdate(span, knownFile);
+      if (knownFile.syncGone) {
+        await FileDataClearSyncGone(span, knownFile.id);
+      }
       updated = true;
       if (contentChanged) {
         // Content was replaced under the same name: cached previews and

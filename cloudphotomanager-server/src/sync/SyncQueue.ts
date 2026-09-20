@@ -23,7 +23,7 @@ import {
   SyncFileCacheCheckFile,
   SyncFileCacheRemoveFile,
 } from "./SyncFileCache";
-import { FileDataGet, FileDataUpdateKeywords, FileDataRecordSyncFailure, FileDataRecordSyncSuccess } from "../files/FileData";
+import { FileDataGet, FileDataUpdateKeywords, FileDataRecordSyncFailure, FileDataRecordSyncSuccess, FileDataMarkSyncGone } from "../files/FileData";
 import { AccountDataGet } from "../accounts/AccountData";
 import {
   SqlDbUtilsExecSQL,
@@ -516,6 +516,10 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
     } catch (err) {
       logger.error("Error Processing Queue Item", err);
       const errorMessage = buildErrorMessage(err);
+      const missingInCloud = isMissingInCloudError(err);
+      const displayMessage = missingInCloud
+        ? `${errorMessage} (marked as gone, will not be retried until the folder sync finds it again)`
+        : errorMessage;
       if (RECORDABLE_OPS.has(item.functionName)) {
         try {
           if (err instanceof MoveConflictError) {
@@ -538,7 +542,7 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
               priority: item.priority,
               data: item.data,
               fileIds: item.fileIds || [],
-              errorMessage,
+              errorMessage: displayMessage,
               filePath,
               accountName,
             });
@@ -550,15 +554,22 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
       if (FILE_CACHE_OPS.has(item.functionName)) {
         const failSpan = OTelTracer().startSpan("SyncQueueFileSyncFailure");
         try {
-          for (const fid of item.fileIds || []) {
-            await FileDataRecordSyncFailure(failSpan, fid, errorMessage);
-          }
-          if (isMissingInCloudError(err)) {
+          if (missingInCloud) {
+            // The cloud account reports the item as gone (404 / ItemNotFound):
+            // tombstone it so it is not retried on every cycle. The folder
+            // re-sync below remains the reconciliation/cleanup authority.
+            for (const fid of item.fileIds || []) {
+              await FileDataMarkSyncGone(failSpan, fid, displayMessage);
+            }
             await queueFolderResyncForMissingFiles(
               failSpan,
               item.accountId,
               item.fileIds || [],
             );
+          } else {
+            for (const fid of item.fileIds || []) {
+              await FileDataRecordSyncFailure(failSpan, fid, errorMessage);
+            }
           }
         } catch (failErr) {
           logger.error("Error recording file sync failure", failErr);

@@ -248,7 +248,7 @@ describe("SyncInventory folder reconciliation", () => {
     // stale cache files and a failure count past a few retries.
     SqlDbUtilsExecSQL(
       span,
-      "UPDATE files SET idCloud = 'stale-cloud-item-ref', hash = 'old-content-hash', keywords = 'old keywords', syncFailCount = 3 WHERE id = ?",
+      "UPDATE files SET idCloud = 'stale-cloud-item-ref', hash = 'old-content-hash', keywords = 'old keywords', syncFailCount = 3, syncGone = 1 WHERE id = ?",
       [file.id],
     );
     const cacheDir = await cacheDirFor(accountDefinition.id, file.id);
@@ -258,14 +258,15 @@ describe("SyncInventory folder reconciliation", () => {
 
     await syncInventory.SyncInventorySyncFolder(account, folder);
 
-    // The record is refreshed and the stale cache/keywords/failures are
-    // cleared.
+    // The record is refreshed and the stale cache/keywords/failures and the
+    // gone tombstone are cleared.
     const updated = await fileData.FileDataGet(span, file.id);
     expect(updated).not.toBeNull();
     expect(updated.idCloud).toBe(file.idCloud);
     expect(updated.hash).toBe(sha256File(file.idCloud));
     expect(updated.keywords).toBeNull();
     expect(updated.syncFailCount).toBe(0);
+    expect(updated.syncGone).toBe(0);
     expect(fs.existsSync(path.join(cacheDir, "preview.webp"))).toBe(false);
     expect(fs.existsSync(path.join(cacheDir, "thumbnail.webp"))).toBe(false);
 
@@ -291,11 +292,44 @@ describe("SyncInventory folder reconciliation", () => {
       );
 
     await fs.remove(file.idCloud);
+    // Files tombstoned as gone must still be cleaned up by the folder sync
+    // when they are absent from the cloud listing.
+    SqlDbUtilsExecSQL(span, "UPDATE files SET syncGone = 1 WHERE id = ?", [
+      file.id,
+    ]);
 
     await syncInventory.SyncInventorySyncFolder(account, folder);
 
     const updated = await fileData.FileDataGet(span, file.id);
     expect(updated).toBeNull();
+  }, 20000);
+
+  it("clears a gone tombstone when the file is still present in the cloud", async () => {
+    const accountDefinition = await createAccount("acct-falsegone");
+    const folder = await createFolder(
+      accountDefinition.id,
+      "photos-falsegone",
+    );
+    const file = await createImageFile(
+      accountDefinition.id,
+      folder,
+      "falsegone.jpg",
+    );
+    const account =
+      await accountFactory.AccountFactoryGetAccountImplementation(
+        accountDefinition.id,
+      );
+
+    SqlDbUtilsExecSQL(span, "UPDATE files SET syncGone = 1 WHERE id = ?", [
+      file.id,
+    ]);
+
+    await syncInventory.SyncInventorySyncFolder(account, folder);
+
+    const updated = await fileData.FileDataGet(span, file.id);
+    expect(updated).not.toBeNull();
+    expect(updated.syncGone).toBe(0);
+    await waitForQueueDrainForFile(file.id);
   }, 20000);
 
   it("adds cloud files that are not known yet", async () => {

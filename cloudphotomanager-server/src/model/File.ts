@@ -19,6 +19,10 @@ export class File {
   public lastSyncError: string;
   public lastSyncAttempt: Date;
 
+  // Tombstone for files that the cloud account reports as missing (404 /
+  // ItemNotFound): they are not retried until a folder sync finds them again.
+  public syncGone: number;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public info: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,6 +38,7 @@ export class File {
     this.syncFailCount = 0;
     this.lastSyncError = null;
     this.lastSyncAttempt = null;
+    this.syncGone = 0;
   }
 
   public static getMediaType(name: string): FileMediaType {
