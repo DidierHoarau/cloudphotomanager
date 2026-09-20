@@ -100,6 +100,12 @@ export async function SyncFileCacheCheckFile(
   priority: SyncQueueItemPriority = SyncQueueItemPriority.NORMAL,
 ) {
   const span = OTelTracer().startSpan("SyncFileCacheCheckFile", context);
+  if (file.syncGone) {
+    // Tombstoned as missing in the cloud: do not re-queue any work. The
+    // folder re-sync is the authority that repairs or deletes the row.
+    span.end();
+    return;
+  }
   if ((file.syncFailCount ?? 0) >= SYNC_FAIL_MAX_AUTO_RETRY) {
     logger.warn(
       `Skipping auto re-queue of file ${file.id} (${file.filename}): ` +
@@ -115,6 +121,13 @@ export async function SyncFileCacheCheckFile(
     account.getAccountDefinition().id,
     file.id,
   );
+  if (fs.existsSync(`${cacheDir}/corrupt.marker`)) {
+    // The image content was detected as corrupt: no recurring re-queues (the
+    // warn was logged once when the marker was written). A manual rebuild of
+    // the cache removes the marker and restores retries.
+    span.end();
+    return;
+  }
   const isImage =
     File.getMediaType(file.filename) === FileMediaType.image ||
     File.getMediaType(file.filename) === FileMediaType.imageRaw;
@@ -214,6 +227,13 @@ export async function SyncFileCacheCleanUp(context: Span, account: Account) {
 }
 
 // Private Functions
+
+// sharp/libvips error signatures for unreadable image content (truncated or
+// corrupt JPEG streams). Used to skip cache generation instead of failing.
+function isCorruptImageError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /VipsJpeg|Corrupt JPEG data|premature end/i.test(message);
+}
 
 async function getVideoWidthWithFfprobe(
   context: Span,
@@ -366,17 +386,33 @@ export async function syncPhotoFromFull(account: Account, file: File) {
           );
         }
         await FileDataUpdateInfo(span, file);
-        // Auto-rotate pixels based on EXIF orientation tag, then strip it
-        await sharp(`${tmpDir}/${tmpFileName}`)
-          .rotate()
-          .withMetadata()
-          .resize({ width: 300 })
-          .toFile(`${cacheDir}/thumbnail.webp`);
-        await sharp(`${tmpDir}/${tmpFileName}`)
-          .rotate()
-          .withMetadata()
-          .resize({ width: 2000, height: 2000, fit: "inside" })
-          .toFile(`${cacheDir}/preview.webp`);
+        // Auto-rotate pixels based on EXIF orientation tag, then strip it.
+        // A corrupt image (e.g. truncated JPEG) must not fail the sync on
+        // every cycle: tombstone cache generation for the file instead.
+        try {
+          await sharp(`${tmpDir}/${tmpFileName}`)
+            .rotate()
+            .withMetadata()
+            .resize({ width: 300 })
+            .toFile(`${cacheDir}/thumbnail.webp`);
+          await sharp(`${tmpDir}/${tmpFileName}`)
+            .rotate()
+            .withMetadata()
+            .resize({ width: 2000, height: 2000, fit: "inside" })
+            .toFile(`${cacheDir}/preview.webp`);
+        } catch (err) {
+          if (!isCorruptImageError(err)) {
+            throw err;
+          }
+          await fs.writeFile(
+            path.join(cacheDir, "corrupt.marker"),
+            err instanceof Error ? err.message : String(err),
+          );
+          logger.warn(
+            `Corrupt image, skipping thumbnail/preview generation for ${account.getAccountDefinition().id} ${file.id} : ${file.filename}: ${err?.message ?? err}`,
+            span,
+          );
+        }
       })
       .catch((err) => {
         logger.warn(`Error Synchronizing Photo: ${err?.message ?? err}`, span);

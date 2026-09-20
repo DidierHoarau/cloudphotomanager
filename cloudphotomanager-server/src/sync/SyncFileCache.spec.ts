@@ -153,6 +153,36 @@ describe("SyncFileCache poison-file retry loop", () => {
     return file;
   }
 
+  async function createTruncatedImageFile(
+    accountId: string,
+    folder: Folder,
+    filename: string,
+  ): Promise<File> {
+    const file = new File(accountId, folder.id, filename);
+    file.idCloud = path.join(folder.idCloud, filename);
+    file.hash = "test-hash";
+    file.dateSync = new Date();
+    file.dateUpdated = new Date();
+    file.dateMedia = new Date();
+    const jpeg = await sharp({
+      create: {
+        width: 600,
+        height: 600,
+        channels: 3,
+        background: { r: 120, g: 80, b: 40 },
+      },
+    })
+      .jpeg()
+      .toBuffer();
+    // Cut the entropy-coded scan data so libvips reports a premature end.
+    await fs.writeFile(
+      file.idCloud,
+      jpeg.subarray(0, Math.floor(jpeg.length / 2)),
+    );
+    await fileData.FileDataAdd(span, file);
+    return file;
+  }
+
   function queueFileSyncOp(
     accountId: string,
     file: File,
@@ -360,7 +390,7 @@ describe("SyncFileCache poison-file retry loop", () => {
     expect(fs.existsSync(path.join(cacheDir, "preview.webp"))).toBe(true);
   });
 
-  it("queues a folder re-sync when the cloud download fails with 404", async () => {
+  it("marks a file gone when the cloud download fails with 404 and queues a folder re-sync", async () => {
     const accountDefinition = await createAccount("acct-404");
     const folder = await createFolder(accountDefinition.id, "photos-404");
     const file = await createImageFile(
@@ -383,7 +413,9 @@ describe("SyncFileCache poison-file retry loop", () => {
     await waitForQueueDrain(`test-op:${file.id}`, "syncPhotoFromFull");
 
     const updated = await fileData.FileDataGet(span, file.id);
-    expect(updated.syncFailCount).toBe(1);
+    expect(updated.syncGone).toBe(1);
+    expect(updated.syncFailCount).toBe(0);
+    expect(updated.lastSyncError).toContain("404");
 
     const failure = syncFailures
       .SyncFailuresList()
@@ -394,12 +426,106 @@ describe("SyncFileCache poison-file retry loop", () => {
       );
     expect(failure).toBeDefined();
     expect(failure.errorMessage).toContain("404");
+    expect(failure.errorMessage).toContain("marked as gone");
 
     const folderResyncRows = queueRows().filter(
       (row) => row.functionName === "SyncInventorySyncFolder",
     );
     expect(folderResyncRows).toHaveLength(1);
     expect(JSON.parse(folderResyncRows[0].data).folderId).toBe(folder.id);
+
+    // A gone file must not be re-queued by subsequent cache checks.
+    const reloaded = await fileData.FileDataGet(span, file.id);
+    await syncFileCache.SyncFileCacheCheckFile(span, account, reloaded);
+    expect(rowsForFile(file.id)).toHaveLength(0);
+  });
+
+  // New tests below are placed before the mock-held in-flight tests: those
+  // hold NORMAL pool slots until afterAll, and queued ops behind them would
+  // stall until the holds are released.
+  it("completes syncPhotoFromFull on a corrupt image and writes a corrupt marker", async () => {
+    const accountDefinition = await createAccount("acct-corrupt");
+    const folder = await createFolder(accountDefinition.id, "photos-corrupt");
+    const file = await createTruncatedImageFile(
+      accountDefinition.id,
+      folder,
+      "corrupt.jpg",
+    );
+
+    queueFileSyncOp(accountDefinition.id, file, "syncPhotoFromFull");
+    await waitForQueueDrain(`test-op:${file.id}`, "syncPhotoFromFull");
+
+    const cacheDir = await fileData.FileDataGetFileCacheDir(
+      span,
+      accountDefinition.id,
+      file.id,
+    );
+    expect(fs.existsSync(path.join(cacheDir, "corrupt.marker"))).toBe(true);
+    expect(fs.existsSync(path.join(cacheDir, "thumbnail.webp"))).toBe(false);
+    expect(fs.existsSync(path.join(cacheDir, "preview.webp"))).toBe(false);
+
+    // The op completed normally: no failure recorded, no counter churn, and
+    // the EXIF saved by FileDataUpdateInfo is kept.
+    const updated = await fileData.FileDataGet(span, file.id);
+    expect(updated.syncFailCount).toBe(0);
+    expect(updated.lastSyncError).toBeNull();
+
+    const failure = syncFailures
+      .SyncFailuresList()
+      .find(
+        (f) =>
+          f.functionName === "syncPhotoFromFull" && f.fileIds.includes(file.id),
+      );
+    expect(failure).toBeUndefined();
+  }, 20000);
+
+  it("skips cache checks for files with a corrupt marker", async () => {
+    const accountDefinition = await createAccount("acct-marker");
+    const folder = await createFolder(accountDefinition.id, "photos-marker");
+    const file = await createImageFile(
+      accountDefinition.id,
+      folder,
+      "marked.jpg",
+      true,
+    );
+    const account =
+      await accountFactory.AccountFactoryGetAccountImplementation(
+        accountDefinition.id,
+      );
+    const cacheDir = await fileData.FileDataGetFileCacheDir(
+      span,
+      accountDefinition.id,
+      file.id,
+    );
+    await fs.ensureDir(cacheDir);
+    await fs.writeFile(
+      path.join(cacheDir, "corrupt.marker"),
+      "VipsJpeg: premature end of JPEG image",
+    );
+
+    await syncFileCache.SyncFileCacheCheckFile(span, account, file);
+
+    expect(rowsForFile(file.id)).toHaveLength(0);
+  });
+
+  it("clears a gone tombstone after a successful sync", async () => {
+    const accountDefinition = await createAccount("acct-gone-ok");
+    const folder = await createFolder(accountDefinition.id, "photos-gone-ok");
+    const file = await createImageFile(
+      accountDefinition.id,
+      folder,
+      "alive.jpg",
+      true,
+    );
+    SqlDbUtilsExecSQL(span, "UPDATE files SET syncGone = 1 WHERE id = ?", [
+      file.id,
+    ]);
+
+    queueFileSyncOp(accountDefinition.id, file, "syncPhotoFromFull");
+    await waitForQueueDrain(`test-op:${file.id}`, "syncPhotoFromFull");
+
+    const updated = await fileData.FileDataGet(span, file.id);
+    expect(updated.syncGone).toBe(0);
   });
 
   it("records a SyncFailure when syncThumbnail fails", async () => {

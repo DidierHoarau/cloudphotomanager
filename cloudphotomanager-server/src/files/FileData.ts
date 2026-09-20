@@ -209,13 +209,44 @@ export async function FileDataRecordSyncSuccess(
   fileId: string,
 ): Promise<void> {
   const span = OTelTracer().startSpan("FileDataRecordSyncSuccess", context);
-  // Only touch rows that previously recorded a failure, to avoid a write on
-  // every successful sync.
+  // Only touch rows that previously recorded a failure or a gone tombstone,
+  // to avoid a write on every successful sync. A success proves the item is
+  // alive in the cloud, so it also clears a stale syncGone marker.
   await SqlDbUtilsExecSQL(
     span,
-    "UPDATE files SET syncFailCount = 0, lastSyncError = NULL, lastSyncAttempt = ? " +
-      " WHERE id = ? AND COALESCE(syncFailCount, 0) > 0",
+    "UPDATE files " +
+      " SET syncFailCount = 0, lastSyncError = NULL, lastSyncAttempt = ?, syncGone = 0" +
+      " WHERE id = ? AND (COALESCE(syncFailCount, 0) > 0 OR COALESCE(syncGone, 0) > 0)",
     [new Date().toISOString(), fileId],
+  );
+  span.end();
+}
+
+export async function FileDataMarkSyncGone(
+  context: Span,
+  fileId: string,
+  errorMessage: string,
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataMarkSyncGone", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files " +
+      " SET syncGone = 1, lastSyncError = ?, lastSyncAttempt = ?" +
+      " WHERE id = ? ",
+    [errorMessage, new Date().toISOString(), fileId],
+  );
+  span.end();
+}
+
+export async function FileDataClearSyncGone(
+  context: Span,
+  fileId: string,
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataClearSyncGone", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET syncGone = 0 WHERE id = ? AND COALESCE(syncGone, 0) > 0",
+    [fileId],
   );
   span.end();
 }
@@ -365,5 +396,6 @@ function fromRaw(fileRaw: any): File {
   file.lastSyncAttempt = fileRaw.lastSyncAttempt
     ? new Date(fileRaw.lastSyncAttempt)
     : null;
+  file.syncGone = fileRaw.syncGone ?? 0;
   return file;
 }
