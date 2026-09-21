@@ -12,7 +12,6 @@ export class RoutesFileOperationsRename {
         accountId: string;
       };
       Body: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         fileIdNames: any[];
       };
     }

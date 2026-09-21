@@ -23,7 +23,6 @@ export function OTelLogger() {
   return ctx.OTelLogger();
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function OTelRequestSpan(req: any): Span | undefined {
   return ctx.OTelRequestSpan(req);
 }

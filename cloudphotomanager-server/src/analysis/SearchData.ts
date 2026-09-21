@@ -60,7 +60,6 @@ export async function SearchDataListAccountDuplicates(
 export async function SearchDataListFiles(
   context: Span,
   accountId: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   filters: any,
 ): Promise<File[]> {
   const span = OTelTracer().startSpan("SearchDataListFiles", context);
@@ -122,7 +121,6 @@ export async function SearchDataAggregateByGeoGrid(
     bbox: GeoBox;
     gridRows?: number;
     gridCols?: number;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     filters?: any;
   },
 ): Promise<GeoGridResult> {
@@ -142,7 +140,6 @@ export async function SearchDataAggregateByGeoGrid(
   const cellHeight = latSpan / gridRows;
   const cellWidth = lonSpan / gridCols;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const queryParameters: any[] = [accountId];
   let extraCondition = "";
   const filters = options.filters || {};
@@ -175,7 +172,6 @@ export async function SearchDataAggregateByGeoGrid(
 
   // Prepend the bucket-math params for the SELECT clause; GROUP BY uses
   // the row/col aliases so we don't repeat the bucket expression.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const bucketParams: any[] = [
     gridRows,
     bbox.minLat,
@@ -194,10 +190,8 @@ export async function SearchDataAggregateByGeoGrid(
     ` WHERE accountId = ? AND ${GEO_PRESENT_CONDITION} ${extraCondition} ` +
     ` GROUP BY row, col `;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const params: any[] = [...bucketParams, ...queryParameters];
   const rawData = await SqlDbUtilsQuerySQL(span, sql, params);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cells: GeoGridCell[] = rawData.map((r: any) => ({
     row: Number(r.row),
     col: Number(r.col),
@@ -211,7 +205,6 @@ export async function SearchDataAggregateByGeoGrid(
 
 // Private Function
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fromRaw(fileRaw: any): File {
   const file = new File(fileRaw.accountId, fileRaw.folderId, fileRaw.filename);
   file.id = fileRaw.id;

@@ -49,13 +49,13 @@ Never redefine Pico CSS framework variables (e.g. `--pico-*`). Custom variables 
 After every code change, the LLM must verify that all three pass with 0 errors:
 
 ```bash
-# Build (TypeScript compilation)
-cd cloudphotomanager-server && npx tsc --noEmit
+# Build (TypeScript compile, then type-check of the spec files)
+cd cloudphotomanager-server && npm run build
 
-# Linter
-cd cloudphotomanager-server && npx eslint src/
+# Linter (oxlint, default recommended preset)
+cd cloudphotomanager-server && npx oxlint src/
 
-# Tests
+# Tests (Jest with @swc/jest transform and v8 coverage)
 cd cloudphotomanager-server && npm test
 ```
 

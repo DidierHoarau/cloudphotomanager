@@ -135,7 +135,6 @@ export async function OneDriveInventoryGetFolder(
 
 // Private Functions
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function folderFromRaw(data: any, oneDriveAccount: OneDriveAccount): Folder {
   const folder = new Folder(
     oneDriveAccount.getAccountDefinition().id,
@@ -147,7 +146,6 @@ function folderFromRaw(data: any, oneDriveAccount: OneDriveAccount): Folder {
   return folder;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fileFromRaw(data: any, folderId: string, oneDriveAccount: OneDriveAccount): File {
   const file = new File(oneDriveAccount.getAccountDefinition().id, folderId, data.name);
   file.idCloud = data.id;

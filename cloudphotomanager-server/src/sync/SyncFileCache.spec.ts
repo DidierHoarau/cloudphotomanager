@@ -50,7 +50,6 @@ jest.mock("./SyncInventory", () => ({
   SyncInventorySyncFolder: jest.fn(() => mockHoldPromise()),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type QueueRow = any;
 
 describe("SyncFileCache poison-file retry loop", () => {

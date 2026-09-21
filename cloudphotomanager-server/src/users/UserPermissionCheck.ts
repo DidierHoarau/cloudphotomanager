@@ -26,7 +26,6 @@ export async function UserPermissionCheckFilterFoldersForUser(
       folderPermittedIteration.folderId
     );
     if (folderPermittedDefinition) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (folderPermittedDefinition as any).scope = folderPermittedIteration.scope;
       folderPermittedList.push(folderPermittedDefinition);
     }
@@ -37,7 +36,6 @@ export async function UserPermissionCheckFilterFoldersForUser(
       if (folderPermitted.id === folder.id) {
         filteredFolders.push(folder);
       } else if (
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (folderPermitted as any).scope === "ro_recursive" &&
         folderPermitted.accountId === folder.accountId &&
         folder.folderpath.lastIndexOf(`${folderPermitted.folderpath}/`) === 0

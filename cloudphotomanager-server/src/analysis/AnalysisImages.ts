@@ -86,9 +86,7 @@ export async function AnalysisImagesGetLabels(
 
 let config: Config | null = null;
 let dateLastUsed: Date | null = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let pipe: any = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let pipePromise: Promise<any> | null = null;
 let inferenceTail: Promise<void> = Promise.resolve();
 let releaseTimer: NodeJS.Timeout | null = null;
@@ -140,7 +138,6 @@ async function maybeReleasePipeline(): Promise<void> {
   // Wait for any in-flight inference to complete before disposing so we
   // don't pull the model out from under an active call.
   await inferenceTail;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const p: any = pipe;
   pipe = null;
   pipePromise = null;
@@ -154,7 +151,6 @@ async function maybeReleasePipeline(): Promise<void> {
   }
   // Nudge the GC when the host exposes it (node --expose-gc). Harmless
   // no-op otherwise.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g = (global as any).gc;
   if (typeof g === "function") {
     try {

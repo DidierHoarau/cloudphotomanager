@@ -78,7 +78,6 @@ export async function UserDataDelete(context: Span, id: string): Promise<void> {
 
 // private Function
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fromRaw(userRaw: any, includePasswordEncrypted = true): User {
   const user = new User();
   user.id = userRaw.id;

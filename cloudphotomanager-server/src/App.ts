@@ -84,7 +84,6 @@ Promise.resolve().then(async () => {
       methods: "GET,PUT,POST,DELETE",
     });
   }
-  /* eslint-disable-next-line */
   fastify.register(require("@fastify/multipart"));
 
   fastify.register(cookie, {

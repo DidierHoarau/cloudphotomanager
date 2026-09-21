@@ -68,7 +68,6 @@ export interface GeoBox {
   maxLon: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function isValidGeoBox(box: any): box is GeoBox {
   return (
     box !== null &&
@@ -85,7 +84,6 @@ export function isValidGeoBox(box: any): box is GeoBox {
 // to files that actually have GPS data.
 export function buildGeoBoxConditionSql(box: GeoBox): {
   sql: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: any[];
 } {
   const sql =

@@ -431,16 +431,14 @@ export async function syncPhotoFromFull(account: Account, file: File) {
             exif: true,
           });
           if (exifData) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             file.info.exif = exifData as Record<string, any>;
             const gpsResult = await extractGps(filePath);
             if (gpsResult.gpsInfo) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (file.info.exif as Record<string, any>).GPSInfo =
                 gpsResult.gpsInfo;
             }
           }
-        } catch (_) {
+        } catch {
           logger.info(
             `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
           );
@@ -527,7 +525,6 @@ export async function syncPhotoKeyWords(account: Account, file: File) {
           // Only re-extract EXIF from preview if not already populated by
           // syncPhotoFromFull (which has access to the original file and
           // therefore better GPS / maker-note data).
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const existingGps = (file.info.exif as Record<string, any> | undefined)
             ?.GPSInfo;
           if (!existingGps) {
@@ -539,17 +536,14 @@ export async function syncPhotoKeyWords(account: Account, file: File) {
                 exif: true,
               });
               if (previewExif) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 file.info.exif = previewExif as Record<string, any>;
                 const gpsResult = await extractGps(previewPath);
                 if (gpsResult.gpsInfo) {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   (file.info.exif as Record<string, any>).GPSInfo =
                     gpsResult.gpsInfo;
                 }
               }
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            } catch (err) {
+            } catch {
               logger.info(
                 `No exif metadata for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
               );

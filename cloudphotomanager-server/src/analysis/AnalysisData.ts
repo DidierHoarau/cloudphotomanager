@@ -111,7 +111,6 @@ export async function AnalysisDataListAccountDuplicates(
 
 // Private Function
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fromRaw(fileRaw: any): File {
   const file = new File(fileRaw.accountId, fileRaw.folderId, fileRaw.filename);
   file.id = fileRaw.id;

@@ -108,7 +108,6 @@ export async function AccountDataDeleteAllFilesAndFolders(
 
 // Private Functions
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fromRaw(accountRaw: any): AccountDefinition {
   const account = new AccountDefinition();
   account.id = accountRaw.id;

@@ -11,7 +11,6 @@ export class User {
     this.id = uuidv4();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public toJson(): any {
     return {
       id: this.id,

@@ -29,7 +29,6 @@ export interface SyncFailure {
   functionName: string;
   kind: "conflict" | "error";
   priority: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any;
   fileIds: string[];
   errorMessage?: string;
@@ -42,7 +41,6 @@ export interface SyncFailure {
   conflict?: SyncFailureConflict;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type BroadcastFn = (message: any) => void;
 let broadcastFn: BroadcastFn | null = null;
 

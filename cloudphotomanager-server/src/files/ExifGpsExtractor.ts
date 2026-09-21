@@ -88,7 +88,6 @@ export async function extractGps(
       gps: true,
       tiff: true,
       exif: true,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     })) as Record<string, any> | undefined;
   } catch {
     return { gpsInfo: null };

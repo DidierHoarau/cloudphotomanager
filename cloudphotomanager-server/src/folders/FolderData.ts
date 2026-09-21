@@ -9,9 +9,7 @@ import {
 import debounce from "lodash/debounce";
 import { OTelTracer } from "../OTelContext";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let cacheAccountsFolders: any[] = [];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let cacheAccountsFoldersCounts: any[] = [];
 let onCacheRefreshed: (() => void) | null = null;
 
@@ -326,7 +324,6 @@ export async function FolderDataRefreshCacheFolders(
   context: Span,
 ): Promise<void> {
   const span = OTelTracer().startSpan("FolderDataRefreshCacheFolders", context);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const newCache: any = {};
   const accounts = await AccountDataList(span);
   for (const account of accounts) {
@@ -344,7 +341,6 @@ export async function FolderDataRefreshCacheFoldersCounts(
     "FolderDataRefreshCacheFoldersCounts",
     context,
   );
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const newCache: any = {};
   const accounts = await AccountDataList(span);
   for (const account of accounts) {
@@ -410,7 +406,6 @@ function FolderDataCacheCounts() {
   FolderDataCacheCountsDebounced();
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fromRaw(folderRaw: any): Folder {
   const folder = new Folder(folderRaw.accountId, folderRaw.folderpath);
   folder.id = folderRaw.id;
