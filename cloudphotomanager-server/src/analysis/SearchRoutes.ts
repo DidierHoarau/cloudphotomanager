@@ -33,7 +33,6 @@ export class SearchRoutes {
         accountId: string;
       };
       Body: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         filters: any;
       };
     }>("/", async (req, res) => {
@@ -57,7 +56,6 @@ export class SearchRoutes {
         bbox: GeoBox;
         gridRows?: number;
         gridCols?: number;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         filters?: any;
       };
     }>("/geoGrid", async (req, res) => {

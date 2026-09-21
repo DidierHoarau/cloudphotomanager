@@ -49,8 +49,7 @@ describe("SyncInventory folder reconciliation", () => {
   let accountData: typeof import("../accounts/AccountData");
   let accountFactory: typeof import("../accounts/AccountFactory");
 
-  function queueRows(): // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  any[] {
+  function queueRows(): any[] {
     return SqlDbUtilsQuerySQL(span, "SELECT * FROM sync_queue");
   }
 

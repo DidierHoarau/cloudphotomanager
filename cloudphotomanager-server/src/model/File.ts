@@ -23,9 +23,7 @@ export class File {
   // ItemNotFound): they are not retried until a folder sync finds them again.
   public syncGone: number;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public info: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public metadata: any;
 
   constructor(accountId: string, folderId: string, filename: string) {

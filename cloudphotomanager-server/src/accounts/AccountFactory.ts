@@ -7,7 +7,6 @@ import { AwsS3Account } from "./awsS3/AwsS3Account";
 import { LocalAccount } from "./localDrive/LocalDriveAccount";
 import { OneDriveAccount } from "./oneDrive/OneDriveAccount";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const accounts: any[] = [];
 
 export async function AccountFactoryGetAccountFromDefinition(

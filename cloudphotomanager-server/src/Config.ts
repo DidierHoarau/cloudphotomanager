@@ -36,7 +36,7 @@ export class Config extends ConfigBase {
       if (pkg && pkg.version) {
         this.VERSION = pkg.version;
       }
-    } catch (_e) {
+    } catch {
       // keep default
     }
 

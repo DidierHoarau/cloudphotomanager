@@ -52,7 +52,6 @@ export class UserRoutes {
       if (userSession.isAuthenticated) {
         user = await UserDataGet(span, userSession.userId);
         const token = await AuthGenerateJWT(span, user);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (res as any).setCookie("token", token, {
           path: "/",
           signed: true,
@@ -74,7 +73,6 @@ export class UserRoutes {
         await UserPasswordCheckPassword(span, user, req.body.password)
       ) {
         const token = await AuthGenerateJWT(span, user);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (res as any).setCookie("token", token, {
           path: "/",
           signed: true,
@@ -163,7 +161,7 @@ export class UserRoutes {
         return res.status(403).send({ error: "Access Denied" });
       }
       const user = await UserDataGetByName(span, userSession.userId);
-      if (!req.body.password || !req.body.password) {
+      if (!req.body.password) {
         return res.status(400).send({ error: "Missing: Password" });
       }
       if (
@@ -199,7 +197,6 @@ export class UserRoutes {
         userId: string;
       };
       Body: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         info: any;
       };
     }>("/:userId/permissions", async (req, res) => {
@@ -227,7 +224,6 @@ export class UserRoutes {
     fastify.get("/access/validate", async (req, res) => {
       let tokenCokkie;
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tokenCokkie = (fastify as any).unsignCookie((req as any).cookies.token);
       } catch {
         tokenCokkie = null;

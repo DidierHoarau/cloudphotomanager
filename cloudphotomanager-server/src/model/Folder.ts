@@ -9,7 +9,6 @@ export class Folder {
   public accountId: string;
   public dateSync: Date;
   public dateUpdated: Date;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public info: any;
 
   constructor(accountId: string, folderpath: string) {

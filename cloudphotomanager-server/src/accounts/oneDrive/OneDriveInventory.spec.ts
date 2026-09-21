@@ -26,8 +26,7 @@ function mockOneDriveAccount(): {
   };
 }
 
-function rawFileItem(name: string, hashes: Record<string, string>): // eslint-disable-next-line @typescript-eslint/no-explicit-any
-any {
+function rawFileItem(name: string, hashes: Record<string, string>): any {
   return {
     id: `item-${name}`,
     name,

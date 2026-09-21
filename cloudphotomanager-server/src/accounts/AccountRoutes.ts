@@ -51,7 +51,6 @@ export class AccountRoutes {
     interface PostAccountValidation extends RequestGenericInterface {
       Body: {
         info: string;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         infoPrivate: any;
       };
     }
@@ -77,7 +76,6 @@ export class AccountRoutes {
         name: string;
         rootpath: string;
         info: string;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         infoPrivate: any;
       };
     }
@@ -117,7 +115,6 @@ export class AccountRoutes {
         name: string;
         rootpath: string;
         info: string;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         infoPrivate: any;
       };
     }

@@ -86,7 +86,6 @@ const FILE_CACHE_OPS = new Set<string>([
 
 type QueueFunction = (
   account: Account,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any,
   priority: SyncQueueItemPriority,
 ) => Promise<void>;
@@ -96,7 +95,6 @@ const promisePoolInteractive = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
 const promisePoolNormal = new PromisePool(MAX_PARALLEL_SYNC, 3600 * 1000);
 const promisePoolBatch = new PromisePool(1, 5 * 3600 * 1000);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type BroadcastFn = (message: any) => void;
 let broadcastFn: BroadcastFn | null = null;
 let queueProcessorRunning = false;
@@ -251,7 +249,6 @@ export async function SyncQueueInit(context: Span): Promise<void> {
   span.end();
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function SyncQueueGetCounts(): any[] {
   const rows = SqlDbUtilsQuerySQL(
     OTelTracer().startSpan("SyncQueueGetCounts"),
@@ -282,7 +279,6 @@ export function SyncQueueGetProcessingFileIds(): string[] {
   return Array.from(queuedFileIdRefCount.keys());
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function SyncQueueGetQueue(): any[] {
   const rows = SqlDbUtilsQuerySQL(
     OTelTracer().startSpan("SyncQueueGetQueue"),
@@ -292,7 +288,6 @@ export function SyncQueueGetQueue(): any[] {
       "priority ASC, dateCreated ASC LIMIT ?",
     [QUEUE_ITEMS_BROADCAST_LIMIT],
   );
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return rows.map((row: any) => {
     const item = rowToItem(row);
     return {
@@ -342,7 +337,6 @@ export function SyncQueueRemoveItem(id: string): void {
 export function SyncQueueQueueItem(
   accountId: string,
   id: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any,
   functionName: string,
   priority: SyncQueueItemPriority,
@@ -792,7 +786,6 @@ function SyncQueueRegisterFunction(
   functionRegistry.set(functionName, fn);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToItem(row: any): SyncQueueItem {
   let data: unknown;
   try {
@@ -806,7 +799,6 @@ function rowToItem(row: any): SyncQueueItem {
     functionName: row.functionName,
     priority: row.priority,
     status: row.status,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data: data as any,
     fileIds: safeParseStringArray(row.fileIds),
   };
@@ -874,9 +866,7 @@ function resolveItemLabel(item: SyncQueueItem): string | null {
 
 function slimLegacyData(
   functionName: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): any {
   if (!data || typeof data !== "object") return data;
   // Folder-based sync functions
@@ -905,7 +895,6 @@ function slimLegacyData(
 
 async function fileDeleteOperation(
   account: Account,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any,
 ): Promise<void> {
   const spanSubProcess = OTelTracer().startSpan("fileDeleteOperation");
@@ -937,7 +926,6 @@ async function fileDeleteOperation(
 
 async function folderMoveOperation(
   account: Account,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any,
 ): Promise<void> {
   const spanSubProcess = OTelTracer().startSpan("folderMoveOperation");
@@ -1041,7 +1029,6 @@ async function folderMoveOperation(
 
 async function fileRenameOperation(
   account: Account,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any,
 ): Promise<void> {
   const spanSubProcess = OTelTracer().startSpan("fileRenameOperation");
@@ -1072,7 +1059,6 @@ async function fileRenameOperation(
 
 async function fileCacheRebuildOperation(
   account: Account,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any,
 ): Promise<void> {
   const spanSubProcess = OTelTracer().startSpan("fileCacheRebuildOperation");

@@ -54,9 +54,7 @@ export async function AuthGenerateJWT(
 }
 
 export async function AuthMustBeAuthenticated(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   req: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   res: any,
 ): Promise<void> {
   let authenticated = false;
@@ -64,8 +62,7 @@ export async function AuthMustBeAuthenticated(
     try {
       jwt.verify(req.headers.authorization.split(" ")[1], config.JWT_KEY);
       authenticated = true;
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (err) {
+    } catch {
       authenticated = false;
     }
   }
@@ -75,7 +72,6 @@ export async function AuthMustBeAuthenticated(
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function AuthGetUserSession(req: any): Promise<UserSession> {
   const userSession: UserSession = { isAuthenticated: false };
   if (req.headers.authorization) {
@@ -98,8 +94,7 @@ export function AuthIsTokenValid(token: string): boolean {
   try {
     jwt.verify(token, config.JWT_KEY);
     return true;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (err) {
+  } catch {
     return false;
   }
 }

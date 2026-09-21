@@ -60,7 +60,6 @@ export async function UserPermissionDataDeleteForUser(
   span.end();
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fromRaw(json: any): UserPermission {
   if (!json) {
     return null;
