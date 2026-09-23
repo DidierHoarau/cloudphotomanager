@@ -22,24 +22,32 @@ export class AuthService {
 
   public static async getToken() {
     const storedKey = localStorage.getItem(AUTH_TOKEN_KEY);
-    if (storedKey) {
-      const decoded = jwtDecode(storedKey);
-      if ((decoded as any).exp < Date.now() / 1000) {
+    if (!storedKey) {
+      return null;
+    }
+    try {
+      const decoded = jwtDecode(storedKey) as any;
+      if (decoded.exp < Date.now() / 1000) {
         console.log("Auth token expired");
         localStorage.removeItem(AUTH_TOKEN_KEY);
         return null;
       }
       return storedKey;
-    } else {
+    } catch (error) {
+      console.log("Auth token invalid");
+      localStorage.removeItem(AUTH_TOKEN_KEY);
       return null;
     }
   }
 
   public static async getTokenInfo() {
     const storedKey = localStorage.getItem(AUTH_TOKEN_KEY);
-    if (storedKey) {
+    if (!storedKey) {
+      return null;
+    }
+    try {
       return jwtDecode(storedKey);
-    } else {
+    } catch (error) {
       return null;
     }
   }
