@@ -6,22 +6,21 @@
       </li>
     </ul>
     <ul class="menu-links">
-      <li v-if="syncStore.failuresCount > 0">
+      <li v-if="syncStore.failuresCount > 0 || syncStore.countTotal > 0">
         <NuxtLink
-          to="/settings/sync?tab=failures"
-          class="sync-indicator sync-indicator-error"
-          title="Sync operations failed — click to review"
-        >
-          <i class="bi bi-exclamation-triangle-fill"></i>
-        </NuxtLink>
-      </li>
-      <li v-if="syncStore.countTotal > 0">
-        <NuxtLink
-          to="/settings/sync"
+          :to="
+            syncStore.failuresCount > 0
+              ? '/settings/sync?tab=failures'
+              : '/settings/sync'
+          "
           class="sync-indicator"
-          title="Operations in progress"
+          :class="{
+            'sync-indicator-error': syncStore.failuresCount > 0,
+            'sync-indicator-blinking': syncStore.countTotal > 0,
+          }"
+          :title="syncIndicatorTitle"
         >
-          <i class="bi bi-hourglass-split"></i>
+          <i :class="syncIndicatorIcon"></i>
         </NuxtLink>
       </li>
       <li v-if="authenticationStore.isAuthenticated">
@@ -60,6 +59,22 @@
 import { AuthService } from "~~/services/AuthService";
 const authenticationStore = AuthenticationStore();
 const syncStore = SyncStore();
+
+const syncIndicatorIcon = computed(() =>
+  syncStore.countTotal > 0
+    ? "bi bi-hourglass-split"
+    : "bi bi-exclamation-triangle-fill",
+);
+
+const syncIndicatorTitle = computed(() => {
+  if (syncStore.failuresCount > 0 && syncStore.countTotal > 0) {
+    return "Sync in progress with errors — click to review errors";
+  }
+  if (syncStore.failuresCount > 0) {
+    return "Sync operations failed — click to review";
+  }
+  return "Sync in progress — click to view the queue";
+});
 </script>
 
 <script>
@@ -115,14 +130,13 @@ nav {
   opacity: 0.3;
 }
 .sync-indicator {
-  opacity: 0.6;
   font-size: 1em;
-  animation: pulse 1.5s infinite;
 }
 .sync-indicator-error {
   color: var(--color-danger);
-  opacity: 1;
-  animation: none;
+}
+.sync-indicator-blinking {
+  animation: pulse 1.5s infinite;
 }
 @keyframes pulse {
   0%,
