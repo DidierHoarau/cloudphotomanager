@@ -198,6 +198,18 @@ export default {
       return SyncStore().failuresCount || 0;
     },
   },
+  watch: {
+    "$route.query.tab"(tab) {
+      if (tab === "failures") {
+        if (this.activeTab !== "failures") {
+          this.activeTab = "failures";
+          SyncStore().fetchFailures();
+        }
+      } else if (this.activeTab === "failures") {
+        this.activeTab = "queue";
+      }
+    },
+  },
   async created() {
     await AccountsStore().fetch();
     const queryTab = this.$route.query && this.$route.query.tab;
