@@ -14,14 +14,13 @@
               : '/settings/sync'
           "
           class="sync-indicator"
-          :class="{ 'sync-indicator-error': syncStore.failuresCount > 0 }"
+          :class="{
+            'sync-indicator-error': syncStore.failuresCount > 0,
+            'sync-indicator-blinking': syncStore.countTotal > 0,
+          }"
           :title="syncIndicatorTitle"
         >
-          <i
-            v-if="syncStore.failuresCount > 0"
-            class="bi bi-exclamation-triangle-fill"
-          ></i>
-          <i v-if="syncStore.countTotal > 0" class="bi bi-hourglass-split"></i>
+          <i :class="syncIndicatorIcon"></i>
         </NuxtLink>
       </li>
       <li v-if="authenticationStore.isAuthenticated">
@@ -61,14 +60,20 @@ import { AuthService } from "~~/services/AuthService";
 const authenticationStore = AuthenticationStore();
 const syncStore = SyncStore();
 
+const syncIndicatorIcon = computed(() =>
+  syncStore.countTotal > 0
+    ? "bi bi-hourglass-split"
+    : "bi bi-exclamation-triangle-fill",
+);
+
 const syncIndicatorTitle = computed(() => {
   if (syncStore.failuresCount > 0 && syncStore.countTotal > 0) {
-    return "Sync errors and operations in progress — click to review errors";
+    return "Sync in progress with errors — click to review errors";
   }
   if (syncStore.failuresCount > 0) {
     return "Sync operations failed — click to review";
   }
-  return "Operations in progress";
+  return "Sync in progress — click to view the queue";
 });
 </script>
 
@@ -125,17 +130,13 @@ nav {
   opacity: 0.3;
 }
 .sync-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  opacity: 0.6;
   font-size: 1em;
-  animation: pulse 1.5s infinite;
 }
 .sync-indicator-error {
   color: var(--color-danger);
-  opacity: 1;
-  animation: none;
+}
+.sync-indicator-blinking {
+  animation: pulse 1.5s infinite;
 }
 @keyframes pulse {
   0%,
