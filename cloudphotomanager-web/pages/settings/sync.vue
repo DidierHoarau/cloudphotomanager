@@ -240,7 +240,7 @@ export default {
     setTab(tab) {
       if (this.activeTab === tab) return;
       this.activeTab = tab;
-      const query = { ...(this.$route.query || {}) };
+      const query = { ...this.$route.query };
       if (tab === "failures") {
         query.tab = "failures";
       } else {

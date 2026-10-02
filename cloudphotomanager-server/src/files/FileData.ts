@@ -34,17 +34,19 @@ export async function FileDataGetFileTmpDir(
 
 export async function FileDataGet(context: Span, id: string): Promise<File> {
   const span = OTelTracer().startSpan("FileDataGet", context);
-  const rawData = await SqlDbUtilsQuerySQL(
-    span,
-    "SELECT * FROM files WHERE id = ? ",
-    [id],
-  );
-  if (rawData.length === 0) {
-    return null;
+  try {
+    const rawData = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT * FROM files WHERE id = ? ",
+      [id],
+    );
+    if (rawData.length === 0) {
+      return null;
+    }
+    return fromRaw(rawData[0]);
+  } finally {
+    span.end();
   }
-  const file = fromRaw(rawData[0]);
-  span.end();
-  return file;
 }
 
 export async function FileDataGetByFolderId(
@@ -54,17 +56,19 @@ export async function FileDataGetByFolderId(
   filename: string,
 ): Promise<File> {
   const span = OTelTracer().startSpan("FileDataGetByFolderId", context);
-  const rawData = await SqlDbUtilsQuerySQL(
-    span,
-    "SELECT * FROM files WHERE accountId = ? AND folderpath = folderId AND filename = ? ",
-    [accountId, folderId, filename],
-  );
-  if (rawData.length === 0) {
-    return null;
+  try {
+    const rawData = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT * FROM files WHERE accountId = ? AND folderpath = folderId AND filename = ? ",
+      [accountId, folderId, filename],
+    );
+    if (rawData.length === 0) {
+      return null;
+    }
+    return fromRaw(rawData[0]);
+  } finally {
+    span.end();
   }
-  const file = fromRaw(rawData[0]);
-  span.end();
-  return file;
 }
 
 export async function FileDataListForAccount(
@@ -284,7 +288,7 @@ export async function FileDataListByFolderPaginated(
   const total = countRaw.length > 0 ? countRaw[0].count : 0;
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    `SELECT * FROM files WHERE accountId = ? AND folderId = ? ORDER BY dateMedia ${order} LIMIT ? OFFSET ?`,
+    `SELECT * FROM files WHERE accountId = ? AND folderId = ? ORDER BY dateMedia ${order}, id ${order} LIMIT ? OFFSET ?`,
     [accountId, folderId, pageSize, offset],
   );
   const files: File[] = [];
@@ -318,7 +322,7 @@ export async function FileDataListByFolderRecursivePaginated(
   const total = countRaw.length > 0 ? countRaw[0].count : 0;
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    `SELECT * FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?)) ORDER BY dateMedia ${order} LIMIT ? OFFSET ?`,
+    `SELECT * FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?)) ORDER BY dateMedia ${order}, id ${order} LIMIT ? OFFSET ?`,
     [accountId, accountId, folderpath, folderpathSubPattern, pageSize, offset],
   );
   const files: File[] = [];
@@ -366,7 +370,7 @@ export async function FileDataListForAccountPaginated(
   const total = countRaw.length > 0 ? countRaw[0].count : 0;
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    "SELECT * FROM files WHERE accountId = ? LIMIT ? OFFSET ?",
+    "SELECT * FROM files WHERE accountId = ? ORDER BY dateMedia DESC, id DESC LIMIT ? OFFSET ?",
     [accountId, pageSize, offset],
   );
   const files: File[] = [];

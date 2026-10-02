@@ -6,11 +6,10 @@ import {
   AuthGenerateJWT,
   AuthGetUserSession,
   AuthIsAdmin,
-  AuthIsTokenValid,
 } from "./Auth";
 import {
-  UserDataAdd,
-  UserDataDelete,
+  UserDataAddStatement,
+  UserDataDeleteStatement,
   UserDataGet,
   UserDataGetByName,
   UserDataList,
@@ -21,10 +20,21 @@ import {
   UserPasswordSetPassword,
 } from "./UserPassword";
 import {
-  UserPermissionDataDeleteForUser,
+  UserPermissionDataDeleteForUserStatement,
   UserPermissionDataGetForUser,
   UserPermissionDataUpdateForUser,
+  UserPermissionDataUpdateForUserStatement,
 } from "./UserPermissionData";
+import { SqlDbUtilsGetDatabase } from "@devopsplaybook.io/common-utils";
+
+// Session cookie: not readable by JavaScript (httpOnly) so a XSS cannot
+// exfiltrate the session; lax same-site keeps the SPA same-origin flows.
+const SESSION_COOKIE_OPTIONS = {
+  path: "/",
+  signed: true,
+  httpOnly: true,
+  sameSite: "lax" as const,
+};
 
 export class UserRoutes {
   //
@@ -52,11 +62,15 @@ export class UserRoutes {
       if (userSession.isAuthenticated) {
         user = await UserDataGet(span, userSession.userId);
         const token = await AuthGenerateJWT(span, user);
-        (res as any).setCookie("token", token, {
-          path: "/",
-          signed: true,
-        });
-        return res.status(201).send({ success: true, token });
+        (res as any).setCookie("token", token, SESSION_COOKIE_OPTIONS);
+        // Do not echo the token when the session came from the httpOnly
+        // cookie: a script calling this endpoint would otherwise be able to
+        // read a usable bearer token back out. API clients using the
+        // Authorization header keep receiving it.
+        if (req.headers?.authorization) {
+          return res.status(201).send({ success: true, token });
+        }
+        return res.status(201).send({ success: true });
       }
 
       // From User/Pass
@@ -73,14 +87,34 @@ export class UserRoutes {
         await UserPasswordCheckPassword(span, user, req.body.password)
       ) {
         const token = await AuthGenerateJWT(span, user);
-        (res as any).setCookie("token", token, {
-          path: "/",
-          signed: true,
-        });
+        (res as any).setCookie("token", token, SESSION_COOKIE_OPTIONS);
         return res.status(201).send({ success: true, token });
       } else {
         return res.status(403).send({ error: "Authentication Failed" });
       }
+    });
+
+    // Current session info (cookie or Authorization header). Used by the web
+    // app to know who is logged in and whether the user is an admin.
+    fastify.get("/session", async (req, res) => {
+      const span = OTelRequestSpan(req);
+      const userSession = await AuthGetUserSession(req);
+      if (!userSession.isAuthenticated) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const user = await UserDataGet(span, userSession.userId);
+      return res.status(200).send({
+        isAuthenticated: true,
+        userId: userSession.userId,
+        userName: user?.name,
+        permissions: userSession.permissions,
+      });
+    });
+
+    // Clears the httpOnly session cookie (JavaScript cannot).
+    fastify.post("/logout", async (req, res) => {
+      (res as any).clearCookie("token", { path: "/" });
+      return res.status(200).send({});
     });
 
     fastify.get("/", async (req, res) => {
@@ -126,8 +160,16 @@ export class UserRoutes {
       const userPermission = new UserPermission();
       userPermission.userId = newUser.id;
       userPermission.info.isAdmin = isAdmin;
-      await UserDataAdd(span, newUser);
-      await UserPermissionDataUpdateForUser(span, newUser.id, userPermission);
+      // The user and its permission row must be created atomically.
+      const apply = SqlDbUtilsGetDatabase().transaction(() => {
+        UserDataAddStatement(span, newUser);
+        UserPermissionDataUpdateForUserStatement(
+          span,
+          newUser.id,
+          userPermission,
+        );
+      });
+      apply();
       res.status(201).send({});
     });
 
@@ -144,8 +186,12 @@ export class UserRoutes {
       if (!(await UserDataGet(span, req.params.userId))) {
         return res.status(404).send({ error: "Not Found" });
       }
-      await UserDataDelete(span, req.params.userId);
-      await UserPermissionDataDeleteForUser(span, req.params.userId);
+      // The user and its permission row must be deleted atomically.
+      const applyDelete = SqlDbUtilsGetDatabase().transaction(() => {
+        UserDataDeleteStatement(span, req.params.userId);
+        UserPermissionDataDeleteForUserStatement(span, req.params.userId);
+      });
+      applyDelete();
       res.status(202).send({});
     });
 
@@ -160,7 +206,10 @@ export class UserRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const user = await UserDataGetByName(span, userSession.userId);
+      const user = await UserDataGet(span, userSession.userId);
+      if (!user) {
+        return res.status(404).send({ error: "Not Found" });
+      }
       if (!req.body.password) {
         return res.status(400).send({ error: "Missing: Password" });
       }
@@ -222,17 +271,8 @@ export class UserRoutes {
     });
 
     fastify.get("/access/validate", async (req, res) => {
-      let tokenCokkie;
-      try {
-        tokenCokkie = (fastify as any).unsignCookie((req as any).cookies.token);
-      } catch {
-        tokenCokkie = null;
-      }
-      if (
-        !tokenCokkie ||
-        !tokenCokkie.valid ||
-        !AuthIsTokenValid(tokenCokkie.value)
-      ) {
+      const userSession = await AuthGetUserSession(req);
+      if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
       res.status(200).send({});

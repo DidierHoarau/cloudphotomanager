@@ -95,15 +95,16 @@ export default {
     if (await AuthenticationStore().ensureAuthenticated()) {
       SyncStore().monitor();
       setTimeout(async () => {
-        // Renew session tocken
+        // Renew the session cookie (the server re-issues it from the
+        // current valid session).
         axios
           .post(
             `${(await Config.get()).SERVER_URL}/users/session`,
             {},
             await AuthService.getAuthHeader(),
           )
-          .then((res) => {
-            AuthService.saveToken(res.data.token);
+          .catch(() => {
+            // best effort: an expired session is handled on the next request
           });
       }, 10000);
     }

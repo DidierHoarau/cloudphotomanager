@@ -68,7 +68,38 @@ export async function LocalAccountInventoryListFoldersInFolder(
   return folders;
 }
 
+// (size, mtimeMs) identifies a file version; the sha256 is only recomputed
+// when either changes, so an unchanged library is not re-hashed on every
+// inventory pass.
+const fileHashCache = new Map<
+  string,
+  { size: number; mtimeMs: number; hash: string }
+>();
+
+export function LocalAccountInventoryClearHashCache(): void {
+  fileHashCache.clear();
+}
+
 async function calculateFileHash(filePath: string): Promise<string> {
+  const stats = await stat(filePath);
+  const cached = fileHashCache.get(filePath);
+  if (
+    cached &&
+    cached.size === stats.size &&
+    cached.mtimeMs === stats.mtimeMs
+  ) {
+    return cached.hash;
+  }
+  const hash = await hashFileContent(filePath);
+  fileHashCache.set(filePath, {
+    size: stats.size,
+    mtimeMs: stats.mtimeMs,
+    hash,
+  });
+  return hash;
+}
+
+function hashFileContent(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash("sha256");
     const stream = fs.createReadStream(filePath);
@@ -88,7 +119,6 @@ export async function LocalAccountInventoryListFilesInFolder(
   for (const item of items) {
     const stats = await stat(path.join(folder.idCloud, item));
     if (!stats.isDirectory()) {
-      const stats = await stat(path.join(folder.idCloud, item));
       const file = new File(
         localAccount.getAccountDefinition().id,
         folder.id,

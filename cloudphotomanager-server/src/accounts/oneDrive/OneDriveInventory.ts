@@ -164,7 +164,7 @@ function fileFromRaw(data: any, folderId: string, oneDriveAccount: OneDriveAccou
     file.metadata.photo = data.photo;
   }
   if (data.video) {
-    file.metadata.photo = data.photo;
+    file.metadata.video = data.video;
   }
   if (data.image) {
     file.metadata.image = data.image;

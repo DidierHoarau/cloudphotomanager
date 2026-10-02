@@ -4,6 +4,7 @@ import { AccountDataList } from "../accounts/AccountData";
 import { Folder } from "../model/Folder";
 import {
   SqlDbUtilsExecSQL,
+  SqlDbUtilsGetDatabase,
   SqlDbUtilsQuerySQL,
 } from "@devopsplaybook.io/common-utils";
 import debounce from "lodash/debounce";
@@ -29,27 +30,35 @@ export async function FolderDataAdd(
   folder: Folder,
 ): Promise<void> {
   const span = OTelTracer().startSpan("FolderData_add", context);
-  await SqlDbUtilsExecSQL(
-    span,
-    "DELETE FROM folders WHERE id = ? AND accountId = ?",
-    [folder.id, folder.accountId],
-  );
-  await SqlDbUtilsExecSQL(
-    span,
-    "INSERT INTO folders (id, idCloud, accountId, folderpath, dateUpdated, dateSync, info) " +
-      "VALUES (?, ?, ?, ?, ?, ?, ?) ",
-    [
-      folder.id,
-      folder.idCloud,
-      folder.accountId,
-      folder.folderpath,
-      folder.dateUpdated.toISOString(),
-      folder.dateSync.toISOString(),
-      JSON.stringify(folder.info),
-    ],
-  );
-  FolderDataCacheCounts();
-  span.end();
+  try {
+    // DELETE + INSERT must be atomic: a failure must not leave the folder
+    // row missing.
+    const apply = SqlDbUtilsGetDatabase().transaction(() => {
+      SqlDbUtilsExecSQL(
+        span,
+        "DELETE FROM folders WHERE id = ? AND accountId = ?",
+        [folder.id, folder.accountId],
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        "INSERT INTO folders (id, idCloud, accountId, folderpath, dateUpdated, dateSync, info) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?) ",
+        [
+          folder.id,
+          folder.idCloud,
+          folder.accountId,
+          folder.folderpath,
+          folder.dateUpdated.toISOString(),
+          folder.dateSync.toISOString(),
+          JSON.stringify(folder.info),
+        ],
+      );
+    });
+    apply();
+  } finally {
+    FolderDataCacheCounts();
+    span.end();
+  }
 }
 
 export async function FolderDataGet(
@@ -57,15 +66,19 @@ export async function FolderDataGet(
   id: string,
 ): Promise<Folder> {
   const span = OTelTracer().startSpan("FolderDataGet", context);
-  const folderRaw = await SqlDbUtilsQuerySQL(
-    span,
-    "SELECT * FROM folders WHERE id = ?",
-    [id],
-  );
-  if (folderRaw.length === 0) {
-    return null;
+  try {
+    const folderRaw = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT * FROM folders WHERE id = ?",
+      [id],
+    );
+    if (folderRaw.length === 0) {
+      return null;
+    }
+    return fromRaw(folderRaw[0]);
+  } finally {
+    span.end();
   }
-  return fromRaw(folderRaw[0]);
 }
 
 export async function FolderDataGetParent(
@@ -73,27 +86,31 @@ export async function FolderDataGetParent(
   id: string,
 ): Promise<Folder> {
   const span = OTelTracer().startSpan("FolderDataGetParent", context);
-  const folderChildRaw = await SqlDbUtilsQuerySQL(
-    span,
-    "SELECT * FROM folders WHERE id = ?",
-    [id],
-  );
-  if (folderChildRaw.length === 0) {
-    return null;
+  try {
+    const folderChildRaw = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT * FROM folders WHERE id = ?",
+      [id],
+    );
+    if (folderChildRaw.length === 0) {
+      return null;
+    }
+    const folderChild = fromRaw(folderChildRaw[0]);
+    if (folderChild.folderpath === "/") {
+      return null;
+    }
+    const folderParentRaw = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT * FROM folders WHERE accountId = ? AND folderpath = ?",
+      [folderChild.accountId, path.dirname(folderChild.folderpath)],
+    );
+    if (folderParentRaw.length === 0) {
+      return null;
+    }
+    return fromRaw(folderParentRaw[0]);
+  } finally {
+    span.end();
   }
-  const folderChild = fromRaw(folderChildRaw[0]);
-  if (folderChild.folderpath === "/") {
-    return null;
-  }
-  const folderParentRaw = await SqlDbUtilsQuerySQL(
-    span,
-    "SELECT * FROM folders WHERE accountId = ? AND folderpath = ?",
-    [folderChild.accountId, path.dirname(folderChild.folderpath)],
-  );
-  if (folderParentRaw.length === 0) {
-    return null;
-  }
-  return fromRaw(folderParentRaw[0]);
 }
 
 export async function FolderDataUpdate(context: Span, folder: Folder) {
@@ -119,15 +136,19 @@ export async function FolderDataGetByCloudId(
   idCloud: string,
 ): Promise<Folder> {
   const span = OTelTracer().startSpan("FolderDataGetByCloudId", context);
-  const folderRaw = await SqlDbUtilsQuerySQL(
-    span,
-    "SELECT * FROM folders WHERE accountId = ? AND idCloud = ?",
-    [accountId, idCloud],
-  );
-  if (folderRaw.length === 0) {
-    return null;
+  try {
+    const folderRaw = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT * FROM folders WHERE accountId = ? AND idCloud = ?",
+      [accountId, idCloud],
+    );
+    if (folderRaw.length === 0) {
+      return null;
+    }
+    return fromRaw(folderRaw[0]);
+  } finally {
+    span.end();
   }
-  return fromRaw(folderRaw[0]);
 }
 
 export async function FolderDataListSubFolders(
@@ -304,20 +325,31 @@ export async function FolderDataDeletePathRecursive(
   folderpath: string,
 ) {
   const span = OTelTracer().startSpan("FolderDataDeletePathRecursive", context);
-  await SqlDbUtilsExecSQL(
-    span,
-    "DELETE FROM files " +
-      " WHERE accountId = ? " +
-      ` AND folderId IN ( SELECT id FROM folders WHERE accountId = ? AND folderpath LIKE ? ) `,
-    [accountId, accountId, `${folderpath}%`],
-  );
-  await SqlDbUtilsExecSQL(
-    span,
-    `DELETE FROM folders WHERE accountId = ? AND folderpath LIKE ? `,
-    [accountId, `${folderpath}%`],
-  );
-  FolderDataCacheCounts();
-  span.end();
+  try {
+    // Match the exact path or its "<path>/" subtree only. LIKE wildcards in
+    // the path are escaped so "/2023" does not match "/2023-backup" and
+    // literal "%"/"_" characters in folder names stay literal.
+    const subtreePrefix = folderpath === "/" ? "/" : `${folderpath}/`;
+    const subtreePattern = `${escapeLikePattern(subtreePrefix)}%`;
+    const apply = SqlDbUtilsGetDatabase().transaction(() => {
+      SqlDbUtilsExecSQL(
+        span,
+        "DELETE FROM files " +
+          " WHERE accountId = ? " +
+          " AND folderId IN ( SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ? ESCAPE '\\') ) ",
+        [accountId, accountId, folderpath, subtreePattern],
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        "DELETE FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ? ESCAPE '\\') ",
+        [accountId, folderpath, subtreePattern],
+      );
+    });
+    apply();
+  } finally {
+    FolderDataCacheCounts();
+    span.end();
+  }
 }
 
 export async function FolderDataRefreshCacheFolders(
@@ -394,6 +426,15 @@ export async function FolderDataGetCount(context: Span): Promise<number> {
 }
 
 // Private Functions
+
+// Escape LIKE wildcards so a folder path is matched literally
+// (patterns are used with ESCAPE '\').
+function escapeLikePattern(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_");
+}
 
 const FolderDataCacheCountsDebounced = debounce(async () => {
   const span = OTelTracer().startSpan("FolderDataCacheCounts");

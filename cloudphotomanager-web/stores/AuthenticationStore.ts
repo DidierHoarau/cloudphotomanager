@@ -12,12 +12,14 @@ export const AuthenticationStore = defineStore("AuthenticationStore", {
   actions: {
     async ensureAuthenticated(): Promise<boolean> {
       this.isAuthenticated = await AuthService.isAuthenticated();
-      this.userInfo = (await AuthService.getTokenInfo()) as any;
-      if (this.isAuthenticated && (this.userInfo as any).permissions && (this.userInfo as any).permissions.isAdmin) {
-        this.isAdmin = true;
-      } else {
-        this.isAdmin = false;
+      this.userInfo = {};
+      if (this.isAuthenticated) {
+        const sessionInfo = await AuthService.getSessionInfo();
+        if (sessionInfo) {
+          this.userInfo = sessionInfo;
+        }
       }
+      this.isAdmin = !!(this.userInfo as any)?.permissions?.isAdmin;
       return this.isAuthenticated;
     },
   },

@@ -1,6 +1,6 @@
 import { AuthService } from "~~/services/AuthService";
 import Config from "~~/services/Config";
-import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
+import { handleError } from "~~/services/EventBus";
 import axios from "axios";
 import { sortBy } from "lodash";
 import { localCache, TTL } from "~~/services/LocalCache";

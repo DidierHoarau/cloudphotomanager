@@ -3,6 +3,7 @@ import { UserPermission } from "../model/UserPermission";
 import { OTelTracer } from "../OTelContext";
 import {
   SqlDbUtilsExecSQL,
+  SqlDbUtilsGetDatabase,
   SqlDbUtilsQuerySQL,
 } from "@devopsplaybook.io/common-utils";
 
@@ -11,19 +12,21 @@ export async function UserPermissionDataGetForUser(
   userId: string,
 ): Promise<UserPermission> {
   const span = OTelTracer().startSpan("UserPermissionData_get", context);
-  const rawData = await SqlDbUtilsQuerySQL(
-    span,
-    "SELECT * FROM users_permissions WHERE userId=?",
-    [userId],
-  );
-  if (rawData.length === 0) {
-    const emptyPermission = new UserPermission();
-    emptyPermission.userId = userId;
-    return emptyPermission;
+  try {
+    const rawData = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT * FROM users_permissions WHERE userId=?",
+      [userId],
+    );
+    if (rawData.length === 0) {
+      const emptyPermission = new UserPermission();
+      emptyPermission.userId = userId;
+      return emptyPermission;
+    }
+    return fromRaw(rawData[0]);
+  } finally {
+    span.end();
   }
-  const userPermission = fromRaw(rawData[0]);
-  span.end();
-  return userPermission;
 }
 
 export async function UserPermissionDataUpdateForUser(
@@ -35,6 +38,24 @@ export async function UserPermissionDataUpdateForUser(
     "UserPermissionData_updateForUser",
     context,
   );
+  try {
+    const apply = SqlDbUtilsGetDatabase().transaction(() => {
+      UserPermissionDataUpdateForUserStatement(span, userId, userPermission);
+    });
+    apply();
+  } finally {
+    span.end();
+  }
+}
+
+// Runs the permission row replacement with no transaction of its own; call
+// inside `SqlDbUtilsGetDatabase().transaction(...)` when other writes must be
+// atomic with it (e.g. user creation).
+export function UserPermissionDataUpdateForUserStatement(
+  span: Span,
+  userId: string,
+  userPermission: UserPermission,
+): void {
   SqlDbUtilsExecSQL(span, "DELETE FROM users_permissions WHERE userId = ?", [
     userId,
   ]);
@@ -43,7 +64,6 @@ export async function UserPermissionDataUpdateForUser(
     "INSERT INTO users_permissions (id, userid, info) " + "VALUES (?, ?,?)",
     [userPermission.id, userId, JSON.stringify(userPermission.toJson().info)],
   );
-  span.end();
 }
 
 export async function UserPermissionDataDeleteForUser(
@@ -54,10 +74,23 @@ export async function UserPermissionDataDeleteForUser(
     "UserPermissionData_deleteForUser",
     context,
   );
+  try {
+    UserPermissionDataDeleteForUserStatement(span, userId);
+  } finally {
+    span.end();
+  }
+}
+
+// Runs the permission row deletion with no transaction of its own; call
+// inside `SqlDbUtilsGetDatabase().transaction(...)` when other writes must be
+// atomic with it (e.g. user deletion).
+export function UserPermissionDataDeleteForUserStatement(
+  span: Span,
+  userId: string,
+): void {
   SqlDbUtilsExecSQL(span, "DELETE FROM users_permissions WHERE userId = ?", [
     userId,
   ]);
-  span.end();
 }
 
 function fromRaw(json: any): UserPermission {

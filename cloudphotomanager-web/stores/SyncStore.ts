@@ -1,5 +1,6 @@
 import { AuthService } from "~~/services/AuthService";
 import Config from "~~/services/Config";
+import { buildSyncWebSocketUrl } from "~~/services/WebSocketUrl";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import axios from "axios";
 
@@ -50,23 +51,9 @@ export const SyncStore = defineStore("SyncStore", {
 
     async _connectWebSocket() {
       const config = await Config.get();
-      // Build an absolute WS URL, handling relative SERVER_URL (e.g. "/api")
-      let serverUrl: string = config.SERVER_URL;
-      if (serverUrl.startsWith("/")) {
-        // Relative path: derive origin from window.location
-        const proto = window.location.protocol === "https:" ? "wss" : "ws";
-        serverUrl = `${proto}://${window.location.host}${serverUrl}`;
-      } else {
-        serverUrl = serverUrl
-          .replace(/^https:\/\//, "wss://")
-          .replace(/^http:\/\//, "ws://");
-      }
-
-      const authHeader = await AuthService.getAuthHeader();
-      const token =
-        authHeader?.headers?.Authorization?.replace("Bearer ", "") || "";
-
-      const fullWsUrl = `${serverUrl}/sync/ws${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+      // Authentication happens through the httpOnly session cookie, which
+      // the browser sends automatically with the same-origin WS handshake.
+      const fullWsUrl = buildSyncWebSocketUrl(config.SERVER_URL);
 
       let ws: WebSocket;
       try {

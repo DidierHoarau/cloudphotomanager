@@ -82,6 +82,7 @@ Promise.resolve().then(async () => {
     fastify.register(cors, {
       origin: config.CORS_POLICY_ORIGIN,
       methods: "GET,PUT,POST,DELETE",
+      credentials: true,
     });
   }
   fastify.register(require("@fastify/multipart"));

@@ -144,7 +144,7 @@ export default {
       }
     },
     async logout() {
-      AuthService.removeToken();
+      await AuthService.logout();
       AuthenticationStore().isAuthenticated = false;
       useRouter().push({ path: "/users/login" });
     },

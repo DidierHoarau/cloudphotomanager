@@ -71,8 +71,8 @@ export default {
               this.user,
               await AuthService.getAuthHeader(),
             )
-            .then((res) => {
-              AuthService.saveToken(res.data.token);
+            .then(() => {
+              // The server set the httpOnly session cookie on the response.
               AuthenticationStore().isAuthenticated = true;
               EventBus.emit(EventTypes.ALERT_MESSAGE, {
                 type: "info",

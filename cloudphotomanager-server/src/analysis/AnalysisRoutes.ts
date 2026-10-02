@@ -1,13 +1,31 @@
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
+import { Span } from "@opentelemetry/sdk-trace-base";
 import { AuthGetUserSession } from "../users/Auth";
 import {
   AnalysisDataGetFileDuplicates,
   AnalysisDataGetFilesDuplicateCounts,
   AnalysisDataListAccountDuplicates,
 } from "./AnalysisData";
+import {
+  UserPermissionContextFolderIdsGet,
+  UserPermissionContextGet,
+} from "../users/UserPermissionCheck";
 
 const DUPLICATE_COUNTS_MAX_IDS = 200;
+
+async function permittedFolderIdsGet(
+  span: Span,
+  userId: string,
+  accountId: string,
+): Promise<string[] | null> {
+  const permissionContext = await UserPermissionContextGet(span, userId);
+  return UserPermissionContextFolderIdsGet(
+    span,
+    permissionContext,
+    accountId,
+  );
+}
 
 export class AnalysisRoutes {
   //
@@ -29,6 +47,11 @@ export class AnalysisRoutes {
         const duplicates = await AnalysisDataListAccountDuplicates(
           span,
           req.params.accountId,
+          await permittedFolderIdsGet(
+            span,
+            userSession.userId,
+            req.params.accountId,
+          ),
         );
         return res.send({ duplicates });
       },
@@ -52,6 +75,11 @@ export class AnalysisRoutes {
           span,
           req.params.accountId,
           req.params.fileId,
+          await permittedFolderIdsGet(
+            span,
+            userSession.userId,
+            req.params.accountId,
+          ),
         );
         return res.send({ duplicate });
       },
@@ -90,6 +118,11 @@ export class AnalysisRoutes {
           span,
           req.params.accountId,
           fileIds,
+          await permittedFolderIdsGet(
+            span,
+            userSession.userId,
+            req.params.accountId,
+          ),
         );
         return res.send({ counts });
       },

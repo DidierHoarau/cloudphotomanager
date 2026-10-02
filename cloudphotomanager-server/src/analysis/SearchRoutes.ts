@@ -1,4 +1,5 @@
 import { FastifyInstance } from "fastify";
+import { Span } from "@opentelemetry/sdk-trace-base";
 import {
   SearchDataAggregateByGeoGrid,
   SearchDataListAccountDuplicates,
@@ -7,11 +8,29 @@ import {
 import { AuthGetUserSession } from "../users/Auth";
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { GeoBox, isValidGeoBox } from "./SearchGeoSql";
+import {
+  UserPermissionContextFolderIdsGet,
+  UserPermissionContextGet,
+} from "../users/UserPermissionCheck";
+
+async function permittedFolderIdsGet(
+  span: Span,
+  userId: string,
+  accountId: string,
+): Promise<string[] | null> {
+  const permissionContext = await UserPermissionContextGet(span, userId);
+  return UserPermissionContextFolderIdsGet(
+    span,
+    permissionContext,
+    accountId,
+  );
+}
 
 export class SearchRoutes {
   //
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     //
+
     fastify.get<{
       Params: {
         accountId: string;
@@ -24,6 +43,11 @@ export class SearchRoutes {
       const duplicates = await SearchDataListAccountDuplicates(
         OTelRequestSpan(req),
         req.params.accountId,
+        await permittedFolderIdsGet(
+          OTelRequestSpan(req),
+          userSession.userId,
+          req.params.accountId,
+        ),
       );
       return res.send({ duplicates });
     });
@@ -44,6 +68,11 @@ export class SearchRoutes {
         OTelRequestSpan(req),
         req.params.accountId,
         req.body.filters,
+        await permittedFolderIdsGet(
+          OTelRequestSpan(req),
+          userSession.userId,
+          req.params.accountId,
+        ),
       );
       return res.status(200).send({ files });
     });
@@ -75,6 +104,11 @@ export class SearchRoutes {
           gridCols: req.body.gridCols,
           filters: req.body.filters,
         },
+        await permittedFolderIdsGet(
+          OTelRequestSpan(req),
+          userSession.userId,
+          req.params.accountId,
+        ),
       );
       return res.status(200).send(result);
     });

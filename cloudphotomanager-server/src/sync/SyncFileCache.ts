@@ -201,30 +201,33 @@ export async function SyncFileCacheCheckFile(
 
 export async function SyncFileCacheCleanUp(context: Span, account: Account) {
   const span = OTelTracer().startSpan("SyncFileCacheCleanUp", context);
-  const accountFiles = await FileDataListForAccount(
-    span,
-    account.getAccountDefinition().id,
-  );
-  const accountCacheRoot = `${config.DATA_DIR}/cache/${account.getAccountDefinition().id}/`;
-  if (!fs.existsSync(accountCacheRoot)) {
-    return;
-  }
-  const cacheFolders = listFoldersRecursively(accountCacheRoot);
-  for (const cacheFolder of cacheFolders) {
-    const targetFileId = path.basename(cacheFolder);
-    if (
-      targetFileId &&
-      countSlashesInPath(cacheFolder.replace(accountCacheRoot, "")) === 2 &&
-      !find(accountFiles, { id: targetFileId })
-    ) {
-      logger.info(
-        `Cleaning Cache: ${account.getAccountDefinition().id} ${targetFileId}`,
-        span,
-      );
-      await fs.remove(cacheFolder);
+  try {
+    const accountFiles = await FileDataListForAccount(
+      span,
+      account.getAccountDefinition().id,
+    );
+    const accountCacheRoot = `${config.DATA_DIR}/cache/${account.getAccountDefinition().id}/`;
+    if (!fs.existsSync(accountCacheRoot)) {
+      return;
     }
+    const cacheFolders = listFoldersRecursively(accountCacheRoot);
+    for (const cacheFolder of cacheFolders) {
+      const targetFileId = path.basename(cacheFolder);
+      if (
+        targetFileId &&
+        countSlashesInPath(cacheFolder.replace(accountCacheRoot, "")) === 2 &&
+        !find(accountFiles, { id: targetFileId })
+      ) {
+        logger.info(
+          `Cleaning Cache: ${account.getAccountDefinition().id} ${targetFileId}`,
+          span,
+        );
+        await fs.remove(cacheFolder);
+      }
+    }
+  } finally {
+    span.end();
   }
-  span.end();
 }
 
 // Private Functions
@@ -283,8 +286,9 @@ async function generateThumbnailWhenCloudThumbnailUnavailable(
   const fullPath = `${tmpDir}/${tmpFileName}`;
   let sourcePath = fullPath;
   if (isHeicContentFile(fullPath)) {
-    await SystemCommand.execute(
-      `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${fullPath} ${fullPath}_raw.jpg`,
+    await SystemCommand.executeFile(
+      `${config.TOOLS_DIR}/tools-image-convert-raw.sh`,
+      [fullPath, `${fullPath}_raw.jpg`],
     );
     sourcePath = `${fullPath}_raw.jpg`;
   }
@@ -301,8 +305,17 @@ async function getVideoWidthWithFfprobe(
 ): Promise<number | null> {
   const span = OTelTracer().startSpan("getVideoWidthWithFfprobe", context);
   try {
-    const ffprobeCmd = `ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 "${filePath}"`;
-    const ffprobeOutput = await SystemCommand.execute(ffprobeCmd);
+    const ffprobeOutput = await SystemCommand.executeFile("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-show_entries",
+      "stream=width",
+      "-of",
+      "csv=p=0",
+      filePath,
+    ]);
     const width = parseInt(ffprobeOutput.trim(), 10);
     span.end();
     if (!isNaN(width)) {
@@ -354,8 +367,13 @@ export async function syncVideoFromFull(account: Account, file: File) {
           }
         }
         logger.info(
-          await SystemCommand.execute(
-            `${config.TOOLS_DIR}/tools-video-process.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}.mp4 ${targetWidth}`,
+          await SystemCommand.executeFile(
+            `${config.TOOLS_DIR}/tools-video-process.sh`,
+            [
+              `${tmpDir}/${tmpFileName}`,
+              `${tmpDir}/${tmpFileName}.mp4`,
+              `${targetWidth}`,
+            ],
           ),
           span,
         );
@@ -412,8 +430,9 @@ export async function syncPhotoFromFull(account: Account, file: File) {
       .then(async () => {
         if (File.getMediaType(file.filename) === FileMediaType.imageRaw) {
           logger.info(
-            await SystemCommand.execute(
-              `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`,
+            await SystemCommand.executeFile(
+              `${config.TOOLS_DIR}/tools-image-convert-raw.sh`,
+              [`${tmpDir}/${tmpFileName}`, `${tmpDir}/${tmpFileName}_raw.jpg`],
             ),
             span,
           );
@@ -626,8 +645,9 @@ export async function syncThumbnail(account: Account, file: File) {
       await account
         .downloadFile(span, file, tmpDir, tmpFileName)
         .then(async () => {
-          await SystemCommand.execute(
-            `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`,
+          await SystemCommand.executeFile(
+            `${config.TOOLS_DIR}/tools-image-convert-raw.sh`,
+            [`${tmpDir}/${tmpFileName}`, `${tmpDir}/${tmpFileName}_raw.jpg`],
           );
           await sharp(`${tmpDir}/${tmpFileName}_raw.jpg`)
             .rotate()
@@ -654,8 +674,9 @@ export async function syncThumbnail(account: Account, file: File) {
         await account
           .downloadFile(span, file, tmpDir, tmpFileName)
           .then(async () => {
-            await SystemCommand.execute(
-              `${config.TOOLS_DIR}/tools-image-convert-raw.sh ${tmpDir}/${tmpFileName} ${tmpDir}/${tmpFileName}_raw.jpg`,
+            await SystemCommand.executeFile(
+              `${config.TOOLS_DIR}/tools-image-convert-raw.sh`,
+              [`${tmpDir}/${tmpFileName}`, `${tmpDir}/${tmpFileName}_raw.jpg`],
             );
             await sharp(`${tmpDir}/${tmpFileName}_raw.jpg`)
               .rotate()
@@ -736,8 +757,9 @@ export async function syncThumbnailFromVideoPreview(
       `Generating video thumbnail ${account.getAccountDefinition().id} ${file.id} : ${file.filename}`,
       span,
     );
-    await SystemCommand.execute(
-      `${config.TOOLS_DIR}/tools-video-generate-thumbnail.sh ${cacheDir}/preview.mp4 ${tmpDir}/thumbnail.jpg`,
+    await SystemCommand.executeFile(
+      `${config.TOOLS_DIR}/tools-video-generate-thumbnail.sh`,
+      [`${cacheDir}/preview.mp4`, `${tmpDir}/thumbnail.jpg`],
     )
       .then(async (output: string) => {
         logger.info(output, span);

@@ -250,8 +250,10 @@ export async function SyncQueueInit(context: Span): Promise<void> {
 }
 
 export function SyncQueueGetCounts(): any[] {
+  // No span context: these read-only helpers run on every broadcast and an
+  // inline span would never be ended by the caller.
   const rows = SqlDbUtilsQuerySQL(
-    OTelTracer().startSpan("SyncQueueGetCounts"),
+    undefined,
     "SELECT status, COUNT(*) as c FROM sync_queue GROUP BY status",
   );
   let active = 0;
@@ -268,7 +270,7 @@ export function SyncQueueGetCounts(): any[] {
 
 export function SyncQueueGetBatchWaitingCount(): number {
   const rows = SqlDbUtilsQuerySQL(
-    OTelTracer().startSpan("SyncQueueGetBatchWaitingCount"),
+    undefined,
     "SELECT COUNT(*) as c FROM sync_queue WHERE priority = ? AND status = ?",
     [SyncQueueItemPriority.BATCH, SyncQueueItemStatus.WAITING],
   );
@@ -281,7 +283,7 @@ export function SyncQueueGetProcessingFileIds(): string[] {
 
 export function SyncQueueGetQueue(): any[] {
   const rows = SqlDbUtilsQuerySQL(
-    OTelTracer().startSpan("SyncQueueGetQueue"),
+    undefined,
     "SELECT id, accountId, functionName, priority, status, data, fileIds " +
       "FROM sync_queue " +
       "ORDER BY CASE WHEN status = 'ACTIVE' THEN 0 ELSE 1 END, " +
@@ -296,6 +298,7 @@ export function SyncQueueGetQueue(): any[] {
       functionName: item.functionName,
       priority: item.priority,
       status: item.status,
+      folderId: item.data?.folderId || null,
       fileIds: item.fileIds || [],
       label: resolveItemLabel(item),
     };
@@ -398,7 +401,7 @@ async function processQueue(): Promise<void> {
 
       if (dispatched === 0) {
         const waitingRow = SqlDbUtilsQuerySQL(
-          OTelTracer().startSpan("SyncQueueProcessCheckWaiting"),
+          undefined,
           "SELECT 1 FROM sync_queue WHERE status = ? LIMIT 1",
           [SyncQueueItemStatus.WAITING],
         );

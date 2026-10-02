@@ -4,21 +4,54 @@ import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
 import { SqlDbUtilsQuerySQL } from "@devopsplaybook.io/common-utils";
 import { OTelTracer } from "../OTelContext";
 
+// Caps keeping a duplicate analysis from loading an entire account at once.
+const DUPLICATES_MAX_GROUPS = 500;
+const DUPLICATES_MAX_ROWS = 10000;
+
+// When permittedFolderIds is non-null, adds a folder scope filter; the ids
+// are passed as a JSON array through SQLite's json_each so the number of
+// permitted folders is not limited by SQL parameter counts.
+function folderScopeFilter(permittedFolderIds: string[] | null): {
+  sql: string;
+  params: any[];
+} {
+  if (permittedFolderIds === null) {
+    return { sql: "", params: [] };
+  }
+  return {
+    sql: " AND folderId IN (SELECT value FROM json_each(?)) ",
+    params: [JSON.stringify(permittedFolderIds)],
+  };
+}
+
 export async function AnalysisDataGetFileDuplicates(
   context: Span,
   accountId: string,
   fileId: string,
+  permittedFolderIds: string[] | null = null,
 ): Promise<AnalysisDuplicate | null> {
   const span = OTelTracer().startSpan(
     "AnalysisData_getFileDuplicates",
     context,
   );
+  const outerFilter = folderScopeFilter(permittedFolderIds);
+  const innerFilter = folderScopeFilter(permittedFolderIds);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    "SELECT * FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' AND hash IN " +
-      " (SELECT hash FROM files WHERE id = ? AND accountId = ? AND hash IS NOT NULL AND hash != '') " +
-      " ORDER BY hash ",
-    [accountId, fileId, accountId],
+    "SELECT * FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
+      outerFilter.sql +
+      " AND hash IN " +
+      " (SELECT hash FROM files WHERE id = ? AND accountId = ? AND hash IS NOT NULL AND hash != '' " +
+      innerFilter.sql +
+      ") ORDER BY hash, id LIMIT ? ",
+    [
+      accountId,
+      ...outerFilter.params,
+      fileId,
+      accountId,
+      ...innerFilter.params,
+      DUPLICATES_MAX_ROWS,
+    ],
   );
   span.end();
   if (rawData.length < 2) {
@@ -37,6 +70,7 @@ export async function AnalysisDataGetFilesDuplicateCounts(
   context: Span,
   accountId: string,
   fileIds: string[],
+  permittedFolderIds: string[] | null = null,
 ): Promise<Record<string, number>> {
   const span = OTelTracer().startSpan(
     "AnalysisData_getFilesDuplicateCounts",
@@ -47,18 +81,28 @@ export async function AnalysisDataGetFilesDuplicateCounts(
     span.end();
     return result;
   }
+  const innerFilter = folderScopeFilter(permittedFolderIds);
+  const outerFilter = folderScopeFilter(permittedFolderIds);
   const placeholders = fileIds.map(() => "?").join(", ");
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT f.id AS id, " +
       "       (SELECT COUNT(*) FROM files f2 " +
-      "          WHERE f2.accountId = f.accountId AND f2.hash = f.hash) AS count " +
+      "          WHERE f2.accountId = f.accountId AND f2.hash = f.hash " +
+      innerFilter.sql +
+      ") AS count " +
       "  FROM files f " +
       " WHERE f.accountId = ? " +
       "   AND f.hash IS NOT NULL " +
       "   AND f.hash != '' " +
+      outerFilter.sql +
       `   AND f.id IN (${placeholders})`,
-    [accountId, ...fileIds],
+    [
+      ...innerFilter.params,
+      accountId,
+      ...outerFilter.params,
+      ...fileIds,
+    ],
   );
   for (const row of rawData) {
     const count = Number(row.count);
@@ -73,19 +117,33 @@ export async function AnalysisDataGetFilesDuplicateCounts(
 export async function AnalysisDataListAccountDuplicates(
   context: Span,
   accountId: string,
+  permittedFolderIds: string[] | null = null,
 ): Promise<AnalysisDuplicate[]> {
   const span = OTelTracer().startSpan(
     "AnalysisData_listAccountDuplicates",
     context,
   );
+  const outerFilter = folderScopeFilter(permittedFolderIds);
+  const innerFilter = folderScopeFilter(permittedFolderIds);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * " +
       " FROM files " +
-      " WHERE accountId = ? AND hash IS NOT NULL AND hash != '' AND hash IN " +
-      " ( SELECT hash FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' GROUP BY hash HAVING count(*) > 1) " +
-      " ORDER BY hash ",
-    [accountId, accountId],
+      " WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
+      outerFilter.sql +
+      " AND hash IN " +
+      " ( SELECT hash FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
+      innerFilter.sql +
+      " GROUP BY hash HAVING count(*) > 1 ORDER BY hash LIMIT ?) " +
+      " ORDER BY hash, id LIMIT ? ",
+    [
+      accountId,
+      ...outerFilter.params,
+      accountId,
+      ...innerFilter.params,
+      DUPLICATES_MAX_GROUPS,
+      DUPLICATES_MAX_ROWS,
+    ],
   );
   const analysis: AnalysisDuplicate[] = [];
   let currentAnalysisDuplicate: AnalysisDuplicate = null;

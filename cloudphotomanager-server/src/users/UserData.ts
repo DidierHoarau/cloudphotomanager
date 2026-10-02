@@ -52,12 +52,19 @@ export async function UserDataList(context: Span): Promise<User[]> {
 
 export async function UserDataAdd(context: Span, user: User): Promise<void> {
   const span = OTelTracer().startSpan("UserData_add", context);
-  await SqlDbUtilsExecSQL(
+  UserDataAddStatement(span, user);
+  span.end();
+}
+
+// Runs the user insert with no transaction of its own; call inside
+// `SqlDbUtilsGetDatabase().transaction(...)` when other writes must be atomic
+// with it (e.g. the permission row).
+export function UserDataAddStatement(span: Span, user: User): void {
+  SqlDbUtilsExecSQL(
     span,
     "INSERT INTO users (id, name, passwordEncrypted) VALUES (?, ?, ?)",
     [user.id, user.name, user.passwordEncrypted],
   );
-  span.end();
 }
 
 export async function UserDataUpdate(context: Span, user: User): Promise<void> {
@@ -72,8 +79,15 @@ export async function UserDataUpdate(context: Span, user: User): Promise<void> {
 
 export async function UserDataDelete(context: Span, id: string): Promise<void> {
   const span = OTelTracer().startSpan("UserData_delete", context);
-  await SqlDbUtilsExecSQL(span, "DELETE FROM users WHERE id = ? ", [id]);
+  UserDataDeleteStatement(span, id);
   span.end();
+}
+
+// Runs the user delete with no transaction of its own; call inside
+// `SqlDbUtilsGetDatabase().transaction(...)` when other writes must be atomic
+// with it (e.g. the permission row).
+export function UserDataDeleteStatement(span: Span, id: string): void {
+  SqlDbUtilsExecSQL(span, "DELETE FROM users WHERE id = ? ", [id]);
 }
 
 // private Function
