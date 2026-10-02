@@ -653,6 +653,166 @@ describe("SyncFileCache poison-file retry loop", () => {
     expect(fs.existsSync(path.join(cacheDir, "thumbnail.webp"))).toBe(false);
   }, 20000);
 
+  // Shell-injection regression tests: a hostile filename must reach the
+  // tools scripts as literal argv, never through a shell. The payload lives
+  // in the last dot segment because that is what feeds the tmp file name;
+  // ${IFS} keeps it a valid single filename while still expanding to a space
+  // under sh.
+  it("passes a hostile video filename to the tools script as literal argv", async () => {
+    const accountDefinition = await createAccount("acct-hostile-video");
+    const folder = await createFolder(
+      accountDefinition.id,
+      "photos-hostile-video",
+    );
+    const hostileName = "clip.mp4$(touch${IFS}cpm-sentinel-video)";
+    const file = await createVideoFile(
+      accountDefinition.id,
+      folder,
+      hostileName,
+    );
+    const account =
+      await accountFactory.AccountFactoryGetAccountImplementation(
+        accountDefinition.id,
+      );
+    const capturePath = path.join(tmpDir, "hostile-video-argv.txt");
+    await fs.ensureDir(config.TOOLS_DIR);
+    await fs.writeFile(
+      path.join(config.TOOLS_DIR, "tools-video-process.sh"),
+      `#!/bin/sh\nprintf '%s\\n' "$@" >> "${capturePath}"\nprintf 'fake-video' > "$2"\n`,
+    );
+    await fs.chmod(
+      path.join(config.TOOLS_DIR, "tools-video-process.sh"),
+      0o755,
+    );
+    const sentinelPath = path.resolve("cpm-sentinel-video");
+
+    await syncFileCache.syncVideoFromFull(account, file);
+
+    // The script received one literal argument per line: the dollar sign and
+    // parentheses of the tmp file name were not expanded by any shell.
+    const argv = (await fs.readFile(capturePath, "utf8"))
+      .split("\n")
+      .filter((line) => line.length > 0);
+    const tmpArg = argv[0];
+    expect(tmpArg).toContain(`${config.TMP_DIR}/cache/${accountDefinition.id}/`);
+    expect(tmpArg).toMatch(/\/tmp\.mp4\$\(touch\$\{IFS\}cpm-sentinel-video\)$/);
+    expect(argv).toEqual([tmpArg, `${tmpArg}.mp4`, "900"]);
+
+    const sentinelExists = fs.existsSync(sentinelPath);
+    if (sentinelExists) {
+      await fs.remove(sentinelPath);
+    }
+    expect(sentinelExists).toBe(false);
+
+    const cacheDir = await fileData.FileDataGetFileCacheDir(
+      span,
+      accountDefinition.id,
+      file.id,
+    );
+    expect(fs.existsSync(path.join(cacheDir, "preview.mp4"))).toBe(true);
+  }, 20000);
+
+  it("generates a thumbnail for a metacharacter filename without invoking a shell", async () => {
+    const accountDefinition = await createAccount("acct-hostile-thumb");
+    const folder = await createFolder(
+      accountDefinition.id,
+      "photos-hostile-thumb",
+    );
+    const hostileName = "sunset.jpg$(touch${IFS}cpm-sentinel-thumb)";
+    const file = await createImageFile(
+      accountDefinition.id,
+      folder,
+      hostileName,
+      true,
+    );
+    const account =
+      await accountFactory.AccountFactoryGetAccountImplementation(
+        accountDefinition.id,
+      );
+    jest
+      .spyOn(account, "downloadThumbnail")
+      .mockImplementation(
+        async (
+          _span,
+          _file,
+          destinationFolderpath: string,
+          destinationFilename: string,
+        ) => {
+          const jpeg = await sharp({
+            create: {
+              width: 8,
+              height: 8,
+              channels: 3,
+              background: { r: 10, g: 200, b: 30 },
+            },
+          })
+            .jpeg()
+            .toBuffer();
+          await fs.writeFile(
+            path.join(destinationFolderpath, destinationFilename),
+            jpeg,
+          );
+        },
+      );
+    const sentinelPath = path.resolve("cpm-sentinel-thumb");
+
+    await syncFileCache.syncThumbnail(account, file);
+
+    const cacheDir = await fileData.FileDataGetFileCacheDir(
+      span,
+      accountDefinition.id,
+      file.id,
+    );
+    expect(fs.existsSync(path.join(cacheDir, "thumbnail.webp"))).toBe(true);
+    const sentinelExists = fs.existsSync(sentinelPath);
+    if (sentinelExists) {
+      await fs.remove(sentinelPath);
+    }
+    expect(sentinelExists).toBe(false);
+  }, 20000);
+
+  // D5 span-leak audit: every span started by the fixed helpers must be
+  // ended when the helper returns, including early-return paths.
+  it("ends every span it starts across the fixed sync/queue/folder helpers", async () => {
+    const accountDefinition = await createAccount("acct-span-audit");
+    const folder = await createFolder(
+      accountDefinition.id,
+      "photos-span-audit",
+    );
+
+    const tracer = OTelTracer() as unknown as {
+      startSpan: (...args: any[]) => Span;
+    };
+    const originalStartSpan = tracer.startSpan.bind(tracer);
+    const trackedSpans: Span[] = [];
+    tracer.startSpan = (...args: any[]) => {
+      const createdSpan = originalStartSpan(...args);
+      trackedSpans.push(createdSpan);
+      return createdSpan;
+    };
+
+    try {
+      await folderData.FolderDataGet(span, folder.id);
+      await folderData.FolderDataGet(span, "no-such-folder");
+      await folderData.FolderDataGetParent(span, folder.id);
+      syncQueue.SyncQueueGetCounts();
+      syncQueue.SyncQueueGetBatchWaitingCount();
+      syncQueue.SyncQueueGetQueue();
+      syncQueue.SyncQueueRemoveItem("no-such-queue-item");
+      await accountFactory.AccountFactoryGetAccountImplementation(
+        accountDefinition.id,
+      );
+    } finally {
+      delete (tracer as unknown as { startSpan?: unknown }).startSpan;
+    }
+
+    expect(trackedSpans.length).toBeGreaterThan(0);
+    const openSpans = trackedSpans.filter(
+      (tracked) => !(tracked as unknown as { ended: boolean }).ended,
+    );
+    expect(openSpans).toEqual([]);
+  });
+
   it("skips auto re-queueing for files past the retry cap", async () => {
     const accountDefinition = await createAccount("acct-cap");
     const folder = await createFolder(accountDefinition.id, "photos-cap");

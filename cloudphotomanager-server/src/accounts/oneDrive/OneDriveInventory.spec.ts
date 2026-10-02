@@ -112,6 +112,64 @@ describe("OneDriveInventory", () => {
       expect(files[0].hash).toBe("");
     });
 
+    it("stores the video facet without clobbering the photo facet", async () => {
+      const videoItem = {
+        ...rawFileItem("clip.mp4", { quickXorHash: "VIDEOHASH" }),
+        photo: { takenDateTime: "2026-01-01T00:00:00.000Z" },
+        video: { width: 1920, height: 1080, duration: 30000 },
+      };
+      mockedAxiosGet
+        .mockResolvedValueOnce({ data: { id: "folder-cloud-id" } })
+        .mockResolvedValueOnce({ data: { value: [videoItem] } });
+
+      const files = await OneDriveInventoryListFilesInFolder(
+        mockSpan,
+        oneDriveAccount as never,
+        folder,
+      );
+
+      expect(files).toHaveLength(1);
+      // Regression: the video branch used to overwrite metadata.photo.
+      expect(files[0].metadata.video).toEqual({
+        width: 1920,
+        height: 1080,
+        duration: 30000,
+      });
+      expect(files[0].metadata.photo).toEqual({
+        takenDateTime: "2026-01-01T00:00:00.000Z",
+      });
+      expect(files[0].dateMedia.toISOString()).toBe(
+        "2026-01-01T00:00:00.000Z",
+      );
+    });
+
+    it("keeps the video facet even when the item has no photo facet", async () => {
+      const videoOnlyItem = {
+        ...rawFileItem("clip-only.mp4", { quickXorHash: "VIDEOHASH" }),
+        video: { width: 640, height: 480, duration: 1000 },
+      };
+      mockedAxiosGet
+        .mockResolvedValueOnce({ data: { id: "folder-cloud-id" } })
+        .mockResolvedValueOnce({ data: { value: [videoOnlyItem] } });
+
+      const files = await OneDriveInventoryListFilesInFolder(
+        mockSpan,
+        oneDriveAccount as never,
+        folder,
+      );
+
+      expect(files[0].metadata.video).toEqual({
+        width: 640,
+        height: 480,
+        duration: 1000,
+      });
+      expect(files[0].metadata.photo).toBeUndefined();
+      // Without a photo facet the created date drives dateMedia.
+      expect(files[0].dateMedia.toISOString()).toBe(
+        new Date("2026-09-18T00:00:00.000Z").toISOString(),
+      );
+    });
+
     it("never leaves hash undefined when the item has no file facet", async () => {
       mockedAxiosGet
         .mockResolvedValueOnce({ data: { id: "folder-cloud-id" } })

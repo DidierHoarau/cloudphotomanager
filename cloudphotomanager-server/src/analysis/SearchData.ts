@@ -14,22 +14,48 @@ import {
   isValidGeoBox,
 } from "./SearchGeoSql";
 
+// Upper bound on rows returned by a single search query; keeps an unfiltered
+// search from loading an entire account into memory.
+export const SEARCH_MAX_RESULTS = 5000;
+// Duplicate listing caps: number of duplicate groups (distinct hashes) and
+// total rows returned.
+export const DUPLICATES_MAX_GROUPS = 500;
+export const DUPLICATES_MAX_ROWS = 10000;
+
 export async function SearchDataListAccountDuplicates(
   context: Span,
   accountId: string,
+  permittedFolderIds: string[] | null = null,
 ): Promise<AnalysisDuplicate[]> {
   const span = OTelTracer().startSpan(
     "SearchDataListAccountDuplicates",
     context,
   );
+  const folderFilterSql =
+    permittedFolderIds === null
+      ? ""
+      : " AND folderId IN (SELECT value FROM json_each(?)) ";
+  const params: any[] = [accountId];
+  if (permittedFolderIds !== null) {
+    params.push(JSON.stringify(permittedFolderIds));
+  }
+  params.push(accountId);
+  if (permittedFolderIds !== null) {
+    params.push(JSON.stringify(permittedFolderIds));
+  }
+  params.push(DUPLICATES_MAX_GROUPS, DUPLICATES_MAX_ROWS);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * " +
       " FROM files " +
-      " WHERE accountId = ? AND hash IN " +
-      " ( SELECT hash FROM files WHERE accountId = ? GROUP BY hash HAVING count(*) > 1) " +
-      " ORDER BY hash ",
-    [accountId, accountId],
+      " WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
+      folderFilterSql +
+      " AND hash IN " +
+      " ( SELECT hash FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
+      folderFilterSql +
+      " GROUP BY hash HAVING count(*) > 1 ORDER BY hash LIMIT ?) " +
+      " ORDER BY hash, id LIMIT ? ",
+    params,
   );
   const analysis: AnalysisDuplicate[] = [];
   let currentAnalysisDuplicate: AnalysisDuplicate = null;
@@ -61,10 +87,15 @@ export async function SearchDataListFiles(
   context: Span,
   accountId: string,
   filters: any,
+  permittedFolderIds: string[] | null = null,
 ): Promise<File[]> {
   const span = OTelTracer().startSpan("SearchDataListFiles", context);
   let queryCondition = "";
   const queryParameters = [accountId];
+  if (permittedFolderIds !== null) {
+    queryCondition += " AND folderId IN (SELECT value FROM json_each(?)) ";
+    queryParameters.push(JSON.stringify(permittedFolderIds));
+  }
   if (filters.dateFrom) {
     queryCondition += " AND dateMedia > ? ";
     queryParameters.push(new Date(filters.dateFrom).toISOString());
@@ -88,8 +119,10 @@ export async function SearchDataListFiles(
   }
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    "SELECT * FROM files WHERE accountId = ? " + queryCondition,
-    queryParameters,
+    "SELECT * FROM files WHERE accountId = ? " +
+      queryCondition +
+      " ORDER BY dateMedia DESC, id DESC LIMIT ? ",
+    [...queryParameters, SEARCH_MAX_RESULTS],
   );
   const files: File[] = [];
   for (const fileRaw of rawData) {
@@ -123,6 +156,7 @@ export async function SearchDataAggregateByGeoGrid(
     gridCols?: number;
     filters?: any;
   },
+  permittedFolderIds: string[] | null = null,
 ): Promise<GeoGridResult> {
   const span = OTelTracer().startSpan("SearchDataAggregateByGeoGrid", context);
   const gridRows =
@@ -142,6 +176,10 @@ export async function SearchDataAggregateByGeoGrid(
 
   const queryParameters: any[] = [accountId];
   let extraCondition = "";
+  if (permittedFolderIds !== null) {
+    extraCondition += " AND folderId IN (SELECT value FROM json_each(?)) ";
+    queryParameters.push(JSON.stringify(permittedFolderIds));
+  }
   const filters = options.filters || {};
   if (filters.dateFrom) {
     extraCondition += " AND dateMedia > ? ";

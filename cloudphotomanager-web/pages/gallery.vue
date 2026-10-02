@@ -520,8 +520,12 @@ export default {
       } catch (err) {
         handleError(err);
       } finally {
-        this.requestEtag = "";
-        this.loading = false;
+        // Only the latest request may clear the loading flag: a stale
+        // response must not reset the state of a newer fetch.
+        if (this.requestEtag === requestEtag) {
+          this.requestEtag = "";
+          this.loading = false;
+        }
       }
       this.folder = find(FoldersStore().folders, { id: folderId }) || {};
     },

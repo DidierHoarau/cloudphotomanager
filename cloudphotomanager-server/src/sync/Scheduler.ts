@@ -75,6 +75,15 @@ export async function SchedulerInit(context: Span, configIn: Config) {
     }
   });
 
+  if (config.AUTO_SYNC === false) {
+    logger.info(
+      "Automatic background sync disabled (AUTO_SYNC=N): scheduled sync and deep scan are not started",
+      span,
+    );
+    span.end();
+    return;
+  }
+
   // Daily deep scan: refresh all folders, clean the cache and queue missing
   // thumbnails/previews.
   cron.schedule(config.CRON_SCAN_DEEP, async () => {

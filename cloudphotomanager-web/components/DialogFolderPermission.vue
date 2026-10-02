@@ -82,7 +82,7 @@ export default {
           if (!permissions.info.folders) {
             permissions.info.folders = [];
           }
-          const folderPermission = find(permissions.folders, {
+          const folderPermission = find(permissions.info.folders, {
             folderId: this.selectedFolder.id,
           });
           if (!folderPermission) {

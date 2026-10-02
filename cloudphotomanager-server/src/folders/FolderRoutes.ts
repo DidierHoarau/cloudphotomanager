@@ -5,7 +5,12 @@ import { FileDataListByFolder } from "../files/FileData";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
-import { UserPermissionCheckFilterFoldersForUser } from "../users/UserPermissionCheck";
+import {
+  UserPermissionCheckFilterFoldersForUser,
+  UserPermissionContextFolderIdsGet,
+  UserPermissionContextFolderIsPermitted,
+  UserPermissionContextGet,
+} from "../users/UserPermissionCheck";
 import {
   FolderDataDelete,
   FolderDataDeletePathRecursive,
@@ -19,6 +24,9 @@ import {
   FileDataListByFolderRecursivePaginated,
 } from "../files/FileData";
 import { File } from "../model/File";
+import { OTelLogger } from "../OTelContext";
+
+const logger = OTelLogger().createModuleLogger("FolderRoutes");
 
 export class FolderRoutes {
   //
@@ -57,7 +65,22 @@ export class FolderRoutes {
         req.params.accountId,
         true,
       );
-      return res.status(200).send({ counts });
+      const permissionContext = await UserPermissionContextGet(
+        span,
+        userSession.userId,
+      );
+      const permittedFolderIds = await UserPermissionContextFolderIdsGet(
+        span,
+        permissionContext,
+        req.params.accountId,
+      );
+      if (permittedFolderIds === null) {
+        return res.status(200).send({ counts });
+      }
+      const permittedSet = new Set(permittedFolderIds);
+      return res.status(200).send({
+        counts: counts.filter((entry) => permittedSet.has(entry.folderId)),
+      });
     });
 
     fastify.get<{
@@ -82,6 +105,19 @@ export class FolderRoutes {
         return res
           .status(200)
           .send({ files: [], page: 0, pageSize: 50, total: 0 });
+      }
+      const permissionContext = await UserPermissionContextGet(
+        span,
+        userSession.userId,
+      );
+      if (
+        !UserPermissionContextFolderIsPermitted(permissionContext, {
+          id: folder.id,
+          accountId: folder.accountId,
+          folderpath: folder.folderpath,
+        })
+      ) {
+        return res.status(403).send({ error: "Access Denied" });
       }
       const includeSubFolders = req.query.includeSubFolders === "true";
       const sortOrder: "asc" | "desc" =
@@ -131,6 +167,19 @@ export class FolderRoutes {
       if (!folder) {
         return res.status(200).send({ files: [] });
       }
+      const permissionContext = await UserPermissionContextGet(
+        span,
+        userSession.userId,
+      );
+      if (
+        !UserPermissionContextFolderIsPermitted(permissionContext, {
+          id: folder.id,
+          accountId: folder.accountId,
+          folderpath: folder.folderpath,
+        })
+      ) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
       const files = await FileDataListByFolder(
         span,
         req.params.accountId,
@@ -151,8 +200,21 @@ export class FolderRoutes {
         return res.status(403).send({ error: "Access Denied" });
       }
       const folder = await FolderDataGet(span, req.params.folderId);
-      if (!folder) {
-        return res.status(200).send({ files: [] });
+      if (!folder || folder.accountId !== req.params.accountId) {
+        return res.status(404).send({ error: "Folder not found" });
+      }
+      const permissionContext = await UserPermissionContextGet(
+        span,
+        userSession.userId,
+      );
+      if (
+        !UserPermissionContextFolderIsPermitted(permissionContext, {
+          id: folder.id,
+          accountId: folder.accountId,
+          folderpath: folder.folderpath,
+        })
+      ) {
+        return res.status(403).send({ error: "Access Denied" });
       }
       const account = await AccountFactoryGetAccountImplementation(
         req.params.accountId,
@@ -179,8 +241,21 @@ export class FolderRoutes {
         return res.status(403).send({ error: "Access Denied" });
       }
       const folder = await FolderDataGet(span, req.params.folderId);
-      if (!folder) {
-        return res.status(200).send({});
+      if (!folder || folder.accountId !== req.params.accountId) {
+        return res.status(404).send({ error: "Folder not found" });
+      }
+      const permissionContext = await UserPermissionContextGet(
+        span,
+        userSession.userId,
+      );
+      if (
+        !UserPermissionContextFolderIsPermitted(permissionContext, {
+          id: folder.id,
+          accountId: folder.accountId,
+          folderpath: folder.folderpath,
+        })
+      ) {
+        return res.status(403).send({ error: "Access Denied" });
       }
       const account = await AccountFactoryGetAccountImplementation(
         req.params.accountId,
@@ -220,6 +295,9 @@ export class FolderRoutes {
         return res.status(403).send({ error: "Access Denied" });
       }
       const folder = await FolderDataGet(span, req.params.folderId);
+      if (!folder) {
+        return res.status(404).send({ error: "Folder not found" });
+      }
       if (folder.folderpath === "/") {
         return res.status(403).send({ error: "Can not delete root folder" });
       }
@@ -227,7 +305,14 @@ export class FolderRoutes {
       const account = await AccountFactoryGetAccountImplementation(
         req.params.accountId,
       );
-      account.deleteFolder(span, folder);
+      try {
+        await account.deleteFolder(span, folder);
+      } catch (error) {
+        logger.error("Error deleting folder in cloud storage", error);
+        return res
+          .status(503)
+          .send({ error: "Error deleting folder in cloud storage" });
+      }
       await FolderDataDelete(
         span,
         account.getAccountDefinition().id,

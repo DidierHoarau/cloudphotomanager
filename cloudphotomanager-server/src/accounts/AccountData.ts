@@ -3,26 +3,30 @@ import { AccountDefinition } from "../model/AccountDefinition";
 import { FolderDataRefreshCacheFolders } from "../folders/FolderData";
 import {
   SqlDbUtilsExecSQL,
+  SqlDbUtilsGetDatabase,
   SqlDbUtilsQuerySQL,
 } from "@devopsplaybook.io/common-utils";
 import { OTelTracer } from "../OTelContext";
+import { AccountFactoryInvalidate } from "./AccountFactory";
 
 export async function AccountDataGet(
   context: Span,
   accountId: string,
 ): Promise<AccountDefinition> {
   const span = OTelTracer().startSpan("AccountDataGet", context);
-  const rawData = await SqlDbUtilsQuerySQL(
-    span,
-    "SELECT * FROM accounts WHERE id = ? ",
-    [accountId],
-  );
-  if (rawData.length === 0) {
-    throw new Error("Account Not Found");
+  try {
+    const rawData = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT * FROM accounts WHERE id = ? ",
+      [accountId],
+    );
+    if (rawData.length === 0) {
+      throw new Error("Account Not Found");
+    }
+    return fromRaw(rawData[0]);
+  } finally {
+    span.end();
   }
-  const account = fromRaw(rawData[0]);
-  span.end();
-  return account;
 }
 
 export async function AccountDataList(
@@ -54,6 +58,7 @@ export async function AccountDataAdd(
       JSON.stringify(accountDefinition.infoPrivate),
     ],
   );
+  AccountFactoryInvalidate(accountDefinition.id);
   FolderDataRefreshCacheFolders(span);
   span.end();
 }
@@ -74,6 +79,7 @@ export async function AccountDataUpdate(
       accountDefinition.id,
     ],
   );
+  AccountFactoryInvalidate(accountDefinition.id);
   FolderDataRefreshCacheFolders(span);
   span.end();
 }
@@ -83,13 +89,23 @@ export async function AccountDataDelete(
   accountId: string,
 ): Promise<void> {
   const span = OTelTracer().startSpan("AccountDataDelete", context);
-  await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [
-    accountId,
-  ]);
-  await SqlDbUtilsExecSQL(span, "DELETE FROM accounts WHERE id = ?", [
-    accountId,
-  ]);
-  span.end();
+  try {
+    // Files and account row are removed atomically: a failure must not leave
+    // orphaned files behind.
+    const apply = SqlDbUtilsGetDatabase().transaction(() => {
+      SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [
+        accountId,
+      ]);
+      SqlDbUtilsExecSQL(span, "DELETE FROM accounts WHERE id = ?", [
+        accountId,
+      ]);
+    });
+    apply();
+  } finally {
+    AccountFactoryInvalidate(accountId);
+    FolderDataRefreshCacheFolders(span);
+    span.end();
+  }
 }
 
 export async function AccountDataDeleteAllFilesAndFolders(
@@ -97,13 +113,20 @@ export async function AccountDataDeleteAllFilesAndFolders(
   accountId: string,
 ): Promise<void> {
   const span = OTelTracer().startSpan("AccountDataDeleteAllFiles", context);
-  await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [
-    accountId,
-  ]);
-  await SqlDbUtilsExecSQL(span, "DELETE FROM folders WHERE accountId = ?", [
-    accountId,
-  ]);
-  span.end();
+  try {
+    const apply = SqlDbUtilsGetDatabase().transaction(() => {
+      SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [
+        accountId,
+      ]);
+      SqlDbUtilsExecSQL(span, "DELETE FROM folders WHERE accountId = ?", [
+        accountId,
+      ]);
+    });
+    apply();
+  } finally {
+    FolderDataRefreshCacheFolders(span);
+    span.end();
+  }
 }
 
 // Private Functions
