@@ -235,6 +235,98 @@ describe("FileData", () => {
     expect(ids.slice(0, 3)).toEqual(["rec-00", "rec-01", "rec-02"]);
   });
 
+  it("recursive listing returns the true total for an empty page past the end", async () => {
+    const accountId = "account-paging-empty-page";
+    const folderId = "folder-empty-page";
+    const date = new Date("2023-07-01T12:00:00.000Z").toISOString();
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO folders (id, idCloud, accountId, folderpath, dateSync, dateUpdated, info) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [folderId, "cloud/empty-page", accountId, "/empty-page", date, date, "{}"],
+    );
+    for (let index = 0; index < 7; index++) {
+      insertFileRow(accountId, folderId, `empty-page-${index}`, date);
+    }
+
+    // Page 0 is normal, page 1 holds the remaining file, page 5 (offset 15)
+    // is past the end and must still report the true total.
+    const first = await fileData.FileDataListByFolderRecursivePaginated(
+      span,
+      accountId,
+      "/empty-page",
+      "asc",
+      0,
+      5,
+    );
+    expect(first.files).toHaveLength(5);
+    expect(first.total).toBe(7);
+
+    const lastPartial = await fileData.FileDataListByFolderRecursivePaginated(
+      span,
+      accountId,
+      "/empty-page",
+      "asc",
+      1,
+      5,
+    );
+    expect(lastPartial.files).toHaveLength(2);
+    expect(lastPartial.total).toBe(7);
+
+    const pastEnd = await fileData.FileDataListByFolderRecursivePaginated(
+      span,
+      accountId,
+      "/empty-page",
+      "asc",
+      5,
+      5,
+    );
+    expect(pastEnd.files).toEqual([]);
+    expect(pastEnd.total).toBe(7);
+  });
+
+  it("recursive listing works for folder names containing LIKE wildcard characters", async () => {
+    const accountId = "account-paging-wildcard";
+    const folderId = "folder-wildcard";
+    const childId = "folder-wildcard-child";
+    const date = new Date("2023-08-01T12:00:00.000Z").toISOString();
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO folders (id, idCloud, accountId, folderpath, dateSync, dateUpdated, info) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [folderId, "cloud/wc", accountId, "/trip_2024.summer", date, date, "{}"],
+    );
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO folders (id, idCloud, accountId, folderpath, dateSync, dateUpdated, info) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [
+        childId,
+        "cloud/wc-child",
+        accountId,
+        "/trip_2024.summer/seq_01",
+        date,
+        date,
+        "{}",
+      ],
+    );
+    insertFileRow(accountId, folderId, "wc-root-1", date);
+    insertFileRow(accountId, childId, "wc-child-1", date);
+    insertFileRow(accountId, childId, "wc-child-2", date);
+
+    const result = await fileData.FileDataListByFolderRecursivePaginated(
+      span,
+      accountId,
+      "/trip_2024.summer",
+      "asc",
+      0,
+      10,
+    );
+    expect(result.total).toBe(3);
+    expect(result.files.map((file) => file.id).sort()).toEqual([
+      "wc-child-1",
+      "wc-child-2",
+      "wc-root-1",
+    ]);
+  });
+
   it("pages an account by dateMedia with a deterministic tiebreaker", async () => {
     const accountId = "account-paging-account";
     const folderId = "folder-paging-account";

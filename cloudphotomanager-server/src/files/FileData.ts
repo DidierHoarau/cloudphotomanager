@@ -314,21 +314,31 @@ export async function FileDataListByFolderRecursivePaginated(
   const order = sortOrder === "asc" ? "ASC" : "DESC";
   const offset = page * pageSize;
   const folderpathSubPattern = folderpath === "/" ? `/%` : `${folderpath}/%`;
-  const countRaw = await SqlDbUtilsQuerySQL(
-    span,
-    `SELECT COUNT(*) as count FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?))`,
-    [accountId, accountId, folderpath, folderpathSubPattern],
-  );
-  const total = countRaw.length > 0 ? countRaw[0].count : 0;
+  // One pass for page + total: COUNT(*) OVER () avoids materializing the
+  // folder subtree a second time just for the count. fromRaw() ignores the
+  // extra column.
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    `SELECT * FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?)) ORDER BY dateMedia ${order}, id ${order} LIMIT ? OFFSET ?`,
+    `SELECT *, COUNT(*) OVER () AS total FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?)) ORDER BY dateMedia ${order}, id ${order} LIMIT ? OFFSET ?`,
     [accountId, accountId, folderpath, folderpathSubPattern, pageSize, offset],
   );
+  let total = 0;
   const files: File[] = [];
-  rawData.forEach((fileRaw) => {
-    files.push(fromRaw(fileRaw));
-  });
+  if (rawData.length > 0) {
+    total = rawData[0].total;
+    rawData.forEach((fileRaw) => {
+      files.push(fromRaw(fileRaw));
+    });
+  } else if (offset > 0) {
+    // An empty page past the end yields no row, so the window total is
+    // unknown: fall back to the explicit count only in that rare path.
+    const countRaw = await SqlDbUtilsQuerySQL(
+      span,
+      `SELECT COUNT(*) as count FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?))`,
+      [accountId, accountId, folderpath, folderpathSubPattern],
+    );
+    total = countRaw.length > 0 ? countRaw[0].count : 0;
+  }
   span.end();
   return { files, total };
 }
