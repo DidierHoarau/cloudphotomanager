@@ -130,19 +130,19 @@
               @click="clickedReplace(failure)"
               :title="
                 failure.conflict.targetFileId
-                  ? 'Delete the existing destination file, then move the source in its place'
+                  ? 'Delete the existing target file, then move the source in its place'
                   : 'Target file id not available'
               "
             >
-              <i class="bi bi-arrow-repeat"></i> Replace Destination
+              <i class="bi bi-arrow-repeat"></i> Replace Target
             </button>
             <button
               class="action-btn action-delete-source"
               :disabled="busy"
               @click="clickedDeleteSource(failure)"
-              title="Delete the origin file being moved"
+              title="Delete the source file being moved"
             >
-              <i class="bi bi-trash"></i> Remove Origin file
+              <i class="bi bi-trash"></i> Remove Source file
             </button>
             <button
               class="action-btn"
@@ -305,16 +305,16 @@ export default {
     clickedReplace(failure) {
       const c = failure.conflict;
       this.askConfirm(
-        "Replace Destination",
-        `Delete the existing destination file and move the source in its place?\nDestination: ${c.target.filename} in ${c.targetFolderpath}`,
+        "Replace Target",
+        `Delete the existing target file and move the source in its place?\nTarget: ${c.target.filename} in ${c.targetFolderpath}`,
         () => SyncStore().resolveFailure(failure.id, "replace"),
       );
     },
     clickedDeleteSource(failure) {
       const c = failure.conflict;
       this.askConfirm(
-        "Remove Origin file",
-        `Delete the origin file being moved? (Can't be undone!)\nFile: ${c.source.filename}`,
+        "Remove Source file",
+        `Delete the source file being moved? (Can't be undone!)\nFile: ${c.source.filename}`,
         () => SyncStore().resolveFailure(failure.id, "deleteSource"),
       );
     },
@@ -449,12 +449,16 @@ export default {
 .conflict-pair {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  gap: var(--space-md);
+  grid-template-rows: repeat(5, auto);
+  gap: var(--space-sm) var(--space-md);
   align-items: stretch;
 }
 .conflict-side {
-  display: flex;
-  flex-direction: column;
+  grid-row: 1 / -1;
+  display: grid;
+  grid-template-rows: subgrid;
+  /* Ignored on the subgridded rows (the parent's row-gap applies); kept so the
+     sides still stack sanely in browsers without subgrid support. */
   gap: var(--space-sm);
   padding: var(--space-md);
   background: rgba(0, 0, 0, 0.04);
@@ -486,8 +490,10 @@ export default {
   font-size: 2em;
 }
 .conflict-meta {
-  display: flex;
-  flex-direction: column;
+  grid-row: span 3;
+  display: grid;
+  grid-template-rows: subgrid;
+  /* Same as .conflict-side: the parent's row-gap applies to subgridded rows. */
   gap: var(--space-xs);
   min-width: 0;
 }
@@ -508,6 +514,7 @@ export default {
   opacity: 0.75;
 }
 .conflict-arrow {
+  grid-row: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: center;
