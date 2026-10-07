@@ -246,4 +246,31 @@ describe("AnalysisRoutes permissions", () => {
     expect(userNon.statusCode).toBe(200);
     expect(userNon.json().counts).toEqual({});
   });
+
+  it("returns identical counts for a web-client-sized batch (150 ids)", async () => {
+    // The web client batches up to 150 ids per POST (DuplicateCountService
+    // MAX_BATCH_IDS); pad the real ids with non-existent ones to exercise the
+    // large IN list end to end.
+    const fileIds = [
+      fp1.id,
+      fp2.id,
+      fp3.id,
+      fq1.id,
+      fq2.id,
+      ...Array.from({ length: 145 }, (_, index) => `missing-${index}`),
+    ];
+    const admin = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/counts`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { fileIds },
+    });
+    expect(admin.statusCode).toBe(200);
+    expect(admin.json().counts).toEqual({
+      [fp1.id]: 2,
+      [fp2.id]: 2,
+      [fp3.id]: 2,
+      [fq1.id]: 2,
+    });
+  });
 });

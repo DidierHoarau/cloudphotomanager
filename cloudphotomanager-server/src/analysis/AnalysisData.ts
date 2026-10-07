@@ -84,20 +84,29 @@ export async function AnalysisDataGetFilesDuplicateCounts(
   const innerFilter = folderScopeFilter(permittedFolderIds);
   const outerFilter = folderScopeFilter(permittedFolderIds);
   const placeholders = fileIds.map(() => "?").join(", ");
+  // Single pass over the account: hash counts are computed once in a
+  // GROUP BY derived table (served index-only by files(accountId, hash))
+  // instead of one correlated COUNT per requested id.
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT f.id AS id, " +
-      "       (SELECT COUNT(*) FROM files f2 " +
-      "          WHERE f2.accountId = f.accountId AND f2.hash = f.hash " +
-      innerFilter.sql +
-      ") AS count " +
+      "       counts.count AS count " +
       "  FROM files f " +
+      "  JOIN (SELECT hash, COUNT(*) AS count " +
+      "          FROM files " +
+      "         WHERE accountId = ? " +
+      "           AND hash IS NOT NULL " +
+      "           AND hash != '' " +
+      innerFilter.sql +
+      "         GROUP BY hash) counts " +
+      "    ON counts.hash = f.hash " +
       " WHERE f.accountId = ? " +
       "   AND f.hash IS NOT NULL " +
       "   AND f.hash != '' " +
       outerFilter.sql +
       `   AND f.id IN (${placeholders})`,
     [
+      accountId,
       ...innerFilter.params,
       accountId,
       ...outerFilter.params,
