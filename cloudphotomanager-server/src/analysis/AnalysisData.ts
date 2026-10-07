@@ -81,41 +81,50 @@ export async function AnalysisDataGetFilesDuplicateCounts(
     span.end();
     return result;
   }
-  const innerFilter = folderScopeFilter(permittedFolderIds);
-  const outerFilter = folderScopeFilter(permittedFolderIds);
   const placeholders = fileIds.map(() => "?").join(", ");
-  // Single pass over the account: hash counts are computed once in a
-  // GROUP BY derived table (served index-only by files(accountId, hash))
-  // instead of one correlated COUNT per requested id.
-  const rawData = await SqlDbUtilsQuerySQL(
+  // Two index-only lookups instead of aggregating the whole account:
+  // fetch the requested files by the unique id index, then count each
+  // involved hash once via files(accountId, hash). The first step must NOT
+  // carry the accountId predicate — with `accountId = ? AND id IN (...)`
+  // the planner range-scans the 80k+ account index instead of probing the
+  // few ids. Ids are globally unique, so the account check happens in JS.
+  const requested = await SqlDbUtilsQuerySQL(
     span,
-    "SELECT f.id AS id, " +
-      "       counts.count AS count " +
-      "  FROM files f " +
-      "  JOIN (SELECT hash, COUNT(*) AS count " +
-      "          FROM files " +
-      "         WHERE accountId = ? " +
-      "           AND hash IS NOT NULL " +
-      "           AND hash != '' " +
-      innerFilter.sql +
-      "         GROUP BY hash) counts " +
-      "    ON counts.hash = f.hash " +
-      " WHERE f.accountId = ? " +
-      "   AND f.hash IS NOT NULL " +
-      "   AND f.hash != '' " +
-      outerFilter.sql +
-      `   AND f.id IN (${placeholders})`,
-    [
-      accountId,
-      ...innerFilter.params,
-      accountId,
-      ...outerFilter.params,
-      ...fileIds,
-    ],
+    `SELECT id, accountId, hash, folderId FROM files WHERE id IN (${placeholders})`,
+    [...fileIds],
   );
-  for (const row of rawData) {
-    const count = Number(row.count);
-    if (count >= 2) {
+  const requestedRows = requested.filter(
+    (row) =>
+      row.accountId === accountId &&
+      row.hash !== null &&
+      row.hash !== undefined &&
+      row.hash !== "" &&
+      (permittedFolderIds === null ||
+        permittedFolderIds.includes(row.folderId)),
+  );
+  const hashes = [...new Set(requestedRows.map((row) => row.hash))];
+  let countByHash = new Map<string, number>();
+  if (hashes.length > 0) {
+    const innerFilter = folderScopeFilter(permittedFolderIds);
+    const hashPlaceholders = hashes.map(() => "?").join(", ");
+    const counted = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT hash, COUNT(*) AS count FROM files " +
+        " WHERE accountId = ? " +
+        "   AND hash IN (" +
+        hashPlaceholders +
+        ") " +
+        innerFilter.sql +
+        " GROUP BY hash",
+      [accountId, ...hashes, ...innerFilter.params],
+    );
+    countByHash = new Map(
+      counted.map((row) => [row.hash, Number(row.count)]),
+    );
+  }
+  for (const row of requestedRows) {
+    const count = countByHash.get(row.hash);
+    if (count !== undefined && count >= 2) {
       result[row.id] = count;
     }
   }
