@@ -111,50 +111,109 @@ export class SyncFailureRoutes {
           error: "Invalid action (expected 'replace' | 'deleteSource')",
         });
       }
-      const accountId = failure.accountId;
-      const conflict = failure.conflict;
-      if (action === "replace") {
-        if (!conflict.targetFileId) {
-          return res
-            .status(400)
-            .send({ error: "Target file id not available, cannot replace" });
-        }
-        // Queue target deletion first
-        SyncQueueQueueItem(
-          accountId,
-          `fileDelete:${accountId}:${conflict.targetFileId}`,
-          { fileId: conflict.targetFileId },
-          "fileDelete",
-          SyncQueueItemPriority.INTERACTIVE,
-          [conflict.targetFileId],
-        );
-        // Then re-queue the move
-        SyncQueueQueueItem(
-          accountId,
-          `folderMove:${accountId}:${conflict.sourceFileId}:${conflict.targetFolderpath}`,
-          {
-            fileId: conflict.sourceFileId,
-            folderpath: conflict.targetFolderpath,
-          },
-          "folderMove",
-          SyncQueueItemPriority.INTERACTIVE,
-          [conflict.sourceFileId],
-        );
-      } else {
-        // deleteSource
-        SyncQueueQueueItem(
-          accountId,
-          `fileDelete:${accountId}:${conflict.sourceFileId}`,
-          { fileId: conflict.sourceFileId },
-          "fileDelete",
-          SyncQueueItemPriority.INTERACTIVE,
-          [conflict.sourceFileId],
-        );
+      if (
+        resolveConflictFailure(failure, action, new Set()) === "missingTarget"
+      ) {
+        return res
+          .status(400)
+          .send({ error: "Target file id not available, cannot replace" });
       }
-      SyncFailuresRemove(failure.id);
       return res.status(200).send({});
     });
+
+    interface ResolveAllRequest extends RequestGenericInterface {
+      Body: { action: "replace" | "deleteSource" };
+    }
+
+    fastify.post<ResolveAllRequest>("/resolve-all", async (req, res) => {
+      const userSession = await AuthGetUserSession(req);
+      if (!AuthIsAdmin(userSession)) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const action = req.body?.action;
+      if (action !== "replace" && action !== "deleteSource") {
+        return res.status(400).send({
+          error: "Invalid action (expected 'replace' | 'deleteSource')",
+        });
+      }
+      let resolved = 0;
+      // Apply the action only to the failures it applies to (see
+      // resolveConflictFailure); everything else is left untouched. Each
+      // file is deleted once even when several conflicts reference it.
+      const queuedFileDeletes = new Set<string>();
+      for (const failure of SyncFailuresList()) {
+        if (
+          resolveConflictFailure(failure, action, queuedFileDeletes) ===
+          "resolved"
+        ) {
+          resolved++;
+        }
+      }
+      return res.status(200).send({ resolved });
+    });
   }
+}
+
+type ResolveResult = "resolved" | "notConflict" | "missingTarget";
+
+// Queue the operations resolving a conflict failure with the given action,
+// then remove the failure. Returns "notConflict" / "missingTarget" (touching
+// nothing) when the failure does not apply to the action. queuedFileDeletes
+// dedupes file deletions across the failures resolved by one request.
+function resolveConflictFailure(
+  failure: SyncFailure,
+  action: "replace" | "deleteSource",
+  queuedFileDeletes: Set<string>,
+): ResolveResult {
+  if (failure.kind !== "conflict" || !failure.conflict) {
+    return "notConflict";
+  }
+  const accountId = failure.accountId;
+  const conflict = failure.conflict;
+  if (action === "replace") {
+    if (!conflict.targetFileId) {
+      return "missingTarget";
+    }
+    // Queue target deletion first
+    queueFileDeleteOnce(accountId, conflict.targetFileId, queuedFileDeletes);
+    // Then re-queue the move
+    SyncQueueQueueItem(
+      accountId,
+      `folderMove:${accountId}:${conflict.sourceFileId}:${conflict.targetFolderpath}`,
+      {
+        fileId: conflict.sourceFileId,
+        folderpath: conflict.targetFolderpath,
+      },
+      "folderMove",
+      SyncQueueItemPriority.INTERACTIVE,
+      [conflict.sourceFileId],
+    );
+  } else {
+    // deleteSource
+    queueFileDeleteOnce(accountId, conflict.sourceFileId, queuedFileDeletes);
+  }
+  SyncFailuresRemove(failure.id);
+  return "resolved";
+}
+
+function queueFileDeleteOnce(
+  accountId: string,
+  fileId: string,
+  queuedFileDeletes: Set<string>,
+): void {
+  const key = `${accountId}:${fileId}`;
+  if (queuedFileDeletes.has(key)) {
+    return;
+  }
+  queuedFileDeletes.add(key);
+  SyncQueueQueueItem(
+    accountId,
+    `fileDelete:${accountId}:${fileId}`,
+    { fileId },
+    "fileDelete",
+    SyncQueueItemPriority.INTERACTIVE,
+    [fileId],
+  );
 }
 
 function requeueFailure(failure: SyncFailure): void {

@@ -32,6 +32,22 @@
         >
           <i class="bi bi-x-lg"></i> Cancel all
         </button>
+        <button
+          class="secondary outline"
+          :disabled="replaceableCount === 0 || busy"
+          @click="clickedReplaceAll"
+          title="Delete the existing target file of every conflict, then move the source in its place"
+        >
+          <i class="bi bi-arrow-repeat"></i> Replace all Targets
+        </button>
+        <button
+          class="secondary outline"
+          :disabled="deletableSourceCount === 0 || busy"
+          @click="clickedDeleteAllSources"
+          title="Delete the source file of every conflict"
+        >
+          <i class="bi bi-trash"></i> Remove all Source files
+        </button>
       </div>
     </div>
 
@@ -195,6 +211,8 @@
 </template>
 
 <script>
+import { countApplicableConflicts } from "~~/utils/SyncFailureActions";
+
 export default {
   props: {
     failures: {
@@ -210,6 +228,16 @@ export default {
       confirmMessage: "",
       pendingAction: null,
     };
+  },
+  computed: {
+    // How many conflict cards each bulk action would consume; non-conflicts
+    // and conflicts missing the file id the action needs are not counted.
+    replaceableCount() {
+      return countApplicableConflicts(this.failures, "replace");
+    },
+    deletableSourceCount() {
+      return countApplicableConflicts(this.failures, "deleteSource");
+    },
   },
   methods: {
     sourceFile(failure) {
@@ -330,6 +358,20 @@ export default {
         "Cancel all",
         "Dismiss all failures? None of the original operations will be retried.",
         () => SyncStore().cancelAllFailures(),
+      );
+    },
+    clickedReplaceAll() {
+      this.askConfirm(
+        "Replace all Targets",
+        `Delete the existing target file of ${this.replaceableCount} conflict(s) and move the sources in their place? (Can't be undone!)`,
+        () => SyncStore().resolveAllFailures("replace"),
+      );
+    },
+    clickedDeleteAllSources() {
+      this.askConfirm(
+        "Remove all Source files",
+        `Delete the source files of ${this.deletableSourceCount} conflict(s)? (Can't be undone!)`,
+        () => SyncStore().resolveAllFailures("deleteSource"),
       );
     },
   },
