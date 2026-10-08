@@ -231,6 +231,20 @@ export const SyncStore = defineStore("SyncStore", {
       }
     },
 
+    async resolveAllFailures(action: "replace" | "deleteSource") {
+      try {
+        const config = await Config.get();
+        await axios.post(
+          `${config.SERVER_URL}/sync/failures/resolve-all`,
+          { action },
+          await AuthService.getAuthHeader(),
+        );
+        await this.fetchFailures();
+      } catch (err) {
+        handleError(err);
+      }
+    },
+
     async cancelAllFailures() {
       try {
         const config = await Config.get();
