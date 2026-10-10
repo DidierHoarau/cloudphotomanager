@@ -19,6 +19,7 @@ import { User } from "../model/User";
 import { UserPermission } from "../model/UserPermission";
 import { UserPermissionFolder } from "../model/UserPermissionFolder";
 import { OTelLogger, OTelSetTracer, OTelTracer } from "../OTelContext";
+import * as jwt from "jsonwebtoken";
 
 export interface RouteSpecContext {
   fastify: FastifyInstance;
@@ -284,6 +285,34 @@ export async function routeSpecTokenFor(
   user: User,
 ): Promise<string> {
   return ctx.auth.AuthGenerateJWT(ctx.span, user);
+}
+
+// Mints a JWT with a backdated `iat` so specs can exercise the sliding
+// session renewal (jsonwebtoken honors a payload-provided `iat`).
+export function routeSpecTokenForWithAge(
+  ctx: RouteSpecContext,
+  user: User,
+  ageSeconds: number,
+): string {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  return jwt.sign(
+    {
+      iat: nowSeconds - ageSeconds,
+      exp: nowSeconds + ctx.config.JWT_VALIDITY_DURATION - ageSeconds,
+      userId: user.id,
+      userName: user.name,
+    },
+    ctx.config.JWT_KEY,
+  );
+}
+
+// Signs a cookie value exactly like the @fastify/cookie plugin does and
+// returns a ready-to-use `token=<value>` cookie header for the session cookie.
+export function routeSpecSignedCookieFor(
+  ctx: RouteSpecContext,
+  token: string,
+): string {
+  return `token=${ctx.fastify.signCookie(token)}`;
 }
 
 export function routeSpecAuthHeaders(token: string): { authorization: string } {

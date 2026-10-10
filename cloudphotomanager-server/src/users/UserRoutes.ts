@@ -6,6 +6,8 @@ import {
   AuthGenerateJWT,
   AuthGetUserSession,
   AuthIsAdmin,
+  AuthRenewSessionIfDue,
+  AuthSessionCookieOptions,
 } from "./Auth";
 import {
   UserDataAddStatement,
@@ -26,15 +28,6 @@ import {
   UserPermissionDataUpdateForUserStatement,
 } from "./UserPermissionData";
 import { SqlDbUtilsGetDatabase } from "@devopsplaybook.io/common-utils";
-
-// Session cookie: not readable by JavaScript (httpOnly) so a XSS cannot
-// exfiltrate the session; lax same-site keeps the SPA same-origin flows.
-const SESSION_COOKIE_OPTIONS = {
-  path: "/",
-  signed: true,
-  httpOnly: true,
-  sameSite: "lax" as const,
-};
 
 export class UserRoutes {
   //
@@ -62,7 +55,7 @@ export class UserRoutes {
       if (userSession.isAuthenticated) {
         user = await UserDataGet(span, userSession.userId);
         const token = await AuthGenerateJWT(span, user);
-        (res as any).setCookie("token", token, SESSION_COOKIE_OPTIONS);
+        (res as any).setCookie("token", token, AuthSessionCookieOptions());
         // Do not echo the token when the session came from the httpOnly
         // cookie: a script calling this endpoint would otherwise be able to
         // read a usable bearer token back out. API clients using the
@@ -87,7 +80,7 @@ export class UserRoutes {
         await UserPasswordCheckPassword(span, user, req.body.password)
       ) {
         const token = await AuthGenerateJWT(span, user);
-        (res as any).setCookie("token", token, SESSION_COOKIE_OPTIONS);
+        (res as any).setCookie("token", token, AuthSessionCookieOptions());
         return res.status(201).send({ success: true, token });
       } else {
         return res.status(403).send({ error: "Authentication Failed" });
@@ -102,6 +95,8 @@ export class UserRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
+      // Sliding renewal: refresh the persistent cookie when the token is due.
+      await AuthRenewSessionIfDue(span, req, res);
       const user = await UserDataGet(span, userSession.userId);
       return res.status(200).send({
         isAuthenticated: true,
@@ -271,10 +266,14 @@ export class UserRoutes {
     });
 
     fastify.get("/access/validate", async (req, res) => {
+      const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
+      // Sliding renewal: the web auth middleware calls this endpoint on every
+      // navigation, so an actively used session keeps rolling forward.
+      await AuthRenewSessionIfDue(span, req, res);
       res.status(200).send({});
     });
   }

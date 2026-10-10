@@ -3,7 +3,9 @@ import {
   routeSpecAddUser,
   routeSpecCookieFromResponse,
   routeSpecSetup,
+  routeSpecSignedCookieFor,
   routeSpecTokenFor,
+  routeSpecTokenForWithAge,
   RouteSpecContext,
 } from "../specTestUtils/RouteSpecHarness";
 
@@ -75,6 +77,9 @@ describe("UserRoutes", () => {
     expect(setCookie.toLowerCase()).toContain("httponly");
     expect(setCookie.toLowerCase()).toContain("samesite=lax");
     expect(setCookie).toContain("Path=/");
+    // The cookie is persistent (not a browser-session cookie): its Max-Age
+    // matches the JWT validity so it survives a browser restart.
+    expect(setCookie).toContain("Max-Age=3600");
   });
 
   it("rejects an unknown user or a wrong password", async () => {
@@ -186,6 +191,92 @@ describe("UserRoutes", () => {
       headers: { cookie },
     });
     expect(allowedFromCookie.statusCode).toBe(200);
+  });
+
+  it("renews the session cookie when a GET /session token is older than half its validity", async () => {
+    const alice = await ctx.userData.UserDataGetByName(ctx.span, "alice");
+    const agedToken = routeSpecTokenForWithAge(
+      ctx,
+      alice,
+      2000, // older than JWT_VALIDITY_DURATION / 2 (1800s)
+    );
+    const agedCookie = routeSpecSignedCookieFor(ctx, agedToken);
+
+    const res = await ctx.fastify.inject({
+      method: "GET",
+      url: "/api/users/session",
+      headers: { cookie: agedCookie },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().isAuthenticated).toBe(true);
+
+    const setCookie = ([] as string[]).concat(
+      res.headers["set-cookie"] as any,
+    )[0];
+    expect(setCookie).toContain("token=");
+    expect(setCookie).toContain("Max-Age=3600");
+
+    // The renewed cookie carries a fresh, valid token.
+    const renewedCookie = setCookie.split(";")[0];
+    const followUp = await ctx.fastify.inject({
+      method: "GET",
+      url: "/api/users/session",
+      headers: { cookie: renewedCookie },
+    });
+    expect(followUp.statusCode).toBe(200);
+    expect(followUp.json().userName).toBe("alice");
+  });
+
+  it("does not renew a fresh cookie session", async () => {
+    const login = await ctx.fastify.inject({
+      method: "POST",
+      url: "/api/users/session",
+      payload: { name: "alice", password: "pw-alice" },
+    });
+    const freshCookie = routeSpecCookieFromResponse(login);
+
+    const res = await ctx.fastify.inject({
+      method: "GET",
+      url: "/api/users/session",
+      headers: { cookie: freshCookie },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["set-cookie"]).toBeUndefined();
+  });
+
+  it("renews the session cookie on access validation and leaves header clients untouched", async () => {
+    const alice = await ctx.userData.UserDataGetByName(ctx.span, "alice");
+    const agedToken = routeSpecTokenForWithAge(ctx, alice, 2000);
+    const agedCookie = routeSpecSignedCookieFor(ctx, agedToken);
+
+    const renewed = await ctx.fastify.inject({
+      method: "GET",
+      url: "/api/users/access/validate",
+      headers: { cookie: agedCookie },
+    });
+    expect(renewed.statusCode).toBe(200);
+    const setCookie = ([] as string[]).concat(
+      renewed.headers["set-cookie"] as any,
+    )[0];
+    expect(setCookie).toContain("token=");
+    expect(setCookie).toContain("Max-Age=3600");
+
+    // Authorization-header (API) clients never get a Set-Cookie.
+    const fromHeader = await ctx.fastify.inject({
+      method: "GET",
+      url: "/api/users/access/validate",
+      headers: routeSpecAuthHeaders(agedToken),
+    });
+    expect(fromHeader.statusCode).toBe(200);
+    expect(fromHeader.headers["set-cookie"]).toBeUndefined();
+
+    const headerSession = await ctx.fastify.inject({
+      method: "GET",
+      url: "/api/users/session",
+      headers: routeSpecAuthHeaders(agedToken),
+    });
+    expect(headerSession.statusCode).toBe(200);
+    expect(headerSession.headers["set-cookie"]).toBeUndefined();
   });
 
   it("changes the password of the authenticated user (A3 regression)", async () => {

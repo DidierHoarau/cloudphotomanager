@@ -89,14 +89,16 @@ export default {
   data() {
     return {
       baseFolder: "",
+      sessionRenewTimer: null,
     };
   },
   async created() {
     if (await AuthenticationStore().ensureAuthenticated()) {
       SyncStore().monitor();
-      setTimeout(async () => {
-        // Renew the session cookie (the server re-issues it from the
-        // current valid session).
+      // Renew the session cookie periodically so a tab left open without
+      // navigation keeps its session (the server re-issues it from the
+      // current valid session); navigation itself also renews server-side.
+      this.sessionRenewTimer = setInterval(async () => {
         axios
           .post(
             `${(await Config.get()).SERVER_URL}/users/session`,
@@ -106,9 +108,15 @@ export default {
           .catch(() => {
             // best effort: an expired session is handled on the next request
           });
-      }, 10000);
+      }, 24 * 60 * 60 * 1000);
     }
     this.baseFolder = this.$route.fullPath.split("/")[1];
+  },
+  beforeUnmount() {
+    if (this.sessionRenewTimer) {
+      clearInterval(this.sessionRenewTimer);
+      this.sessionRenewTimer = null;
+    }
   },
 };
 </script>
