@@ -11,6 +11,13 @@ CloudPhotoManager is a self-hosted free and open source photo managegement tool.
 - Multiple users to be able to shared some folder to some users
 - Detection of duplicates
 
+# Sessions
+
+- Login issues a JWT stored in a signed httpOnly cookie that is valid for `JWT_VALIDITY_DURATION` seconds (default: `8035200`, i.e. about 93 days; overridable via environment variable or configuration file).
+- The cookie is persistent (`Max-Age` aligned with the JWT validity), so it survives closing and re-opening the browser without a new login.
+- Sessions are renewed automatically while the application is used: the server re-issues the token once it is older than half of its validity, and a tab left open also renews the cookie daily.
+- Sessions survive an application restart as long as the `/data` volume (which holds the database containing the JWT signing key) is persistent.
+
 # Installation
 
 The only supported way to setup the application is with Docker containers.
@@ -59,6 +66,9 @@ spec:
             # Sync and scheduling (optional; defaults shown)
             - name: AUTO_SYNC
               value: "Y" # Set to "N" to disable automatic background sync
+            # Session (optional; default shown)
+            - name: JWT_VALIDITY_DURATION
+              value: "8035200" # Session validity in seconds (~93 days); renewed automatically while in use
             - name: SOURCE_FETCH_FREQUENCY
               value: "1800000" # Base sync interval in milliseconds (30 min)
             - name: SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR

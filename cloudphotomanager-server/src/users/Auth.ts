@@ -10,6 +10,7 @@ import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsQuerySQL,
 } from "@devopsplaybook.io/common-utils";
+import { UserDataGet } from "./UserData";
 import { UserPermissionDataGetForUser } from "./UserPermissionData";
 
 const logger = OTelLogger().createModuleLogger(path.basename(__filename));
@@ -127,4 +128,69 @@ export function AuthIsAdmin(userSession: UserSession): boolean {
     return true;
   }
   return false;
+}
+
+// Session cookie: not readable by JavaScript (httpOnly) so a XSS cannot
+// exfiltrate the session; lax same-site keeps the SPA same-origin flows;
+// maxAge (seconds, like JWT_VALIDITY_DURATION) makes the cookie persistent
+// across browser restarts and aligned with the JWT validity.
+export function AuthSessionCookieOptions() {
+  return {
+    path: "/",
+    signed: true,
+    httpOnly: true,
+    sameSite: "lax" as const,
+    maxAge: config.JWT_VALIDITY_DURATION,
+  };
+}
+
+// Sliding renewal for browser sessions: when a cookie-authenticated request
+// carries a token older than half of JWT_VALIDITY_DURATION, re-issue a fresh
+// JWT and refresh the persistent cookie so an actively used session never
+// expires. Authorization-header clients are left untouched (they re-POST
+// /session for fresh tokens).
+export async function AuthRenewSessionIfDue(
+  context: Span,
+  req: any,
+  res: any,
+): Promise<void> {
+  if (req.headers?.authorization) {
+    return;
+  }
+  let token: string | undefined;
+  try {
+    const signedToken = req.cookies?.token;
+    if (signedToken && typeof req.unsignCookie === "function") {
+      const unsigned = req.unsignCookie(signedToken);
+      if (unsigned?.valid) {
+        token = unsigned.value;
+      }
+    }
+  } catch {
+    return;
+  }
+  if (!token) {
+    return;
+  }
+  let info: jwt.JwtPayload;
+  try {
+    info = jwt.verify(token, config.JWT_KEY) as jwt.JwtPayload;
+  } catch {
+    return;
+  }
+  // jsonwebtoken stamps `iat` at signing time; renew once the token is older
+  // than half of its validity.
+  if (!info.iat) {
+    return;
+  }
+  const ageSeconds = Math.floor(Date.now() / 1000) - info.iat;
+  if (ageSeconds < config.JWT_VALIDITY_DURATION / 2) {
+    return;
+  }
+  const user = await UserDataGet(context, info.userId);
+  if (!user) {
+    return;
+  }
+  const freshToken = await AuthGenerateJWT(context, user);
+  (res as any).setCookie("token", freshToken, AuthSessionCookieOptions());
 }
