@@ -8,12 +8,14 @@
     <div ref="grid" class="gallery-grid">
       <LazyGalleryThumbnail
         class="card gallery-file"
+        :class="{ 'gallery-file-with-folder': showFolder }"
         v-for="file in visibleFiles"
         :key="file.id"
         :file="file"
         :enableSelection="enableSelection"
         :selectedFiles="selectedFiles"
         :duplicateCount="duplicateCounts[file.id] || 0"
+        :showFolder="showFolder"
         @onFileSelected="onFileSelected"
         @focusGalleryItem="focusGalleryItem"
       />
@@ -30,6 +32,7 @@
 // Must match the .gallery-grid / .gallery-file CSS below:
 const CELL_MIN_WIDTH_EM = 10; // grid-template-columns minmax(10em, 1fr)
 const CELL_HEIGHT_EM = 11; // .gallery-file height
+const CELL_FOLDER_EXTRA_EM = 1.4; // .gallery-file-with-folder extra height
 const BUFFER_VIEWPORTS = 2; // rows rendered above/below the viewport
 
 export default {
@@ -53,6 +56,12 @@ export default {
       type: Object,
       required: false,
       default: () => ({}),
+    },
+    // Renders the folder path on each thumbnail (search results).
+    showFolder: {
+      type: Boolean,
+      required: false,
+      default: () => false,
     },
   },
   data() {
@@ -160,7 +169,8 @@ export default {
         parseFloat(gridStyle.rowGap) ||
         parseFloat(gridStyle.columnGap) ||
         emPx;
-      const cellHeight = CELL_HEIGHT_EM * emPx;
+      const cellHeight =
+        (CELL_HEIGHT_EM + (this.showFolder ? CELL_FOLDER_EXTRA_EM : 0)) * emPx;
       const rowPitch = cellHeight + gapPx;
       const columns = Math.max(
         1,
@@ -220,6 +230,9 @@ export default {
   grid-template-columns: auto 1fr auto;
   grid-template-rows: auto auto auto;
   height: 11em;
+}
+.gallery-file-with-folder {
+  height: 12.4em;
 }
 .gallery-window-spacer {
   width: 100%;

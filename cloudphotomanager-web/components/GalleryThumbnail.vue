@@ -20,6 +20,9 @@
     <div class="gallery-file-name">
       {{ file.filename }}
     </div>
+    <div v-if="showFolder" class="gallery-file-folder">
+      {{ folderPath }}
+    </div>
     <div class="gallery-file-date">{{ displayDate(file.dateMedia) }}</div>
     <div class="gallery-file-size">
       {{ displaySize(file.info.size) }}
@@ -56,10 +59,22 @@ export default {
       required: false,
       default: 0,
     },
+    // Show the folder path under the filename (used by the search results).
+    showFolder: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
   computed: {
     isProcessing() {
       return SyncStore().isFileProcessing(this.file.id);
+    },
+    folderPath() {
+      const folder = FoldersStore().folders.find(
+        (f) => f.id === this.file.folderId,
+      );
+      return folder ? folder.folderpath : this.file.folderId;
     },
   },
   methods: {
@@ -110,6 +125,16 @@ export default {
   font-size: var(--font-xs);
   word-break: break-all;
   opacity: 0.8;
+}
+.gallery-file-folder {
+  grid-column-start: 1;
+  grid-column-end: span 3;
+  font-size: var(--font-xs);
+  word-break: break-all;
+  opacity: 0.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .gallery-file-image {
   grid-row: 1;

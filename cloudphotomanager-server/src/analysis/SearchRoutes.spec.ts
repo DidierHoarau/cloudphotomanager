@@ -147,6 +147,46 @@ describe("SearchRoutes permissions", () => {
       payload: { bbox: { minLat: 48, maxLat: 49, minLon: 2, maxLon: 3 } },
     });
     expect(geoGrid.statusCode).toBe(403);
+    const labels = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/files/search/labels`,
+    });
+    expect(labels.statusCode).toBe(403);
+  });
+
+  it("lists account labels scoped to the permitted folders", async () => {
+    const admin = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/files/search/labels`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(admin.statusCode).toBe(200);
+    // fp1 ("alpha.jpg", keywords "beach sunset") + fq1 ("delta.jpg",
+    // keywords "mountain beach"): the filename tokens do not surface.
+    expect(admin.json().labels).toEqual([
+      { label: "beach", count: 2 },
+      { label: "mountain", count: 1 },
+      { label: "sunset", count: 1 },
+    ]);
+
+    const userP = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/files/search/labels`,
+      headers: routeSpecAuthHeaders(tokenUserP),
+    });
+    expect(userP.statusCode).toBe(200);
+    expect(userP.json().labels).toEqual([
+      { label: "beach", count: 1 },
+      { label: "sunset", count: 1 },
+    ]);
+
+    const userNon = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/files/search/labels`,
+      headers: routeSpecAuthHeaders(tokenUserNon),
+    });
+    expect(userNon.statusCode).toBe(200);
+    expect(userNon.json().labels).toEqual([]);
   });
 
   it("filters search results by folder permission", async () => {

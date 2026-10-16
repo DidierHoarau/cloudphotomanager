@@ -3,6 +3,7 @@ import { Span } from "@opentelemetry/sdk-trace-base";
 import {
   SearchDataAggregateByGeoGrid,
   SearchDataListAccountDuplicates,
+  SearchDataListAccountLabels,
   SearchDataListFiles,
 } from "./SearchData";
 import { AuthGetUserSession } from "../users/Auth";
@@ -50,6 +51,27 @@ export class SearchRoutes {
         ),
       );
       return res.send({ duplicates });
+    });
+
+    fastify.get<{
+      Params: {
+        accountId: string;
+      };
+    }>("/labels", async (req, res) => {
+      const userSession = await AuthGetUserSession(req);
+      if (!userSession.isAuthenticated) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const labels = await SearchDataListAccountLabels(
+        OTelRequestSpan(req),
+        req.params.accountId,
+        await permittedFolderIdsGet(
+          OTelRequestSpan(req),
+          userSession.userId,
+          req.params.accountId,
+        ),
+      );
+      return res.send({ labels });
     });
 
     fastify.post<{

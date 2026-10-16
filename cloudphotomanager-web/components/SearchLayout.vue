@@ -20,6 +20,11 @@ export default {
           to: "/search",
         },
         {
+          id: "map",
+          label: "Map",
+          to: "/search/map",
+        },
+        {
           id: "duplicates",
           label: "Duplicates",
           to: "/search/duplicates",

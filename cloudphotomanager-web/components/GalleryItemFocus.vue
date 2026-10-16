@@ -90,6 +90,14 @@
         >
           <i class="bi bi-info-circle"></i>
         </button>
+        <NuxtLink
+          v-if="mapLink"
+          class="action-btn"
+          :to="mapLink"
+          title="Show on map"
+        >
+          <i class="bi bi-geo-alt"></i>
+        </NuxtLink>
         <button class="action-btn" @click="clickedClose()" title="Close">
           <i class="bi bi-x-lg"></i>
         </button>
@@ -253,6 +261,7 @@ import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { FileUtils } from "~~/services/FileUtils";
 import { MediaUrls } from "~~/services/MediaUrls";
+import { GeoUtils } from "~~/services/GeoUtils";
 import { findIndex } from "lodash";
 
 export default {
@@ -818,6 +827,23 @@ export default {
     isFileSelected() {
       if (!this.file) return false;
       return findIndex(this.selectedFiles, { id: this.file.id }) >= 0;
+    },
+    // Map deep link for the current file; hidden on the share page. Navigating
+    // to the map unmounts the viewer; browser Back restores it via the
+    // existing fileId query handling.
+    mapLink() {
+      if (!this.file || this.shareToken) return null;
+      const coords = GeoUtils.getGpsCoords(this.file);
+      if (!coords) return null;
+      return {
+        path: "/search/map",
+        query: {
+          accountId: this.file.accountId,
+          lat: coords.lat,
+          lon: coords.lon,
+          zoom: 16,
+        },
+      };
     },
     isCurrentFileOuttake() {
       if (!this.file || !this.file.filename) return false;
