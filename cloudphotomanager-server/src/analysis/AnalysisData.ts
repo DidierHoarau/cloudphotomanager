@@ -24,6 +24,10 @@ function folderScopeFilter(permittedFolderIds: string[] | null): {
   };
 }
 
+// Trashed files are excluded from duplicate analysis so badge counts and
+// duplicate listings ignore copies that await restore or purge.
+const TRASHED_CONDITION = " AND COALESCE(trashed, 0) = 0 ";
+
 export async function AnalysisDataGetFileDuplicates(
   context: Span,
   accountId: string,
@@ -40,9 +44,11 @@ export async function AnalysisDataGetFileDuplicates(
     span,
     "SELECT * FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
       outerFilter.sql +
+      TRASHED_CONDITION +
       " AND hash IN " +
       " (SELECT hash FROM files WHERE id = ? AND accountId = ? AND hash IS NOT NULL AND hash != '' " +
       innerFilter.sql +
+      TRASHED_CONDITION +
       ") ORDER BY hash, id LIMIT ? ",
     [
       accountId,
@@ -115,6 +121,7 @@ export async function AnalysisDataGetFilesDuplicateCounts(
         hashPlaceholders +
         ") " +
         innerFilter.sql +
+        TRASHED_CONDITION +
         " GROUP BY hash",
       [accountId, ...hashes, ...innerFilter.params],
     );
@@ -149,9 +156,11 @@ export async function AnalysisDataListAccountDuplicates(
       " FROM files " +
       " WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
       outerFilter.sql +
+      TRASHED_CONDITION +
       " AND hash IN " +
       " ( SELECT hash FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
       innerFilter.sql +
+      TRASHED_CONDITION +
       " GROUP BY hash HAVING count(*) > 1 ORDER BY hash LIMIT ?) " +
       " ORDER BY hash, id LIMIT ? ",
     [

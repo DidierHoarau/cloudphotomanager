@@ -782,6 +782,17 @@ function broadcastOperationComplete(
   });
 }
 
+// Exported wrapper so synchronous operations that bypass the queue (trash,
+// restore, favorite) can notify connected sessions through the same
+// operation_complete websocket message as queued operations.
+export function SyncQueueBroadcastOperationComplete(
+  operationName: string,
+  fileIds: string[],
+  priority: SyncQueueItemPriority = SyncQueueItemPriority.INTERACTIVE,
+): void {
+  broadcastOperationComplete(operationName, fileIds, priority);
+}
+
 function SyncQueueRegisterFunction(
   functionName: string,
   fn: QueueFunction,

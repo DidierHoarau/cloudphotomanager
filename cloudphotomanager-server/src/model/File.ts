@@ -23,6 +23,12 @@ export class File {
   // ItemNotFound): they are not retried until a folder sync finds them again.
   public syncGone: number;
 
+  // Curation state: favorite flag and soft-delete (trash) marker. Trashed
+  // files stay in the cloud and in the DB until the retention purge.
+  public favorite: number;
+  public trashed: number;
+  public dateTrashed: Date;
+
   public info: any;
   public metadata: any;
 
@@ -37,6 +43,9 @@ export class File {
     this.lastSyncError = null;
     this.lastSyncAttempt = null;
     this.syncGone = 0;
+    this.favorite = 0;
+    this.trashed = 0;
+    this.dateTrashed = null;
   }
 
   public static getMediaType(name: string): FileMediaType {

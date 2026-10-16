@@ -216,7 +216,7 @@ export default {
       return folder ? folder.folderpath : folderId;
     },
     clickedDeleteDuplicate(dup) {
-      this.confirmDeleteMessage = `Delete this duplicate? (Can't be undone!)\nFile: ${dup.filename}`;
+      this.confirmDeleteMessage = `Move this duplicate to Trash? (Restorable for 30 days)\nFile: ${dup.filename}`;
       this.pendingDeleteDup = dup;
       this.showConfirmDelete = true;
     },
@@ -234,7 +234,7 @@ export default {
           await AuthService.getAuthHeader(),
         );
         EventBus.emit(EventTypes.ALERT_MESSAGE, {
-          text: "Delete queued \u2014 running in background",
+          text: "Moved to Trash",
         });
         // Remove from local list
         if (this.duplicates && this.duplicates.files) {

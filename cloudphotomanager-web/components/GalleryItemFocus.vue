@@ -72,6 +72,17 @@
           <i class="bi bi-box-arrow-up-right"></i>
         </a>
         <button
+          v-if="authenticationStore.isAdmin && !shareToken"
+          class="action-btn"
+          @click="doActionToggleFavorite()"
+          :title="file && file.favorite ? 'Remove favorite' : 'Add favorite'"
+        >
+          <i
+            class="bi"
+            :class="file && file.favorite ? 'bi-star-fill' : 'bi-star'"
+          ></i>
+        </button>
+        <button
           v-if="!shareToken"
           class="action-btn"
           @click="showFileInfo = true"
@@ -115,7 +126,7 @@
                 class="action-menu-item action-menu-item-danger"
                 @click="onActionClicked('delete')"
               >
-                Delete
+                Move to Trash
               </button>
               <button
                 v-if="file && getType(file) == 'image'"
@@ -357,10 +368,10 @@ export default {
       if (!this.file) return;
       const operationName = message?.operationName || "";
       const affectedFileIds = message?.fileIds || [];
-      // fileDelete: only act if the current file was NOT already removed
-      // optimistically (removeFileAndAdvance sets _removedByOperation)
+      // fileDelete/fileTrash: only act if the current file was NOT already
+      // removed optimistically (removeFileAndAdvance sets _removedByOperation)
       if (
-        operationName === "fileDelete" &&
+        (operationName === "fileDelete" || operationName === "fileTrash") &&
         affectedFileIds.includes(this.file.id)
       ) {
         this._removedByOperation = true;
@@ -509,6 +520,24 @@ export default {
         handleError(err);
       }
     },
+    async doActionToggleFavorite() {
+      if (!this.file) return;
+      const favorite = !this.file.favorite;
+      try {
+        await axios.post(
+          `${this.serverUrl}/accounts/${this.file.accountId}/files/batch/operations/fileFavorite`,
+          { fileIdList: [this.file.id], favorite },
+          await AuthService.getAuthHeader(),
+        );
+        // The file object is shared with the grid: the badge updates too.
+        this.file.favorite = favorite ? 1 : 0;
+        EventBus.emit(EventTypes.ALERT_MESSAGE, {
+          text: favorite ? "Added to favorites" : "Removed from favorites",
+        });
+      } catch (err) {
+        handleError(err);
+      }
+    },
     async onActionClicked(action) {
       this.closeActionsMenu();
       if (!action) return;
@@ -558,8 +587,8 @@ export default {
       }
     },
     async clickedDelete() {
-      this.confirmDialogTitle = "Confirm Delete";
-      this.confirmDialogMessage = `Delete the file? (Can't be undone!)\nFile: ${this.file.filename} \n`;
+      this.confirmDialogTitle = "Move to Trash";
+      this.confirmDialogMessage = `Move the file to Trash? (Restorable for 30 days)\nFile: ${this.file.filename} \n`;
       this.confirmDialogCallback = async () => {
         const fileId = this.file.id;
         const accountId = this.file.accountId;
@@ -571,7 +600,7 @@ export default {
           );
           SyncStore().markFilesAsPending([fileId]);
           EventBus.emit(EventTypes.ALERT_MESSAGE, {
-            text: "Delete queued \u2014 running in background",
+            text: "Moved to Trash",
           });
           // Advance immediately (optimistic). Mark so the galleryFiles watcher
           // and the OPERATION_COMPLETE listener don't double-advance.

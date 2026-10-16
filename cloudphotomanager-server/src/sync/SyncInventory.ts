@@ -48,7 +48,7 @@ export async function SyncInventorySyncFolder(
       await Promise.all([
         account.listFoldersInFolder(span, cloudFolder),
         account.listFilesInFolder(span, cloudFolder),
-        FileDataListByFolder(span, accountId, knownFolder.id),
+        FileDataListByFolder(span, accountId, knownFolder.id, true),
         FolderDataListSubFolders(span, knownFolder),
       ]);
 

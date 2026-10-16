@@ -273,4 +273,46 @@ describe("AnalysisRoutes permissions", () => {
       [fq1.id]: 2,
     });
   });
+
+  it("ignores trashed files in duplicate groups and counts", async () => {
+    await ctx.fileData.FileDataTrash(ctx.span, fp2.id);
+
+    const afterTrash = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(afterTrash.json().duplicates.map((g: any) => g.hash)).toEqual([
+      "dup-cross",
+    ]);
+
+    const singleton = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/${fp1.id}`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(singleton.json().duplicate).toBeNull();
+
+    const counts = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/counts`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { fileIds: [fp1.id, fp3.id, fp2.id] },
+    });
+    expect(counts.json().counts).toEqual({ [fp3.id]: 2 });
+
+    await ctx.fileData.FileDataRestore(ctx.span, fp2.id);
+
+    const afterRestore = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(
+      afterRestore
+        .json()
+        .duplicates.map((g: any) => g.hash)
+        .sort(),
+    ).toEqual(["dup-cross", "dup-in-p"]);
+  });
 });

@@ -93,6 +93,7 @@ export class FolderRoutes {
         sortOrder?: string;
         page?: string;
         pageSize?: string;
+        favoriteOnly?: string;
       };
     }>("/:folderId/files-recursive", async (req, res) => {
       const span = OTelRequestSpan(req);
@@ -120,6 +121,7 @@ export class FolderRoutes {
         return res.status(403).send({ error: "Access Denied" });
       }
       const includeSubFolders = req.query.includeSubFolders === "true";
+      const favoriteOnly = req.query.favoriteOnly === "true";
       const sortOrder: "asc" | "desc" =
         req.query.sortOrder === "asc" ? "asc" : "desc";
       const page = parseInt(req.query.page || "0", 10);
@@ -133,6 +135,7 @@ export class FolderRoutes {
           sortOrder,
           page,
           pageSize,
+          favoriteOnly,
         );
       } else {
         result = await FileDataListByFolderPaginated(
@@ -142,6 +145,7 @@ export class FolderRoutes {
           sortOrder,
           page,
           pageSize,
+          favoriteOnly,
         );
       }
       return res.status(200).send({

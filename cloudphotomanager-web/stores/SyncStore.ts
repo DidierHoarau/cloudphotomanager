@@ -111,6 +111,8 @@ export const SyncStore = defineStore("SyncStore", {
             if (msg.priority === 1) {
               const opNames: Record<string, string> = {
                 fileDelete: "Delete complete",
+                fileTrash: "Moved to Trash",
+                fileRestore: "Restore complete",
                 folderMove: "Move complete",
                 fileRename: "Rename complete",
               };
