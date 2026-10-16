@@ -35,6 +35,7 @@ export async function SearchDataListAccountDuplicates(
     permittedFolderIds === null
       ? ""
       : " AND folderId IN (SELECT value FROM json_each(?)) ";
+  const trashedCondition = " AND COALESCE(trashed, 0) = 0 ";
   const params: any[] = [accountId];
   if (permittedFolderIds !== null) {
     params.push(JSON.stringify(permittedFolderIds));
@@ -50,9 +51,11 @@ export async function SearchDataListAccountDuplicates(
       " FROM files " +
       " WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
       folderFilterSql +
+      trashedCondition +
       " AND hash IN " +
       " ( SELECT hash FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
       folderFilterSql +
+      trashedCondition +
       " GROUP BY hash HAVING count(*) > 1 ORDER BY hash LIMIT ?) " +
       " ORDER BY hash, id LIMIT ? ",
     params,
@@ -90,11 +93,14 @@ export async function SearchDataListFiles(
   permittedFolderIds: string[] | null = null,
 ): Promise<File[]> {
   const span = OTelTracer().startSpan("SearchDataListFiles", context);
-  let queryCondition = "";
+  let queryCondition = " AND COALESCE(trashed, 0) = 0 ";
   const queryParameters = [accountId];
   if (permittedFolderIds !== null) {
     queryCondition += " AND folderId IN (SELECT value FROM json_each(?)) ";
     queryParameters.push(JSON.stringify(permittedFolderIds));
+  }
+  if (filters.favoriteOnly === true) {
+    queryCondition += " AND COALESCE(favorite, 0) = 1 ";
   }
   if (filters.dateFrom) {
     queryCondition += " AND dateMedia > ? ";
@@ -175,7 +181,7 @@ export async function SearchDataAggregateByGeoGrid(
   const cellWidth = lonSpan / gridCols;
 
   const queryParameters: any[] = [accountId];
-  let extraCondition = "";
+  let extraCondition = " AND COALESCE(trashed, 0) = 0 ";
   if (permittedFolderIds !== null) {
     extraCondition += " AND folderId IN (SELECT value FROM json_each(?)) ";
     queryParameters.push(JSON.stringify(permittedFolderIds));
@@ -248,6 +254,7 @@ function fromRaw(fileRaw: any): File {
   file.id = fileRaw.id;
   file.idCloud = fileRaw.idCloud;
   file.hash = fileRaw.hash;
+  file.favorite = fileRaw.favorite ?? 0;
   file.dateSync = new Date(fileRaw.dateSync);
   file.dateUpdated = new Date(fileRaw.dateUpdated);
   file.dateMedia = new Date(fileRaw.dateMedia);

@@ -87,8 +87,9 @@ describe("SQL migrations", () => {
     expect(dbVersion()).toBe(6);
     expect(existingIndexes()).toEqual([]);
 
-    // Boot with init-0007.sql and init-0008.sql present: the three indexes
-    // and the shares table are created once.
+    // Boot with init-0007.sql, init-0008.sql and init-0009.sql present: the
+    // three indexes, the shares table and the favorite/trash columns are
+    // created once.
     await fs.copy(
       path.join(realSqlDir, "init-0007.sql"),
       path.join(sqlDir, "init-0007.sql"),
@@ -97,10 +98,19 @@ describe("SQL migrations", () => {
       path.join(realSqlDir, "init-0008.sql"),
       path.join(sqlDir, "init-0008.sql"),
     );
+    await fs.copy(
+      path.join(realSqlDir, "init-0009.sql"),
+      path.join(sqlDir, "init-0009.sql"),
+    );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(8);
+    expect(dbVersion()).toBe(9);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
+    const trashColumns = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM pragma_table_info('files') WHERE name IN ('favorite', 'trashed', 'dateTrashed')",
+    ).map((row) => row.name);
+    expect(trashColumns.sort()).toEqual(["dateTrashed", "favorite", "trashed"]);
 
     // A third boot re-applies nothing (idempotent re-run).
     const appliedLogBefore = SqlDbUtilsQuerySQL(
@@ -109,7 +119,7 @@ describe("SQL migrations", () => {
     );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(8);
+    expect(dbVersion()).toBe(9);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
     const appliedLogAfter = SqlDbUtilsQuerySQL(
       undefined,
@@ -126,7 +136,7 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(8);
+    expect(dbVersion()).toBe(9);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
   });
 });

@@ -39,6 +39,11 @@
     <span v-if="duplicateCount > 1" class="gallery-duplicate-badge"
       >x{{ duplicateCount }}</span
     >
+    <i
+      v-if="file.favorite"
+      class="bi bi-star-fill gallery-favorite-badge"
+      title="Favorite"
+    ></i>
   </div>
 </template>
 
@@ -188,6 +193,15 @@ export default {
   padding: 0.1em 0.4em;
   border-radius: var(--radius-sm);
   font-size: var(--font-xs);
+  pointer-events: none;
+}
+.gallery-favorite-badge {
+  position: absolute;
+  top: var(--space-xs);
+  left: var(--space-xs);
+  color: var(--color-warning);
+  font-size: var(--font-base);
+  filter: drop-shadow(0 0 0.15em rgba(0, 0, 0, 0.6));
   pointer-events: none;
 }
 </style>

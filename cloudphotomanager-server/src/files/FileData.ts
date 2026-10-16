@@ -93,11 +93,18 @@ export async function FileDataListByFolder(
   context: Span,
   accountId: string,
   folderId: string,
+  includeTrashed = false,
 ): Promise<File[]> {
   const span = OTelTracer().startSpan("FileDataListByFolder", context);
+  // Cloud-sync reconciliation needs every row (trashed files still exist in
+  // the cloud); UI listings only ever see non-trashed files.
+  const trashedCondition = includeTrashed
+    ? ""
+    : " AND COALESCE(trashed, 0) = 0 ";
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    "SELECT * FROM files WHERE accountId = ? AND folderId = ?",
+    "SELECT * FROM files WHERE accountId = ? AND folderId = ?" +
+      trashedCondition,
     [accountId, folderId],
   );
   const files = [];
@@ -183,6 +190,53 @@ export async function FileDataUpdateInfo(
     file.id,
   ]);
   span.end();
+}
+
+export async function FileDataUpdateFavorite(
+  context: Span,
+  fileId: string,
+  favorite: boolean,
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataUpdateFavorite", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET favorite = ? WHERE id = ? ",
+    [favorite ? 1 : 0, fileId],
+  );
+  span.end();
+}
+
+// Moves a file to the trash (DB-only soft delete). Returns the number of rows
+// actually trashed: 0 when the file does not exist or is already trashed.
+export async function FileDataTrash(
+  context: Span,
+  fileId: string,
+): Promise<number> {
+  const span = OTelTracer().startSpan("FileDataTrash", context);
+  const rowsAffected = SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET trashed = 1, dateTrashed = ? WHERE id = ? AND COALESCE(trashed, 0) = 0 ",
+    [new Date().toISOString(), fileId],
+  );
+  FolderDataRefreshCacheFoldersCounts(span);
+  span.end();
+  return rowsAffected;
+}
+
+// Restores a trashed file. Returns the number of rows actually restored.
+export async function FileDataRestore(
+  context: Span,
+  fileId: string,
+): Promise<number> {
+  const span = OTelTracer().startSpan("FileDataRestore", context);
+  const rowsAffected = SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET trashed = 0, dateTrashed = NULL WHERE id = ? AND COALESCE(trashed, 0) = 1 ",
+    [fileId],
+  );
+  FolderDataRefreshCacheFoldersCounts(span);
+  span.end();
+  return rowsAffected;
 }
 
 export async function FileDataDelete(context: Span, id: string): Promise<void> {
@@ -276,19 +330,24 @@ export async function FileDataListByFolderPaginated(
   sortOrder: "asc" | "desc",
   page: number,
   pageSize: number,
+  favoriteOnly = false,
 ): Promise<{ files: File[]; total: number }> {
   const span = OTelTracer().startSpan("FileDataListByFolderPaginated", context);
   const order = sortOrder === "asc" ? "ASC" : "DESC";
   const offset = page * pageSize;
+  const favoriteCondition = favoriteOnly
+    ? " AND COALESCE(favorite, 0) = 1 "
+    : "";
   const countRaw = await SqlDbUtilsQuerySQL(
     span,
-    "SELECT COUNT(*) as count FROM files WHERE accountId = ? AND folderId = ?",
+    "SELECT COUNT(*) as count FROM files WHERE accountId = ? AND folderId = ? AND COALESCE(trashed, 0) = 0" +
+      favoriteCondition,
     [accountId, folderId],
   );
   const total = countRaw.length > 0 ? countRaw[0].count : 0;
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    `SELECT * FROM files WHERE accountId = ? AND folderId = ? ORDER BY dateMedia ${order}, id ${order} LIMIT ? OFFSET ?`,
+    `SELECT * FROM files WHERE accountId = ? AND folderId = ? AND COALESCE(trashed, 0) = 0${favoriteCondition} ORDER BY dateMedia ${order}, id ${order} LIMIT ? OFFSET ?`,
     [accountId, folderId, pageSize, offset],
   );
   const files: File[] = [];
@@ -306,6 +365,7 @@ export async function FileDataListByFolderRecursivePaginated(
   sortOrder: "asc" | "desc",
   page: number,
   pageSize: number,
+  favoriteOnly = false,
 ): Promise<{ files: File[]; total: number }> {
   const span = OTelTracer().startSpan(
     "FileDataListByFolderRecursivePaginated",
@@ -314,12 +374,15 @@ export async function FileDataListByFolderRecursivePaginated(
   const order = sortOrder === "asc" ? "ASC" : "DESC";
   const offset = page * pageSize;
   const folderpathSubPattern = folderpath === "/" ? `/%` : `${folderpath}/%`;
+  const favoriteCondition = favoriteOnly
+    ? " AND COALESCE(favorite, 0) = 1 "
+    : "";
   // One pass for page + total: COUNT(*) OVER () avoids materializing the
   // folder subtree a second time just for the count. fromRaw() ignores the
   // extra column.
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    `SELECT *, COUNT(*) OVER () AS total FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?)) ORDER BY dateMedia ${order}, id ${order} LIMIT ? OFFSET ?`,
+    `SELECT *, COUNT(*) OVER () AS total FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0${favoriteCondition} AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?)) ORDER BY dateMedia ${order}, id ${order} LIMIT ? OFFSET ?`,
     [accountId, accountId, folderpath, folderpathSubPattern, pageSize, offset],
   );
   let total = 0;
@@ -334,7 +397,7 @@ export async function FileDataListByFolderRecursivePaginated(
     // unknown: fall back to the explicit count only in that rare path.
     const countRaw = await SqlDbUtilsQuerySQL(
       span,
-      `SELECT COUNT(*) as count FROM files WHERE accountId = ? AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?))`,
+      `SELECT COUNT(*) as count FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0${favoriteCondition} AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?))`,
       [accountId, accountId, folderpath, folderpathSubPattern],
     );
     total = countRaw.length > 0 ? countRaw[0].count : 0;
@@ -374,19 +437,155 @@ export async function FileDataListForAccountPaginated(
   const offset = page * pageSize;
   const countRaw = await SqlDbUtilsQuerySQL(
     span,
-    "SELECT COUNT(*) as count FROM files WHERE accountId = ?",
+    "SELECT COUNT(*) as count FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0",
     [accountId],
   );
   const total = countRaw.length > 0 ? countRaw[0].count : 0;
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    "SELECT * FROM files WHERE accountId = ? ORDER BY dateMedia DESC, id DESC LIMIT ? OFFSET ?",
+    "SELECT * FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0 ORDER BY dateMedia DESC, id DESC LIMIT ? OFFSET ?",
     [accountId, pageSize, offset],
   );
   const files: File[] = [];
   rawData.forEach((fileRaw) => {
     files.push(fromRaw(fileRaw));
   });
+  span.end();
+  return { files, total };
+}
+
+export async function FileDataListTrashPaginated(
+  context: Span,
+  accountId: string,
+  permittedFolderIds: string[] | null,
+  page: number,
+  pageSize: number,
+): Promise<{ files: File[]; total: number }> {
+  const span = OTelTracer().startSpan("FileDataListTrashPaginated", context);
+  const folderFilterSql =
+    permittedFolderIds === null
+      ? ""
+      : " AND folderId IN (SELECT value FROM json_each(?)) ";
+  const params: any[] = [accountId];
+  if (permittedFolderIds !== null) {
+    params.push(JSON.stringify(permittedFolderIds));
+  }
+  params.push(pageSize, page * pageSize);
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    `SELECT *, COUNT(*) OVER () AS total FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 1${folderFilterSql} ORDER BY dateTrashed DESC, id DESC LIMIT ? OFFSET ?`,
+    params,
+  );
+  let total = 0;
+  const files: File[] = [];
+  if (rawData.length > 0) {
+    total = rawData[0].total;
+    rawData.forEach((fileRaw) => {
+      files.push(fromRaw(fileRaw));
+    });
+  } else if (page > 0) {
+    const countRaw = await SqlDbUtilsQuerySQL(
+      span,
+      `SELECT COUNT(*) as count FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 1${folderFilterSql}`,
+      params.slice(0, permittedFolderIds === null ? 1 : 2),
+    );
+    total = countRaw.length > 0 ? countRaw[0].count : 0;
+  }
+  span.end();
+  return { files, total };
+}
+
+export async function FileDataListExpiredTrash(
+  context: Span,
+  cutoffIso: string,
+): Promise<string[]> {
+  const span = OTelTracer().startSpan("FileDataListExpiredTrash", context);
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT id FROM files WHERE COALESCE(trashed, 0) = 1 AND dateTrashed IS NOT NULL AND dateTrashed < ? ",
+    [cutoffIso],
+  );
+  span.end();
+  return rawData.map((row: any) => row.id);
+}
+
+export async function FileDataListAccountMonths(
+  context: Span,
+  accountId: string,
+  permittedFolderIds: string[] | null,
+): Promise<{ year: number; month: number; count: number }[]> {
+  const span = OTelTracer().startSpan("FileDataListAccountMonths", context);
+  const folderFilterSql =
+    permittedFolderIds === null
+      ? ""
+      : " AND folderId IN (SELECT value FROM json_each(?)) ";
+  const params: any[] = [accountId];
+  if (permittedFolderIds !== null) {
+    params.push(JSON.stringify(permittedFolderIds));
+  }
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    `SELECT substr(dateMedia, 1, 4) AS year, substr(dateMedia, 6, 2) AS month, COUNT(*) AS count FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0 AND dateMedia IS NOT NULL${folderFilterSql} GROUP BY year, month ORDER BY year DESC, month DESC`,
+    params,
+  );
+  span.end();
+  return rawData.map((row: any) => ({
+    year: Number(row.year),
+    month: Number(row.month),
+    count: Number(row.count),
+  }));
+}
+
+export async function FileDataListByMonthPaginated(
+  context: Span,
+  accountId: string,
+  permittedFolderIds: string[] | null,
+  monthStartIso: string,
+  monthEndIsoExclusive: string,
+  sortOrder: "asc" | "desc",
+  page: number,
+  pageSize: number,
+): Promise<{ files: File[]; total: number }> {
+  const span = OTelTracer().startSpan("FileDataListByMonthPaginated", context);
+  const order = sortOrder === "asc" ? "ASC" : "DESC";
+  const offset = page * pageSize;
+  const folderFilterSql =
+    permittedFolderIds === null
+      ? ""
+      : " AND folderId IN (SELECT value FROM json_each(?)) ";
+  const params: any[] = [
+    accountId,
+    monthStartIso,
+    monthEndIsoExclusive,
+  ];
+  if (permittedFolderIds !== null) {
+    params.push(JSON.stringify(permittedFolderIds));
+  }
+  params.push(pageSize, offset);
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    `SELECT *, COUNT(*) OVER () AS total FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0 AND dateMedia >= ? AND dateMedia < ?${folderFilterSql} ORDER BY dateMedia ${order}, id ${order} LIMIT ? OFFSET ?`,
+    params,
+  );
+  let total = 0;
+  const files: File[] = [];
+  if (rawData.length > 0) {
+    total = rawData[0].total;
+    rawData.forEach((fileRaw) => {
+      files.push(fromRaw(fileRaw));
+    });
+  } else if (page > 0) {
+    const countParams: any[] = [accountId, monthStartIso, monthEndIsoExclusive];
+    if (permittedFolderIds !== null) {
+      countParams.push(JSON.stringify(permittedFolderIds));
+    }
+    const countRaw = await SqlDbUtilsQuerySQL(
+      span,
+      `SELECT COUNT(*) as count FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0 AND dateMedia >= ? AND dateMedia < ?${folderFilterSql}`,
+      countParams,
+    );
+    total = countRaw.length > 0 ? countRaw[0].count : 0;
+  }
   span.end();
   return { files, total };
 }
@@ -410,5 +609,10 @@ function fromRaw(fileRaw: any): File {
     ? new Date(fileRaw.lastSyncAttempt)
     : null;
   file.syncGone = fileRaw.syncGone ?? 0;
+  file.favorite = fileRaw.favorite ?? 0;
+  file.trashed = fileRaw.trashed ?? 0;
+  file.dateTrashed = fileRaw.dateTrashed
+    ? new Date(fileRaw.dateTrashed)
+    : null;
   return file;
 }

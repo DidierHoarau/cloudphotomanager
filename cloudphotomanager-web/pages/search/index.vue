@@ -33,6 +33,14 @@
             />
           </label>
           <kbd v-if="files.length > 0">Images Found: {{ files.length }}</kbd>
+          <label class="favorites-only-checkbox">
+            <input
+              v-model="favoriteOnly"
+              type="checkbox"
+              v-on:change="onSearchFilterChanged"
+            />
+            <span>Favorites only</span>
+          </label>
         </div>
       </div>
 
@@ -84,6 +92,7 @@ export default {
       searchKeyword: "",
       dateFrom: null,
       dateTo: null,
+      favoriteOnly: false,
       selectedFiles: [],
       displayFullScreen: false,
       positionFocus: 0,
@@ -105,6 +114,11 @@ export default {
       if (this.dateTo) {
         filters.dateTo = new Date(this.dateTo);
       }
+      if (this.favoriteOnly) {
+        filters.favoriteOnly = true;
+      }
+      // The favorites-only toggle alone must trigger a request even when no
+      // other filter is set.
       if (Object.keys(filters).length > 0) {
         this.loading = true;
         await axios
@@ -170,6 +184,21 @@ export default {
   display: grid;
   grid-template-columns: 1fr 1fr;
   column-gap: var(--space-base);
+}
+
+.favorites-only-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+  user-select: none;
+}
+
+.favorites-only-checkbox input[type="checkbox"] {
+  cursor: pointer;
+  width: 1em;
+  height: 1em;
+  margin: 0;
 }
 
 @media (prefers-color-scheme: dark) {

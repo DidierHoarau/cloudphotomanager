@@ -225,6 +225,51 @@ describe("FolderRoutes permissions", () => {
     expect(missing.json().files).toEqual([]);
   });
 
+  it("supports favoriteOnly and hides trashed files from listings", async () => {
+    const fileP2 = await routeSpecCreateFile(
+      ctx,
+      accountA.id,
+      folderP,
+      "in-p-2.jpg",
+    );
+    await ctx.fileData.FileDataUpdateFavorite(ctx.span, fileP.id, true);
+
+    const recursiveUrl = `/api/accounts/${accountA.id}/folders/${folderP.id}/files-recursive?includeSubFolders=true`;
+
+    const all = await ctx.fastify.inject({
+      method: "GET",
+      url: recursiveUrl,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(all.json().files.map((f: any) => f.id).sort()).toEqual(
+      [fileP.id, fileP2.id].sort(),
+    );
+
+    const favorites = await ctx.fastify.inject({
+      method: "GET",
+      url: `${recursiveUrl}&favoriteOnly=true`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(favorites.json().total).toBe(1);
+    expect(favorites.json().files.map((f: any) => f.id)).toEqual([fileP.id]);
+
+    await ctx.fileData.FileDataTrash(ctx.span, fileP2.id);
+
+    const afterTrash = await ctx.fastify.inject({
+      method: "GET",
+      url: recursiveUrl,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(afterTrash.json().files.map((f: any) => f.id)).toEqual([fileP.id]);
+
+    const singleFolder = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/folders/${folderP.id}/files`,
+      headers: routeSpecAuthHeaders(tokenUserP),
+    });
+    expect(singleFolder.json().files.map((f: any) => f.id)).toEqual([fileP.id]);
+  });
+
   it("enforces permission on folder sync requests", async () => {
     const denied = await ctx.fastify.inject({
       method: "PUT",

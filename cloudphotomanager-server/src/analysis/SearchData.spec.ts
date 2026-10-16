@@ -13,6 +13,7 @@ import {
   DUPLICATES_MAX_GROUPS,
   DUPLICATES_MAX_ROWS,
   SEARCH_MAX_RESULTS,
+  SearchDataAggregateByGeoGrid,
   SearchDataListAccountDuplicates,
   SearchDataListFiles,
 } from "./SearchData";
@@ -244,5 +245,86 @@ describe("SearchData limits", () => {
 
     const none = await SearchDataListAccountDuplicates(span, accountId, []);
     expect(none).toEqual([]);
+  });
+
+  it("excludes trashed files and supports favoriteOnly across search, duplicates and the geo grid", async () => {
+    const accountId = "account-curation-filter";
+    const dateMedia = "2024-04-01T10:00:00.000Z";
+    insertFiles(accountId, [
+      { id: "cur-fav", folderId: "folder-p", hash: "hash-fav", dateMedia },
+      { id: "cur-plain", folderId: "folder-p", hash: "hash-plain", dateMedia },
+      { id: "cur-keep1", folderId: "folder-p", hash: "hash-keep", dateMedia },
+      { id: "cur-keep2", folderId: "folder-p", hash: "hash-keep", dateMedia },
+      // One member of this pair is trashed: the survivor alone must not
+      // surface as a duplicate group.
+      { id: "cur-trash", folderId: "folder-p", hash: "hash-dup", dateMedia },
+      { id: "cur-survivor", folderId: "folder-p", hash: "hash-dup", dateMedia },
+      // A fully trashed pair disappears entirely.
+      { id: "cur-gone1", folderId: "folder-p", hash: "hash-gone", dateMedia },
+      { id: "cur-gone2", folderId: "folder-p", hash: "hash-gone", dateMedia },
+    ]);
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files SET favorite = 1 WHERE id = 'cur-fav'",
+    );
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files SET trashed = 1, dateTrashed = ? WHERE id IN ('cur-trash', 'cur-gone1', 'cur-gone2')",
+      [new Date().toISOString()],
+    );
+    // GPS info: cur-fav stays visible, cur-trash is trashed and must drop
+    // out of the geo grid aggregation.
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files SET info = ? WHERE id = 'cur-fav'",
+      [
+        JSON.stringify({
+          exif: { GPSInfo: { GPSLatitudeDecimal: 1.5, GPSLongitudeDecimal: 2.5 } },
+        }),
+      ],
+    );
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files SET info = ? WHERE id = 'cur-trash'",
+      [
+        JSON.stringify({
+          exif: { GPSInfo: { GPSLatitudeDecimal: 5.5, GPSLongitudeDecimal: 6.5 } },
+        }),
+      ],
+    );
+
+    const search = await SearchDataListFiles(span, accountId, {});
+    expect(search.map((file) => file.id).sort()).toEqual([
+      "cur-fav",
+      "cur-keep1",
+      "cur-keep2",
+      "cur-plain",
+      "cur-survivor",
+    ]);
+    expect(search.find((file) => file.id === "cur-fav").favorite).toBe(1);
+
+    const favorites = await SearchDataListFiles(span, accountId, {
+      favoriteOnly: true,
+    });
+    expect(favorites.map((file) => file.id)).toEqual(["cur-fav"]);
+
+    const duplicates = await SearchDataListAccountDuplicates(
+      span,
+      accountId,
+      null,
+    );
+    expect(duplicates.map((duplicate) => duplicate.hash)).toEqual([
+      "hash-keep",
+    ]);
+
+    const grid = await SearchDataAggregateByGeoGrid(span, accountId, {
+      bbox: { minLat: 0, maxLat: 10, minLon: 0, maxLon: 10 },
+      gridRows: 10,
+      gridCols: 10,
+    });
+    expect(grid.cells).toHaveLength(1);
+    expect(grid.cells[0].count).toBe(1);
+    expect(grid.cells[0].centerLat).toBeCloseTo(1.5);
+    expect(grid.cells[0].centerLon).toBeCloseTo(2.5);
   });
 });

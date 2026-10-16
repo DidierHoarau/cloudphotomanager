@@ -356,4 +356,289 @@ describe("FileData", () => {
     expect(ids.slice(0, 6)).toEqual([...sameNewer].sort().reverse());
     expect(ids.slice(6).sort()).toEqual([...olderIds].sort());
   });
+
+  // Favorites and trash (soft delete)
+
+  function insertFileRowAt(
+    accountId: string,
+    folderId: string,
+    fileId: string,
+    dateMediaIso: string,
+  ): void {
+    insertFileRow(accountId, folderId, fileId, dateMediaIso);
+  }
+
+  it("round-trips favorite, trashed and dateTrashed through fromRaw", async () => {
+    const accountId = "account-curation-rt";
+    const folderId = "folder-curation-rt";
+    const date = new Date("2023-03-01T12:00:00.000Z").toISOString();
+    insertFileRowAt(accountId, folderId, "crt-plain", date);
+    insertFileRowAt(accountId, folderId, "crt-fav", date);
+    insertFileRowAt(accountId, folderId, "crt-trashed", date);
+
+    await fileData.FileDataUpdateFavorite(span, "crt-fav", true);
+    await fileData.FileDataTrash(span, "crt-trashed");
+
+    const plain = await fileData.FileDataGet(span, "crt-plain");
+    expect(plain.favorite).toBe(0);
+    expect(plain.trashed).toBe(0);
+    expect(plain.dateTrashed).toBeNull();
+
+    const fav = await fileData.FileDataGet(span, "crt-fav");
+    expect(fav.favorite).toBe(1);
+
+    const trashed = await fileData.FileDataGet(span, "crt-trashed");
+    expect(trashed.trashed).toBe(1);
+    expect(trashed.dateTrashed).not.toBeNull();
+
+    await fileData.FileDataUpdateFavorite(span, "crt-fav", false);
+    const unfav = await fileData.FileDataGet(span, "crt-fav");
+    expect(unfav.favorite).toBe(0);
+  });
+
+  it("trash and restore are conditional and idempotent", async () => {
+    const accountId = "account-curation-idem";
+    const folderId = "folder-curation-idem";
+    const date = new Date("2023-03-02T12:00:00.000Z").toISOString();
+    insertFileRowAt(accountId, folderId, "idem-a", date);
+
+    // First trash affects the row; trashing again changes nothing.
+    await expect(fileData.FileDataTrash(span, "idem-a")).resolves.toBe(1);
+    const firstTrashDate = (await fileData.FileDataGet(span, "idem-a"))
+      .dateTrashed;
+    await expect(fileData.FileDataTrash(span, "idem-a")).resolves.toBe(0);
+    expect(
+      (await fileData.FileDataGet(span, "idem-a")).dateTrashed,
+    ).toEqual(firstTrashDate);
+
+    // Unknown file: no row affected.
+    await expect(fileData.FileDataTrash(span, "idem-unknown")).resolves.toBe(0);
+
+    // Restore returns the row; restoring again changes nothing.
+    await expect(fileData.FileDataRestore(span, "idem-a")).resolves.toBe(1);
+    const restored = await fileData.FileDataGet(span, "idem-a");
+    expect(restored.trashed).toBe(0);
+    expect(restored.dateTrashed).toBeNull();
+    await expect(fileData.FileDataRestore(span, "idem-a")).resolves.toBe(0);
+  });
+
+  it("folder listings exclude trashed files and honor favoriteOnly", async () => {
+    const accountId = "account-curation-lists";
+    const folderId = "folder-curation-lists";
+    const date = new Date("2023-04-01T12:00:00.000Z").toISOString();
+    // The recursive listing matches on folder paths, so seed a folder row.
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO folders (id, idCloud, accountId, folderpath, dateSync, dateUpdated, info) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [folderId, "cloud/lists", accountId, "/lists", date, date, "{}"],
+    );
+    insertFileRowAt(accountId, folderId, "cl-plain", date);
+    insertFileRowAt(accountId, folderId, "cl-fav", date);
+    insertFileRowAt(accountId, folderId, "cl-fav-trashed", date);
+    insertFileRowAt(accountId, folderId, "cl-trashed", date);
+    await fileData.FileDataUpdateFavorite(span, "cl-fav", true);
+    await fileData.FileDataUpdateFavorite(span, "cl-fav-trashed", true);
+    await fileData.FileDataTrash(span, "cl-trashed");
+    await fileData.FileDataTrash(span, "cl-fav-trashed");
+
+    const folderAll = await fileData.FileDataListByFolderPaginated(
+      span,
+      accountId,
+      folderId,
+      "asc",
+      0,
+      50,
+    );
+    expect(folderAll.total).toBe(2);
+    expect(folderAll.files.map((f) => f.id).sort()).toEqual([
+      "cl-fav",
+      "cl-plain",
+    ]);
+
+    const folderFav = await fileData.FileDataListByFolderPaginated(
+      span,
+      accountId,
+      folderId,
+      "asc",
+      0,
+      50,
+      true,
+    );
+    expect(folderFav.total).toBe(1);
+    expect(folderFav.files.map((f) => f.id)).toEqual(["cl-fav"]);
+
+    const folderRecAll = await fileData.FileDataListByFolderRecursivePaginated(
+      span,
+      accountId,
+      "/lists",
+      "asc",
+      0,
+      50,
+    );
+    expect(folderRecAll.total).toBe(2);
+
+    const folderRecFav = await fileData.FileDataListByFolderRecursivePaginated(
+      span,
+      accountId,
+      "/lists",
+      "asc",
+      0,
+      50,
+      true,
+    );
+    expect(folderRecFav.total).toBe(1);
+    expect(folderRecFav.files.map((f) => f.id)).toEqual(["cl-fav"]);
+
+    // The nightly cache check listing skips trashed files account-wide.
+    const accountPage = await fileData.FileDataListForAccountPaginated(
+      span,
+      accountId,
+      0,
+      50,
+    );
+    expect(accountPage.total).toBe(2);
+    expect(accountPage.files.map((f) => f.id).sort()).toEqual([
+      "cl-fav",
+      "cl-plain",
+    ]);
+  });
+
+  it("lists the trash paginated, newest first, and lists expired trash ids", async () => {
+    const accountId = "account-curation-trash";
+    const folderId = "folder-curation-trash";
+    const date = new Date("2023-05-01T12:00:00.000Z").toISOString();
+    insertFileRowAt(accountId, folderId, "tr-keep", date);
+    for (let index = 0; index < 5; index++) {
+      insertFileRowAt(accountId, folderId, `tr-${index}`, date);
+      await fileData.FileDataTrash(span, `tr-${index}`);
+    }
+
+    const page0 = await fileData.FileDataListTrashPaginated(
+      span,
+      accountId,
+      null,
+      0,
+      3,
+    );
+    expect(page0.total).toBe(5);
+    expect(page0.files).toHaveLength(3);
+
+    const page1 = await fileData.FileDataListTrashPaginated(
+      span,
+      accountId,
+      null,
+      1,
+      3,
+    );
+    expect(page1.total).toBe(5);
+    expect(page1.files).toHaveLength(2);
+
+    const all = await fileData.FileDataListTrashPaginated(
+      span,
+      accountId,
+      null,
+      0,
+      10,
+    );
+    expect(all.files.map((f) => f.id).sort()).toEqual([
+      "tr-0",
+      "tr-1",
+      "tr-2",
+      "tr-3",
+      "tr-4",
+    ]);
+
+    // Expired-trash listing is account-wide, so pin the trash dates of this
+    // test's files to a fixed old day and cut between that and the (current)
+    // trash dates written by the other tests in this spec.
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files SET dateTrashed = ? WHERE id LIKE 'tr-_'",
+      ["2020-01-01T00:00:00.000Z"],
+    );
+
+    // Not-yet-trashed files and future cutoffs return nothing.
+    expect(
+      (await fileData.FileDataListExpiredTrash(span, new Date(0).toISOString()))
+        .length,
+    ).toBe(0);
+    const cutoff = new Date("2021-01-01T00:00:00.000Z").toISOString();
+    const expired = await fileData.FileDataListExpiredTrash(span, cutoff);
+    expect(expired.sort()).toEqual(["tr-0", "tr-1", "tr-2", "tr-3", "tr-4"]);
+
+    // Restore removes a file from the trash listing.
+    await fileData.FileDataRestore(span, "tr-0");
+    const afterRestore = await fileData.FileDataListTrashPaginated(
+      span,
+      accountId,
+      null,
+      0,
+      10,
+    );
+    expect(afterRestore.total).toBe(4);
+  });
+
+  it("summarizes months across folders and lists a month with UTC boundaries", async () => {
+    const accountId = "account-curation-months";
+    const folderA = "folder-months-a";
+    const folderB = "folder-months-b";
+    const marA = new Date("2022-03-15T10:00:00.000Z").toISOString();
+    const marB = new Date("2022-03-31T23:59:59.999Z").toISOString();
+    const apr = new Date("2022-04-01T00:00:00.000Z").toISOString();
+    insertFileRowAt(accountId, folderA, "mo-a1", marA);
+    insertFileRowAt(accountId, folderB, "mo-b1", marB);
+    insertFileRowAt(accountId, folderA, "mo-a2", apr);
+    await fileData.FileDataTrash(span, "mo-b1");
+
+    const months = await fileData.FileDataListAccountMonths(
+      span,
+      accountId,
+      null,
+    );
+    // Trashed files are excluded from the month summary.
+    expect(months).toEqual([
+      { year: 2022, month: 4, count: 1 },
+      { year: 2022, month: 3, count: 1 },
+    ]);
+
+    // Month pagination uses UTC bounds: March 31 23:59:59.999Z is inside,
+    // April 1 00:00:00.000Z is outside (and vice versa for the April month).
+    const march = await fileData.FileDataListByMonthPaginated(
+      span,
+      accountId,
+      null,
+      "2022-03-01T00:00:00.000Z",
+      "2022-04-01T00:00:00.000Z",
+      "asc",
+      0,
+      50,
+    );
+    expect(march.total).toBe(1);
+    expect(march.files.map((f) => f.id)).toEqual(["mo-a1"]);
+
+    const april = await fileData.FileDataListByMonthPaginated(
+      span,
+      accountId,
+      null,
+      "2022-04-01T00:00:00.000Z",
+      "2022-05-01T00:00:00.000Z",
+      "desc",
+      0,
+      50,
+    );
+    expect(april.total).toBe(1);
+    expect(april.files.map((f) => f.id)).toEqual(["mo-a2"]);
+
+    // Restoring the trashed file brings it back into the month summary.
+    await fileData.FileDataRestore(span, "mo-b1");
+    const monthsAfter = await fileData.FileDataListAccountMonths(
+      span,
+      accountId,
+      null,
+    );
+    expect(monthsAfter).toEqual([
+      { year: 2022, month: 4, count: 1 },
+      { year: 2022, month: 3, count: 2 },
+    ]);
+  });
 });

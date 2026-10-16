@@ -3,7 +3,12 @@ import * as cron from "node-cron";
 import { AccountDataList } from "../accounts/AccountData";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { Config } from "../Config";
-import { FileDataDeleteNoFolder, FileDataGetCount } from "../files/FileData";
+import {
+  FileDataDeleteNoFolder,
+  FileDataGet,
+  FileDataGetCount,
+  FileDataListExpiredTrash,
+} from "../files/FileData";
 import {
   FolderDataAdd,
   FolderDataDeleteFoldersWithDuplicates,
@@ -70,6 +75,20 @@ export async function SchedulerInit(context: Span, configIn: Config) {
       await SchedulerUpdateStats(cronSpan);
     } catch (err) {
       logger.error("Cron CRON_METRIC_REFRESH error", err, cronSpan);
+    } finally {
+      cronSpan.end();
+    }
+  });
+
+  // Daily trash purge: permanently delete (cloud fileDelete) the files that
+  // have been in the Trash longer than the retention window. Runs even when
+  // background sync is disabled so trashed files never live forever.
+  cron.schedule(config.CRON_TRASH_PURGE, async () => {
+    const cronSpan = OTelTracer().startSpan("SchedulerCronTrashPurge");
+    try {
+      await SchedulerPurgeExpiredTrash(cronSpan);
+    } catch (err) {
+      logger.error("Cron CRON_TRASH_PURGE error", err, cronSpan);
     } finally {
       cronSpan.end();
     }
@@ -241,6 +260,33 @@ async function SchedulerUpdateStats(context: Span) {
   const span = OTelTracer().startSpan("SchedulerUpdateStats", context);
   stats.nbFolders = await FolderDataGetCount(span);
   stats.nbFiles = await FileDataGetCount(span);
+  span.end();
+}
+
+// Enqueues the cloud fileDelete operation for every file whose trash
+// retention window has expired.
+export async function SchedulerPurgeExpiredTrash(context: Span) {
+  const span = OTelTracer().startSpan("SchedulerPurgeExpiredTrash", context);
+  const cutoff = new Date(
+    Date.now() - config.TRASH_RETENTION_DAYS * 24 * 3600 * 1000,
+  ).toISOString();
+  const expiredFileIds = await FileDataListExpiredTrash(span, cutoff);
+  for (const fileId of expiredFileIds) {
+    const file = await FileDataGet(span, fileId);
+    if (!file) continue;
+    logger.info(
+      `Purging expired trash file ${file.accountId}: ${file.filename}`,
+      span,
+    );
+    SyncQueueQueueItem(
+      file.accountId,
+      `fileDelete:${file.accountId}:${fileId}`,
+      { fileId },
+      "fileDelete",
+      SyncQueueItemPriority.NORMAL,
+      [fileId],
+    );
+  }
   span.end();
 }
 

@@ -25,6 +25,10 @@ export class Config extends ConfigBase {
   public IMAGE_CLASSIFICATION_MODEL = "Xenova/mobilenet_v2_1.0_224";
   public CRON_METRIC_REFRESH = "*/15 * * * *"; // every 15 minutes
   public CRON_SCAN_DEEP = "0 0 * * *"; // every day at midnight
+  // Days a file stays in the Trash before the daily purge permanently
+  // deletes it from the cloud storage.
+  public TRASH_RETENTION_DAYS = 30;
+  public CRON_TRASH_PURGE = "30 3 * * *"; // every day at 3:30 AM
 
   constructor() {
     super("cloudphotomanager-server");
@@ -52,6 +56,8 @@ export class Config extends ConfigBase {
     this.addConfigField({ field: "IMAGE_CLASSIFICATION_MODEL" });
     this.addConfigField({ field: "CRON_METRIC_REFRESH" });
     this.addConfigField({ field: "CRON_SCAN_DEEP" });
+    this.addConfigField({ field: "TRASH_RETENTION_DAYS" });
+    this.addConfigField({ field: "CRON_TRASH_PURGE" });
   }
 
   public async reload(): Promise<void> {

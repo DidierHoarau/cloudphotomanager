@@ -32,9 +32,23 @@
       </li>
       <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink
+          to="/timeline"
+          :class="baseFolder === 'timeline' ? 'active' : 'inactive'"
+          ><i class="bi bi-clock-history"></i
+        ></NuxtLink>
+      </li>
+      <li v-if="authenticationStore.isAuthenticated">
+        <NuxtLink
           to="/search"
           :class="baseFolder === 'search' ? 'active' : 'inactive'"
           ><i class="bi bi-search"></i
+        ></NuxtLink>
+      </li>
+      <li v-if="authenticationStore.isAdmin">
+        <NuxtLink
+          to="/trash"
+          :class="baseFolder === 'trash' ? 'active' : 'inactive'"
+          ><i class="bi bi-trash"></i
         ></NuxtLink>
       </li>
       <li v-if="authenticationStore.isAdmin">

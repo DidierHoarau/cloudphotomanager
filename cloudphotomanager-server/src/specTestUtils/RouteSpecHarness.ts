@@ -72,6 +72,7 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
     IMAGE_CLASSIFICATION_ENABLED: false,
     AUTO_SYNC: false,
     JWT_VALIDITY_DURATION: 3600,
+    TRASH_RETENTION_DAYS: 30,
   };
 
   const syncQueue = await import("../sync/SyncQueue");
@@ -97,6 +98,14 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   const { UserRoutes } = await import("../users/UserRoutes");
   const { FileRoutes } = await import("../files/FileRoutes");
   const { FolderRoutes } = await import("../folders/FolderRoutes");
+  const { RoutesFileOperationsDelete } = await import(
+    "../files/RoutesFileOperationsDelete"
+  );
+  const { RoutesFileOperationsFavorite } = await import(
+    "../files/RoutesFileOperationsFavorite"
+  );
+  const { TrashRoutes } = await import("../files/TrashRoutes");
+  const { TimelineRoutes } = await import("../folders/TimelineRoutes");
   const { RoutesFileOperationsDownload } = await import(
     "../files/RoutesFileOperationsDownload"
   );
@@ -125,6 +134,18 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   });
   await fastify.register(new FolderRoutes().getRoutes, {
     prefix: "/api/accounts/:accountId/folders",
+  });
+  await fastify.register(new RoutesFileOperationsDelete().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/batch/operations/fileDelete",
+  });
+  await fastify.register(new RoutesFileOperationsFavorite().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/batch/operations/fileFavorite",
+  });
+  await fastify.register(new TrashRoutes(config as any).getRoutes, {
+    prefix: "/api/accounts/:accountId/trash",
+  });
+  await fastify.register(new TimelineRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/timeline",
   });
   await fastify.register(new RoutesFileOperationsDownload().getRoutes, {
     prefix: "/api/accounts/:accountId/files/batch/operations/fileDownload",

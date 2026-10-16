@@ -216,7 +216,7 @@ export async function FolderDataListCountsForAccount(
   }
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    "SELECT count(*) as counts, folderId FROM files WHERE accountId = ? GROUP BY folderId ",
+    "SELECT count(*) as counts, folderId FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0 GROUP BY folderId ",
     [accountId],
   );
   const counts = [];

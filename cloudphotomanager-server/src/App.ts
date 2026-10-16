@@ -16,9 +16,11 @@ import { FileDataInit } from "./files/FileData";
 import { FileRoutes } from "./files/FileRoutes";
 import { RoutesFileOperationsDelete } from "./files/RoutesFileOperationsDelete";
 import { RoutesFileOperationsDownload } from "./files/RoutesFileOperationsDownload";
+import { RoutesFileOperationsFavorite } from "./files/RoutesFileOperationsFavorite";
 import { RoutesFileOperationsFolderMove } from "./files/RoutesFileOperationsFolderMove";
 import { RoutesFileOperationsRebuildCache } from "./files/RoutesFileOperationsRebuildCache";
 import { RoutesFileOperationsRename } from "./files/RoutesFileOperationsRename";
+import { TrashRoutes } from "./files/TrashRoutes";
 import { FolderDataInit } from "./folders/FolderData";
 import { SchedulerInit } from "./sync/Scheduler";
 import { ShareRoutes, ShareRoutesPublic } from "./shares/ShareRoutes";
@@ -34,6 +36,7 @@ import {
 } from "./OTelContext";
 import { AccountRoutes } from "./accounts/AccountRoutes";
 import { FolderRoutes } from "./folders/FolderRoutes";
+import { TimelineRoutes } from "./folders/TimelineRoutes";
 import { SyncQueueInit } from "./sync/SyncQueue";
 import { SyncFailuresInit } from "./sync/SyncFailures";
 import { SyncFailureRoutes } from "./sync/SyncFailureRoutes";
@@ -116,6 +119,18 @@ Promise.resolve().then(async () => {
 
   fastify.register(new RoutesFileOperationsDelete().getRoutes, {
     prefix: "/api/accounts/:accountId/files/batch/operations/fileDelete",
+  });
+
+  fastify.register(new RoutesFileOperationsFavorite().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/batch/operations/fileFavorite",
+  });
+
+  fastify.register(new TrashRoutes(config).getRoutes, {
+    prefix: "/api/accounts/:accountId/trash",
+  });
+
+  fastify.register(new TimelineRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/timeline",
   });
 
   fastify.register(new RoutesFileOperationsFolderMove().getRoutes, {

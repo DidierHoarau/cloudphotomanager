@@ -28,7 +28,7 @@
         class="secondary outline"
         v-on:click="clickedDelete()"
       >
-        <i class="bi bi-trash-fill"></i> Delete
+        <i class="bi bi-trash-fill"></i> Trash
       </button>
       <button
         v-if="
@@ -65,6 +65,15 @@
       >
         <i class="bi bi-three-dots"></i> More...
       </button>
+      <button
+        class="secondary outline"
+        :class="{ 'favorites-toggle-active': favoriteOnly }"
+        v-on:click="clickedToggleFavoriteOnly()"
+        title="Show favorites only"
+      >
+        <i :class="favoriteOnly ? 'bi bi-star-fill' : 'bi bi-star'"></i>
+        Favorites
+      </button>
       <button class="secondary outline" v-on:click="clickedOptions()">
         <i class="bi bi-sliders"></i> Options...
       </button>
@@ -100,7 +109,7 @@
     />
     <DialogConfirm
       v-if="activeOperation == 'confirm-delete'"
-      title="Delete Files"
+      title="Move to Trash"
       :message="confirmMessage"
       @onConfirm="executeDelete"
       @onCancel="activeOperation = ''"
@@ -186,6 +195,7 @@ export default {
       outtakesCount: 0,
       includeSubFolders: false,
       sortOrder: "desc",
+      favoriteOnly: false,
       currentPage: 0,
       pageSize: 60,
       hasMore: false,
@@ -213,6 +223,9 @@ export default {
         }
         if (o.sortOrder === "asc" || o.sortOrder === "desc") {
           this.sortOrder = o.sortOrder;
+        }
+        if (typeof o.favoriteOnly === "boolean") {
+          this.favoriteOnly = o.favoriteOnly;
         }
       }
     } catch (e) {
@@ -245,7 +258,9 @@ export default {
 
       // File removal operations: update local array without full refresh
       if (
-        (operationName === "fileDelete" || operationName === "folderMove") &&
+        (operationName === "fileDelete" ||
+          operationName === "folderMove" ||
+          operationName === "fileTrash") &&
         affectedFileIds.length > 0
       ) {
         const removedSet = new Set(affectedFileIds);
@@ -399,13 +414,14 @@ export default {
     },
     /** Build a deterministic cache key for a files-page request. */
     _filesPageKey(accountId, folderId, page, pageSize) {
-      return `${accountId}:${folderId}:${this.includeSubFolders}:${this.sortOrder}:${page}:${pageSize}`;
+      return `${accountId}:${folderId}:${this.includeSubFolders}:${this.sortOrder}:${this.favoriteOnly}:${page}:${pageSize}`;
     },
     async _requestFilesPage({ accountId, folderId, page, pageSize }) {
       const serverUrl = Config.sync.SERVER_URL;
       const params = new URLSearchParams({
         includeSubFolders: String(this.includeSubFolders),
         sortOrder: this.sortOrder,
+        favoriteOnly: String(this.favoriteOnly),
         page: String(page),
         pageSize: String(pageSize),
       });
@@ -706,6 +722,20 @@ export default {
     clickedOptions() {
       this.activeOperation = "options";
     },
+    clickedToggleFavoriteOnly() {
+      this.favoriteOnly = !this.favoriteOnly;
+      try {
+        const saved = localStorage.getItem("galleryOptions");
+        const o = saved ? JSON.parse(saved) : {};
+        o.favoriteOnly = this.favoriteOnly;
+        localStorage.setItem("galleryOptions", JSON.stringify(o));
+      } catch (e) {
+        // ignore
+      }
+      if (this.currentAccountId && this.currentFolderId) {
+        this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
+      }
+    },
     onOptionsSaved(options) {
       this.includeSubFolders = options.includeSubFolders;
       this.sortOrder = options.sortOrder;
@@ -727,9 +757,9 @@ export default {
     },
     clickedDelete() {
       if (this.selectedFiles.length === 1) {
-        this.confirmMessage = `Delete the file? (Can't be undone!)\nFile: ${this.selectedFiles[0].filename}`;
+        this.confirmMessage = `Move the file to Trash? (Restorable for 30 days)\nFile: ${this.selectedFiles[0].filename}`;
       } else {
-        this.confirmMessage = `Delete the ${this.selectedFiles.length} selected files? (Can't be undone!)`;
+        this.confirmMessage = `Move the ${this.selectedFiles.length} selected files to Trash? (Restorable for 30 days)`;
       }
       this.activeOperation = "confirm-delete";
     },
@@ -751,7 +781,7 @@ export default {
         .then(() => {
           this.selectedFiles = [];
           EventBus.emit(EventTypes.ALERT_MESSAGE, {
-            text: "Delete queued — running in background",
+            text: "Moved to Trash",
           });
         })
         .catch(handleError);
@@ -882,6 +912,11 @@ export default {
 
 .gallery-files-actions kbd {
   height: 2.2em;
+}
+
+.favorites-toggle-active {
+  color: var(--color-warning);
+  border-color: var(--color-warning);
 }
 
 @media (min-width: 901px) {

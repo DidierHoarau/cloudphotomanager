@@ -278,8 +278,8 @@ export default {
       this.selectedFile = file;
     },
     async deleteDuplicate(file) {
-      this.confirmDialogTitle = "Confirm Delete";
-      this.confirmDialogMessage = `Delete the file? (Can't be undone!)\nFile: ${file.filename} \nFolder: ${this.getFolderPath(file.folderId)}`;
+      this.confirmDialogTitle = "Move to Trash";
+      this.confirmDialogMessage = `Move the file to Trash? (Restorable for 30 days)\nFile: ${file.filename} \nFolder: ${this.getFolderPath(file.folderId)}`;
       this.confirmDialogCallback = async () => {
         await axios
           .post(
@@ -291,7 +291,7 @@ export default {
           )
           .then((res) => {
             EventBus.emit(EventTypes.ALERT_MESSAGE, {
-              text: "File deleted",
+              text: "Moved to Trash",
             });
             const hashIndex = findIndex(this.analysis, { hash: file.hash });
             if (hashIndex < 0) return;
