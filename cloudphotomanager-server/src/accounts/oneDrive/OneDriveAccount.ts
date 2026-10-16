@@ -44,6 +44,7 @@ export class OneDriveAccount implements Account {
 
   public getCapabilities(): AccountCapabilities {
     return {
+      downloadFileOriginal: true,
       downloadPhotoThumbnail: true,
       downloadPhotoPreview: false,
       downloadVideoThumbnail: true,

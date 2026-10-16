@@ -97,6 +97,12 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   const { UserRoutes } = await import("../users/UserRoutes");
   const { FileRoutes } = await import("../files/FileRoutes");
   const { FolderRoutes } = await import("../folders/FolderRoutes");
+  const { RoutesFileOperationsDownload } = await import(
+    "../files/RoutesFileOperationsDownload"
+  );
+  const { ShareRoutes, ShareRoutesPublic } = await import(
+    "../shares/ShareRoutes"
+  );
   const { SearchRoutes } = await import("../analysis/SearchRoutes");
   const { AnalysisRoutes } = await import("../analysis/AnalysisRoutes");
   const { SyncRoutes } = await import("../sync/SyncRoutes");
@@ -119,6 +125,15 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   });
   await fastify.register(new FolderRoutes().getRoutes, {
     prefix: "/api/accounts/:accountId/folders",
+  });
+  await fastify.register(new RoutesFileOperationsDownload().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/batch/operations/fileDownload",
+  });
+  await fastify.register(new ShareRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/folders/:folderId/share",
+  });
+  await fastify.register(new ShareRoutesPublic().getRoutes, {
+    prefix: "/api/share",
   });
   await fastify.register(new SearchRoutes().getRoutes, {
     prefix: "/api/accounts/:accountId/files/search",

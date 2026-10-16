@@ -10,6 +10,8 @@ import { OTelLogger } from "../OTelContext";
 import { File } from "../model/File";
 import { FolderDataGet } from "../folders/FolderData";
 import { UserPermissionCheckFolderForUser } from "../users/UserPermissionCheck";
+import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
+import { FileDownloadStreamOriginal } from "./FileDownload";
 
 const logger = OTelLogger().createModuleLogger("FileRoutes");
 
@@ -131,6 +133,38 @@ export class FileRoutes {
       res.header("Content-Length", stats.size);
       res.header("Content-Type", "application/octet-stream");
       return res.send(stream);
+    });
+
+    fastify.get<{
+      Params: {
+        fileId: string;
+      };
+      Querystring: {
+        disposition?: string;
+      };
+    }>("/:fileId/download", async (req, res) => {
+      const span = OTelRequestSpan(req);
+      const userSession = await AuthGetUserSession(req);
+      if (!userSession.isAuthenticated) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const file = await fileGetAccessible(
+        span,
+        userSession.userId,
+        req.params.fileId,
+      );
+      if (!file) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const account = await AccountFactoryGetAccountImplementation(
+        file.accountId,
+      );
+      if (!account.getCapabilities().downloadFileOriginal) {
+        return res.status(403).send({ error: "Access Denied" });
+      }
+      const disposition =
+        req.query.disposition === "inline" ? "inline" : "attachment";
+      await FileDownloadStreamOriginal(span, account, file, res, disposition);
     });
 
     fastify.get("/static/404", async (req, res) => {

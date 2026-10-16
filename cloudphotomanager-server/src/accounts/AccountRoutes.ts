@@ -1,5 +1,6 @@
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
+import { AccountCapabilities } from "../model/AccountCapabilities";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { OTelLogger } from "../OTelContext";
 import { SchedulerStartAccountSync } from "../sync/Scheduler";
@@ -15,6 +16,32 @@ import { AccountFactoryGetAccountFromDefinition } from "./AccountFactory";
 
 const logger = OTelLogger().createModuleLogger("AccountRoutes");
 
+const CAPABILITIES_NONE: AccountCapabilities = {
+  downloadFileOriginal: false,
+  downloadPhotoThumbnail: false,
+  downloadPhotoPreview: false,
+  downloadVideoThumbnail: false,
+  downloadVideoPreview: false,
+};
+
+// The web needs to know what an account can do (e.g. whether original files
+// can be downloaded) without reading account internals. Unknown account
+// types degrade to no capabilities rather than failing the listing.
+async function AccountCapabilitiesForDefinition(
+  span: any,
+  accountDefinition: AccountDefinition,
+): Promise<AccountCapabilities> {
+  try {
+    const account = await AccountFactoryGetAccountFromDefinition(
+      accountDefinition,
+    );
+    return account.getCapabilities();
+  } catch (err) {
+    logger.error("Error Getting Account Capabilities", err, span);
+    return CAPABILITIES_NONE;
+  }
+}
+
 export class AccountRoutes {
   //
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
@@ -26,9 +53,13 @@ export class AccountRoutes {
         return res.status(403).send({ error: "Access Denied" });
       }
       const accounts = await AccountDataList(span);
-      accounts.forEach((account: AccountDefinition) => {
+      for (const account of accounts) {
         delete account.infoPrivate;
-      });
+        (account as any).capabilities = await AccountCapabilitiesForDefinition(
+          span,
+          account,
+        );
+      }
       return res.status(200).send({ accounts });
     });
 
@@ -45,6 +76,10 @@ export class AccountRoutes {
       }
       const account = await AccountDataGet(span, req.params.accountId);
       delete account.infoPrivate;
+      (account as any).capabilities = await AccountCapabilitiesForDefinition(
+        span,
+        account,
+      );
       return res.status(200).send(account);
     });
 

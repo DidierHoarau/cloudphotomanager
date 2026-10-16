@@ -74,6 +74,14 @@
               formatSize(file.info && file.info.size)
             }}</span>
           </div>
+          <div v-if="canDownloadOriginal" class="dialog-info-item">
+            <span class="dialog-info-item-label">Original</span>
+            <span class="dialog-info-item-value">
+              <a :href="downloadHref" :download="file.filename"
+                ><i class="bi bi-download"></i> Download original</a
+              >
+            </span>
+          </div>
         </div>
         <hr />
         <strong>Duplicates</strong>
@@ -140,9 +148,11 @@ export default {
       confirmDeleteMessage: "",
       pendingDeleteDup: null,
       copiedKey: null,
+      serverUrl: "",
     };
   },
   async created() {
+    this.serverUrl = (await Config.get()).SERVER_URL;
     await this.loadDuplicates();
   },
   methods: {
@@ -250,6 +260,15 @@ export default {
     },
     isAdmin() {
       return AuthenticationStore().isAdmin;
+    },
+    canDownloadOriginal() {
+      const capabilities = AccountsStore().capabilitiesFor(
+        this.file.accountId,
+      );
+      return !!(capabilities && capabilities.downloadFileOriginal);
+    },
+    downloadHref() {
+      return `${this.serverUrl}/files/${encodeURIComponent(this.file.id)}/download`;
     },
   },
 };

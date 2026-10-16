@@ -45,6 +45,15 @@
       <button
         v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
         class="secondary outline"
+        :disabled="bulkDownloading"
+        v-on:click="clickedDownload()"
+      >
+        <i class="bi bi-download"></i>
+        {{ bulkDownloading ? "Zipping..." : "Download" }}
+      </button>
+      <button
+        v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
+        class="secondary outline"
         v-on:click="clickedMove()"
       >
         <i class="bi bi-arrows-move"></i> Move...
@@ -190,6 +199,7 @@ export default {
       _onFolderCacheUpdated: null,
       confirmMessage: "",
       _pendingDeleteFolderParentId: "",
+      bulkDownloading: false,
     };
   },
   async created() {
@@ -653,6 +663,38 @@ export default {
     },
     clickedSelect() {
       this.activeOperation = "select";
+    },
+    async clickedDownload() {
+      if (this.bulkDownloading) return;
+      this.bulkDownloading = true;
+      const fileIdList = this.selectedFiles.map((f) => f.id);
+      try {
+        const res = await axios.post(
+          `${Config.sync.SERVER_URL}/accounts/${
+            this.currentAccountId
+          }/files/batch/operations/fileDownload`,
+          { fileIdList },
+          { responseType: "blob" },
+        );
+        const url = URL.createObjectURL(res.data);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `photos-${new Date()
+          .toISOString()
+          .replace(/[:.]/g, "-")
+          .substring(0, 19)}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        EventBus.emit(EventTypes.ALERT_MESSAGE, {
+          text: "Download started",
+        });
+      } catch (err) {
+        handleError(err);
+      } finally {
+        this.bulkDownloading = false;
+      }
     },
     clickedMore() {
       if (this.selectedFiles.length > 0) {

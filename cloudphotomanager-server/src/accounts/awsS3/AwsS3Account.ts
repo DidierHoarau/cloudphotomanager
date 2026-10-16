@@ -32,6 +32,7 @@ export class AwsS3Account implements Account {
 
   getCapabilities(): AccountCapabilities {
     return {
+      downloadFileOriginal: true,
       downloadPhotoThumbnail: false,
       downloadPhotoPreview: false,
       downloadVideoThumbnail: false,
