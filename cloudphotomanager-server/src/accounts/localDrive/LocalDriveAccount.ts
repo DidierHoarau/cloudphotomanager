@@ -27,6 +27,7 @@ export class LocalAccount implements Account {
 
   getCapabilities(): AccountCapabilities {
     return {
+      downloadFileOriginal: true,
       downloadPhotoThumbnail: false,
       downloadPhotoPreview: false,
       downloadVideoThumbnail: false,

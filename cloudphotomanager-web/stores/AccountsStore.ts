@@ -15,7 +15,20 @@ export const AccountsStore = defineStore("AccountsStore", {
     _fetchPromise: null as Promise<void> | null,
   }),
 
-  getters: {},
+  getters: {
+    /** Feature flags of an account (e.g. downloadFileOriginal); all false when unknown. */
+    capabilitiesFor(state) {
+      return (accountId: string) =>
+        state.accounts.find((account) => account.id === accountId)
+          ?.capabilities || {
+          downloadFileOriginal: false,
+          downloadPhotoThumbnail: false,
+          downloadPhotoPreview: false,
+          downloadVideoThumbnail: false,
+          downloadVideoPreview: false,
+        };
+    },
+  },
 
   actions: {
     /** Hydrate accounts from IndexedDB (non-blocking, called once). */

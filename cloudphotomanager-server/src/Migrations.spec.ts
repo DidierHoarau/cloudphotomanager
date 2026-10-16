@@ -76,7 +76,7 @@ describe("SQL migrations", () => {
   });
 
   it("migrates a pre-init-0007 database at boot and stays idempotent", async () => {
-    // Simulate the existing production DB: every migration except 0007.
+    // Simulate the existing production DB: every migration except 0007+.
     const files = (await fs.readdir(realSqlDir))
       .filter((name) => /^init-\d+\.sql$/.test(name) && name < "init-0007.sql")
       .sort();
@@ -87,14 +87,19 @@ describe("SQL migrations", () => {
     expect(dbVersion()).toBe(6);
     expect(existingIndexes()).toEqual([]);
 
-    // Boot with init-0007.sql present: the three indexes are created once.
+    // Boot with init-0007.sql and init-0008.sql present: the three indexes
+    // and the shares table are created once.
     await fs.copy(
       path.join(realSqlDir, "init-0007.sql"),
       path.join(sqlDir, "init-0007.sql"),
     );
+    await fs.copy(
+      path.join(realSqlDir, "init-0008.sql"),
+      path.join(sqlDir, "init-0008.sql"),
+    );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(7);
+    expect(dbVersion()).toBe(8);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
 
     // A third boot re-applies nothing (idempotent re-run).
@@ -104,7 +109,7 @@ describe("SQL migrations", () => {
     );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(7);
+    expect(dbVersion()).toBe(8);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
     const appliedLogAfter = SqlDbUtilsQuerySQL(
       undefined,
@@ -121,7 +126,7 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(7);
+    expect(dbVersion()).toBe(8);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
   });
 });

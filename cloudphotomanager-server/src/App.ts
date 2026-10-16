@@ -15,11 +15,13 @@ import { Config } from "./Config";
 import { FileDataInit } from "./files/FileData";
 import { FileRoutes } from "./files/FileRoutes";
 import { RoutesFileOperationsDelete } from "./files/RoutesFileOperationsDelete";
+import { RoutesFileOperationsDownload } from "./files/RoutesFileOperationsDownload";
 import { RoutesFileOperationsFolderMove } from "./files/RoutesFileOperationsFolderMove";
 import { RoutesFileOperationsRebuildCache } from "./files/RoutesFileOperationsRebuildCache";
 import { RoutesFileOperationsRename } from "./files/RoutesFileOperationsRename";
 import { FolderDataInit } from "./folders/FolderData";
 import { SchedulerInit } from "./sync/Scheduler";
+import { ShareRoutes, ShareRoutesPublic } from "./shares/ShareRoutes";
 import { SyncFileCacheInit } from "./sync/SyncFileCache";
 import { SyncRoutes } from "./sync/SyncRoutes";
 import { AuthInit } from "./users/Auth";
@@ -126,6 +128,18 @@ Promise.resolve().then(async () => {
 
   fastify.register(new RoutesFileOperationsRebuildCache().getRoutes, {
     prefix: "/api/accounts/:accountId/files/batch/operations/fileCacheDelete",
+  });
+
+  fastify.register(new RoutesFileOperationsDownload().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/batch/operations/fileDownload",
+  });
+
+  fastify.register(new ShareRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/folders/:folderId/share",
+  });
+
+  fastify.register(new ShareRoutesPublic().getRoutes, {
+    prefix: "/api/share",
   });
 
   fastify.register(new SearchRoutes().getRoutes, {

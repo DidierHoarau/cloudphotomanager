@@ -21,9 +21,43 @@ jest.mock("../sync/SyncFileCache", () => ({
   SyncFileCacheCheckAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock("../accounts/AccountFactory", () => ({
+  ...jest.requireActual("../accounts/AccountFactory"),
+  AccountFactoryGetAccountImplementation: jest.fn(),
+}));
+
 import { SyncFileCacheCheckAsync } from "../sync/SyncFileCache";
+import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 
 const checkAsyncMock = SyncFileCacheCheckAsync as unknown as jest.Mock;
+const getAccountMock =
+  AccountFactoryGetAccountImplementation as unknown as jest.Mock;
+
+function stubAccount(accountId: string, downloadFileOriginal: boolean) {
+  return {
+    getAccountDefinition: () => ({ id: accountId }),
+    getCapabilities: () => ({
+      downloadFileOriginal,
+      downloadPhotoThumbnail: false,
+      downloadPhotoPreview: false,
+      downloadVideoThumbnail: false,
+      downloadVideoPreview: false,
+    }),
+    downloadFile: jest.fn(
+      async (
+        _span: any,
+        _file: any,
+        destinationFolderpath: string,
+        destinationFilename: string,
+      ) => {
+        await fs.writeFile(
+          path.join(destinationFolderpath, destinationFilename),
+          "original-bytes",
+        );
+      },
+    ),
+  };
+}
 
 describe("FileRoutes permissions", () => {
   let ctx: RouteSpecContext;
@@ -220,5 +254,121 @@ describe("FileRoutes permissions", () => {
     });
     expect(malformed.statusCode).toBe(404);
     expect(checkAsyncMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("FileRoutes original download", () => {
+  let ctx: RouteSpecContext;
+  let accountA: any;
+  let folderP: any;
+  let folderQ: any;
+  let fileP: any;
+  let fileQ: any;
+  let tokenUserP: string;
+  let tokenUserNon: string;
+  let tokenAdmin: string;
+
+  beforeAll(async () => {
+    ctx = await routeSpecSetup();
+    accountA = await routeSpecCreateAccount(ctx, "acct-download-a");
+    folderP = await routeSpecCreateFolder(ctx, accountA.id, "/p");
+    folderQ = await routeSpecCreateFolder(ctx, accountA.id, "/q");
+    fileP = await routeSpecCreateFile(ctx, accountA.id, folderP, "in-p.jpg");
+    fileQ = await routeSpecCreateFile(ctx, accountA.id, folderQ, "in-q.jpg");
+
+    const userP = await routeSpecAddUser(ctx, {
+      name: "user-p-download",
+      password: "pw",
+      grants: [{ folderId: folderP.id, scope: "ro" }],
+    });
+    const userNon = await routeSpecAddUser(ctx, {
+      name: "user-non-download",
+      password: "pw",
+      grants: [],
+    });
+    const admin = await routeSpecAddUser(ctx, {
+      name: "admin-download",
+      password: "pw",
+      isAdmin: true,
+    });
+    tokenUserP = await routeSpecTokenFor(ctx, userP);
+    tokenUserNon = await routeSpecTokenFor(ctx, userNon);
+    tokenAdmin = await routeSpecTokenFor(ctx, admin);
+  });
+
+  afterAll(async () => {
+    await ctx.fastify.close();
+  });
+
+  beforeEach(() => {
+    getAccountMock.mockReset();
+  });
+
+  it("rejects unauthenticated download requests", async () => {
+    const res = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/files/${fileP.id}/download`,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(getAccountMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects downloads of unpermitted, other-folder or unknown files", async () => {
+    getAccountMock.mockResolvedValue(stubAccount(accountA.id, true));
+    const unpermitted = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/files/${fileP.id}/download`,
+      headers: routeSpecAuthHeaders(tokenUserNon),
+    });
+    expect(unpermitted.statusCode).toBe(403);
+
+    const otherFolder = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/files/${fileQ.id}/download`,
+      headers: routeSpecAuthHeaders(tokenUserP),
+    });
+    expect(otherFolder.statusCode).toBe(403);
+
+    const unknown = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/files/no-such-file/download`,
+      headers: routeSpecAuthHeaders(tokenUserP),
+    });
+    expect(unknown.statusCode).toBe(403);
+  });
+
+  it("streams the original with attachment disposition by default", async () => {
+    getAccountMock.mockResolvedValue(stubAccount(accountA.id, true));
+    const res = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/files/${fileP.id}/download`,
+      headers: routeSpecAuthHeaders(tokenUserP),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toBe("original-bytes");
+    expect(res.headers["content-type"]).toBe("image/jpeg");
+    expect(res.headers["content-disposition"]).toContain("attachment");
+    expect(res.headers["content-disposition"]).toContain("in-p.jpg");
+  });
+
+  it("serves the original inline when requested", async () => {
+    getAccountMock.mockResolvedValue(stubAccount(accountA.id, true));
+    const res = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/files/${fileP.id}/download?disposition=inline`,
+      headers: routeSpecAuthHeaders(tokenUserP),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-disposition"]).toContain("inline");
+  });
+
+  it("rejects downloads when the account cannot serve originals", async () => {
+    getAccountMock.mockResolvedValue(stubAccount(accountA.id, false));
+    const res = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/files/${fileP.id}/download`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(res.statusCode).toBe(403);
   });
 });

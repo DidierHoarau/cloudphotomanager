@@ -52,7 +52,31 @@
           />
         </label>
         <div class="action-bar-divider"></div>
-        <button class="action-btn" @click="showFileInfo = true" title="Info">
+        <a
+          v-if="canDownloadOriginal"
+          class="action-btn"
+          :href="downloadOriginalHref()"
+          :download="file && file.filename"
+          title="Download"
+        >
+          <i class="bi bi-download"></i>
+        </a>
+        <a
+          v-if="canDownloadOriginal"
+          class="action-btn"
+          :href="downloadOriginalHref('inline')"
+          target="_blank"
+          rel="noopener"
+          title="Open original"
+        >
+          <i class="bi bi-box-arrow-up-right"></i>
+        </a>
+        <button
+          v-if="!shareToken"
+          class="action-btn"
+          @click="showFileInfo = true"
+          title="Info"
+        >
           <i class="bi bi-info-circle"></i>
         </button>
         <button class="action-btn" @click="clickedClose()" title="Close">
@@ -234,6 +258,14 @@ export default {
       type: Array,
       required: false,
       default: () => [],
+    },
+    // When set, the viewer runs on the public share page: downloads go
+    // through the token-based share endpoint instead of the session-cookie
+    // one, and dialogs that need a user session are hidden.
+    shareToken: {
+      type: String,
+      required: false,
+      default: "",
     },
   },
   data() {
@@ -659,6 +691,12 @@ export default {
     getThumbnailSource(file) {
       return MediaUrls.thumbnailFromBase(this.staticUrl, file);
     },
+    downloadOriginalHref(disposition) {
+      if (this.shareToken) {
+        return `${this.serverUrl}/share/${encodeURIComponent(this.shareToken)}/files/${encodeURIComponent(this.file.id)}/download${disposition === "inline" ? "?disposition=inline" : ""}`;
+      }
+      return `${this.serverUrl}/files/${encodeURIComponent(this.file.id)}/download${disposition === "inline" ? "?disposition=inline" : ""}`;
+    },
     onMediaLoaded() {
       this.mediaLoading = false;
     },
@@ -723,6 +761,14 @@ export default {
         transformOrigin: "center center",
         userSelect: "none",
       };
+    },
+    canDownloadOriginal() {
+      if (!this.file) return false;
+      if (this.shareToken) return true;
+      const capabilities = AccountsStore().capabilitiesFor(
+        this.file.accountId,
+      );
+      return !!(capabilities && capabilities.downloadFileOriginal);
     },
     isCurrentFileProcessing() {
       if (!this.file) return false;
