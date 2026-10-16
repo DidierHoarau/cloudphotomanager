@@ -74,6 +74,14 @@
               formatSize(file.info && file.info.size)
             }}</span>
           </div>
+          <div v-if="gpsCoords" class="dialog-info-item">
+            <span class="dialog-info-item-label">Location (GPS)</span>
+            <span class="dialog-info-item-value">
+              <NuxtLink :to="mapLink" @click="clickedClose()">
+                {{ displayCoords }} <i class="bi bi-geo-alt"></i> Show on map
+              </NuxtLink>
+            </span>
+          </div>
           <div v-if="canDownloadOriginal" class="dialog-info-item">
             <span class="dialog-info-item-label">Original</span>
             <span class="dialog-info-item-value">
@@ -131,6 +139,7 @@ const authenticationStore = AuthenticationStore();
 import axios from "axios";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
+import { GeoUtils } from "~~/services/GeoUtils";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 
 export default {
@@ -269,6 +278,24 @@ export default {
     },
     downloadHref() {
       return `${this.serverUrl}/files/${encodeURIComponent(this.file.id)}/download`;
+    },
+    gpsCoords() {
+      return GeoUtils.getGpsCoords(this.file);
+    },
+    displayCoords() {
+      if (!this.gpsCoords) return "";
+      return `${this.gpsCoords.lat.toFixed(5)}, ${this.gpsCoords.lon.toFixed(5)}`;
+    },
+    mapLink() {
+      return {
+        path: "/search/map",
+        query: {
+          accountId: this.file.accountId,
+          lat: this.gpsCoords.lat,
+          lon: this.gpsCoords.lon,
+          zoom: 16,
+        },
+      };
     },
   },
 };

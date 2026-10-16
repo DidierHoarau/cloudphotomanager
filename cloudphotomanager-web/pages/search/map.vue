@@ -98,6 +98,24 @@ function loadLeaflet() {
 
 const GRID_ROWS = 10;
 const GRID_COLS = 10;
+// Deep-link zoom bounds (matching the tile layer maxZoom) and the default
+// zoom used when a link carries coordinates but no explicit zoom.
+const ZOOM_MIN = 2;
+const ZOOM_MAX = 19;
+const DEEP_LINK_ZOOM_DEFAULT = 16;
+
+function parseCoordinate(value) {
+  const num = typeof value === "string" ? parseFloat(value) : NaN;
+  return Number.isFinite(num) ? num : null;
+}
+
+function parseZoom(value) {
+  const num = typeof value === "string" ? parseFloat(value) : NaN;
+  if (!Number.isFinite(num)) {
+    return DEEP_LINK_ZOOM_DEFAULT;
+  }
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(num)));
+}
 
 export default {
   data() {
@@ -134,6 +152,16 @@ export default {
     await AccountsStore().fetch();
   },
   async mounted() {
+    // Deep-link override: /search/map?accountId=…&lat=…&lon=…&zoom=… takes
+    // precedence over the auto-selected first account (NavigationSearch has
+    // already emitted its selection by the time this runs).
+    const route = useRoute();
+    const queryAccountId = route.query.accountId;
+    if (typeof queryAccountId === "string" && queryAccountId) {
+      this.currentAccountId = queryAccountId;
+    }
+    const lat = parseCoordinate(route.query.lat);
+    const lon = parseCoordinate(route.query.lon);
     try {
       this.L = await loadLeaflet();
       // Wait for the map container to be laid out before instantiating
@@ -141,6 +169,9 @@ export default {
       // render in the top-left corner until the next resize event.
       await this.$nextTick();
       this.initMap();
+      if (lat !== null && lon !== null) {
+        this.map.setView([lat, lon], parseZoom(route.query.zoom));
+      }
     } catch (err) {
       handleError(err);
     } finally {

@@ -11,6 +11,10 @@ CloudPhotoManager is a self-hosted free and open source photo managegement tool.
 - Multiple users to be able to shared some folder to some users
 - Detection of duplicates
 - Favorites: mark keepers from the viewer, filter the gallery and the search by favorites
+- Faceted search: filter by media type (photos/videos/RAW), folder subtree, has-location, favorites and outtakes
+- Label browsing: click the classification labels detected on your photos to search them
+- Search results support selection and the same bulk actions as the gallery (trash/download/move), with the folder path shown on each result
+- Geo map: browse geo-tagged photos on a world map, reachable from a Map tab and "Show on map" entry points in the File Info dialog and the fullscreen viewer
 - Trash: deletes move files to a restorable Trash (30 days retention, automatic purge), with restore and permanent delete
 - Timeline: browse the whole library by month across folders
 - Download the original file from the fullscreen viewer or the File Info dialog

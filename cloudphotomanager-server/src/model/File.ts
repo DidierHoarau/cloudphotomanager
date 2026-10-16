@@ -1,5 +1,5 @@
 import { UtilsMd5 } from "../Utils";
-import { FileMediaType } from "./FileMediaType";
+import { FILE_MEDIA_TYPE_EXTENSIONS, FileMediaType } from "./FileMediaType";
 
 export class File {
   //
@@ -49,24 +49,16 @@ export class File {
   }
 
   public static getMediaType(name: string): FileMediaType {
-    const imageExtensionsRaw = ["dng", "raw", "arw", "heic"];
-    const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "tiff"];
-    const videoExtensions = [
-      "mp4",
-      "mov",
-      "wmv",
-      "avi",
-      "mkv",
-      "mpg",
-      "mpeg",
-      "flv",
-    ];
     const extension = name.split(".").pop().toLowerCase();
-    if (imageExtensions.includes(extension)) {
+    if (FILE_MEDIA_TYPE_EXTENSIONS[FileMediaType.image].includes(extension)) {
       return FileMediaType.image;
-    } else if (videoExtensions.includes(extension)) {
+    } else if (
+      FILE_MEDIA_TYPE_EXTENSIONS[FileMediaType.video].includes(extension)
+    ) {
       return FileMediaType.video;
-    } else if (imageExtensionsRaw.includes(extension)) {
+    } else if (
+      FILE_MEDIA_TYPE_EXTENSIONS[FileMediaType.imageRaw].includes(extension)
+    ) {
       return FileMediaType.imageRaw;
     } else {
       return FileMediaType.unknown;

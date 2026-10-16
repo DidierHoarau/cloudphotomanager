@@ -3,7 +3,11 @@ import * as _ from "lodash";
 import { SqlDbUtilsQuerySQL } from "@devopsplaybook.io/common-utils";
 import { File } from "../model/File";
 import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
-import { FolderDataListForAccount } from "../folders/FolderData";
+import {
+  FILE_MEDIA_TYPE_EXTENSIONS,
+  FileMediaType,
+} from "../model/FileMediaType";
+import { FolderDataGet, FolderDataListForAccount } from "../folders/FolderData";
 import { OTelTracer } from "../OTelContext";
 import {
   buildGeoBoxConditionSql,
@@ -21,6 +25,8 @@ export const SEARCH_MAX_RESULTS = 5000;
 // total rows returned.
 export const DUPLICATES_MAX_GROUPS = 500;
 export const DUPLICATES_MAX_ROWS = 10000;
+// Maximum number of distinct labels returned by the label listing.
+export const SEARCH_LABELS_MAX = 200;
 
 export async function SearchDataListAccountDuplicates(
   context: Span,
@@ -102,6 +108,60 @@ export async function SearchDataListFiles(
   if (filters.favoriteOnly === true) {
     queryCondition += " AND COALESCE(favorite, 0) = 1 ";
   }
+  if (filters.outtakesOnly === true) {
+    queryCondition += " AND filename LIKE '%-outtake.%' ";
+  }
+  if (filters.hasLocation === true) {
+    queryCondition += ` AND ${GEO_PRESENT_CONDITION} `;
+  }
+  // Media-type facet: match the filename extension against the shared
+  // extension lists (same source of truth as File.getMediaType). Unknown
+  // values are ignored; the unknown type itself is not offered as a facet.
+  // A selection with no known media type matches nothing.
+  if (Array.isArray(filters.mediaTypes) && filters.mediaTypes.length > 0) {
+    const extensions: string[] = [];
+    for (const mediaType of filters.mediaTypes) {
+      if (
+        mediaType === FileMediaType.image ||
+        mediaType === FileMediaType.video ||
+        mediaType === FileMediaType.imageRaw
+      ) {
+        extensions.push(...FILE_MEDIA_TYPE_EXTENSIONS[mediaType]);
+      }
+    }
+    if (extensions.length === 0) {
+      span.end();
+      return [];
+    }
+    const likeConditions = extensions
+      .map(() => "LOWER(filename) LIKE ? ")
+      .join(" OR ");
+    queryCondition += ` AND (${likeConditions}) `;
+    for (const extension of extensions) {
+      queryParameters.push(`%.${extension}`);
+    }
+  }
+  // Folder facet: restrict to the folder subtree (the folder itself plus its
+  // children). A folder outside the caller's permissions or an unknown folder
+  // yields no results.
+  if (filters.folderId) {
+    const folder = await FolderDataGet(span, filters.folderId);
+    const permitted =
+      folder &&
+      folder.accountId === accountId &&
+      (permittedFolderIds === null ||
+        permittedFolderIds.includes(folder.id));
+    if (!permitted) {
+      span.end();
+      return [];
+    }
+    const folderpathSubPattern =
+      folder.folderpath === "/" ? `/%` : `${folder.folderpath}/%`;
+    queryCondition +=
+      " AND folderId IN (SELECT id FROM folders WHERE accountId = ? " +
+      " AND (folderpath = ? OR folderpath LIKE ?)) ";
+    queryParameters.push(accountId, folder.folderpath, folderpathSubPattern);
+  }
   if (filters.dateFrom) {
     queryCondition += " AND dateMedia > ? ";
     queryParameters.push(new Date(filters.dateFrom).toISOString());
@@ -136,6 +196,67 @@ export async function SearchDataListFiles(
   }
   span.end();
   return files;
+}
+
+export interface SearchLabel {
+  label: string;
+  count: number;
+}
+
+// Browses the classification labels already stored in the files.keywords
+// column ("lowercase(filename) + space-separated labels"). The filename
+// tokens are excluded so only real classification labels are listed.
+export async function SearchDataListAccountLabels(
+  context: Span,
+  accountId: string,
+  permittedFolderIds: string[] | null = null,
+): Promise<SearchLabel[]> {
+  const span = OTelTracer().startSpan("SearchDataListAccountLabels", context);
+  const folderFilterSql =
+    permittedFolderIds === null
+      ? ""
+      : " AND folderId IN (SELECT value FROM json_each(?)) ";
+  const params: any[] = [accountId];
+  if (permittedFolderIds !== null) {
+    params.push(JSON.stringify(permittedFolderIds));
+  }
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT filename, keywords FROM files " +
+      " WHERE accountId = ? AND COALESCE(trashed, 0) = 0 " +
+      folderFilterSql +
+      " AND keywords IS NOT NULL AND keywords != '' ",
+    params,
+  );
+  const labelCounts = new Map<string, number>();
+  for (const row of rawData) {
+    const filenameTokens = new Set(
+      String(row.filename).toLowerCase().split(/\s+/).filter(Boolean),
+    );
+    const tokens = String(row.keywords)
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    const fileLabels = new Set<string>();
+    for (const token of tokens) {
+      if (token.length < 3 || /^\d+$/.test(token)) {
+        continue;
+      }
+      if (filenameTokens.has(token)) {
+        continue;
+      }
+      fileLabels.add(token);
+    }
+    for (const label of fileLabels) {
+      labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+    }
+  }
+  const labels: SearchLabel[] = [...labelCounts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, SEARCH_LABELS_MAX);
+  span.end();
+  return labels;
 }
 
 export interface GeoGridCell {

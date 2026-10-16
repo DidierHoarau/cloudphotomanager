@@ -12,9 +12,11 @@ import { OTelSetTracer, OTelTracer } from "../OTelContext";
 import {
   DUPLICATES_MAX_GROUPS,
   DUPLICATES_MAX_ROWS,
+  SEARCH_LABELS_MAX,
   SEARCH_MAX_RESULTS,
   SearchDataAggregateByGeoGrid,
   SearchDataListAccountDuplicates,
+  SearchDataListAccountLabels,
   SearchDataListFiles,
 } from "./SearchData";
 
@@ -28,20 +30,24 @@ describe("SearchData limits", () => {
     folderId: string;
     hash: string;
     dateMedia: string;
+    filename?: string;
+    keywords?: string;
   }
 
   function insertFiles(accountId: string, rows: FileRow[]): void {
     const batchSize = 500;
     for (let start = 0; start < rows.length; start += batchSize) {
       const batch = rows.slice(start, start + batchSize);
-      const placeholders = batch.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+      const placeholders = batch
+        .map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .join(", ");
       const params: any[] = [];
       for (const row of batch) {
         params.push(
           row.id,
           `cloud/${row.id}`,
           accountId,
-          `${row.id}.jpg`,
+          row.filename ?? `${row.id}.jpg`,
           row.folderId,
           row.hash,
           row.dateMedia,
@@ -49,13 +55,35 @@ describe("SearchData limits", () => {
           row.dateMedia,
           "{}",
           "{}",
+          row.keywords ?? null,
         );
       }
       SqlDbUtilsExecSQL(
         span,
-        "INSERT INTO files (id, idCloud, accountId, filename, folderId, hash, dateUpdated, dateSync, dateMedia, info, metadata) " +
+        "INSERT INTO files (id, idCloud, accountId, filename, folderId, hash, dateUpdated, dateSync, dateMedia, info, metadata, keywords) " +
           `VALUES ${placeholders}`,
         params,
+      );
+    }
+  }
+
+  function insertFolders(
+    accountId: string,
+    rows: { id: string; folderpath: string }[],
+  ): void {
+    for (const row of rows) {
+      SqlDbUtilsExecSQL(
+        span,
+        "INSERT INTO folders (id, idCloud, accountId, folderpath, dateSync, dateUpdated, info) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          row.id,
+          `cloud/${row.folderpath}`,
+          accountId,
+          row.folderpath,
+          new Date().toISOString(),
+          new Date().toISOString(),
+          "{}",
+        ],
       );
     }
   }
@@ -326,5 +354,238 @@ describe("SearchData limits", () => {
     expect(grid.cells[0].count).toBe(1);
     expect(grid.cells[0].centerLat).toBeCloseTo(1.5);
     expect(grid.cells[0].centerLon).toBeCloseTo(2.5);
+  });
+
+  it("filters search results by media type, ignoring unknown values", async () => {
+    const accountId = "account-search-mediatype";
+    const dateMedia = "2024-05-01T10:00:00.000Z";
+    insertFiles(accountId, [
+      { id: "mt-jpg", folderId: "folder-mt", hash: "h1", dateMedia, filename: "photo.jpg" },
+      { id: "mt-png", folderId: "folder-mt", hash: "h2", dateMedia, filename: "drawing.PNG" },
+      { id: "mt-mp4", folderId: "folder-mt", hash: "h3", dateMedia, filename: "clip.mp4" },
+      { id: "mt-dng", folderId: "folder-mt", hash: "h4", dateMedia, filename: "shot.dng" },
+      { id: "mt-txt", folderId: "folder-mt", hash: "h5", dateMedia, filename: "notes.txt" },
+    ]);
+
+    const images = await SearchDataListFiles(span, accountId, {
+      mediaTypes: ["image"],
+    });
+    expect(images.map((file) => file.id).sort()).toEqual([
+      "mt-jpg",
+      "mt-png",
+    ]);
+
+    const videos = await SearchDataListFiles(span, accountId, {
+      mediaTypes: ["video"],
+    });
+    expect(videos.map((file) => file.id)).toEqual(["mt-mp4"]);
+
+    const raw = await SearchDataListFiles(span, accountId, {
+      mediaTypes: ["imageRaw"],
+    });
+    expect(raw.map((file) => file.id)).toEqual(["mt-dng"]);
+
+    const combined = await SearchDataListFiles(span, accountId, {
+      mediaTypes: ["video", "imageRaw"],
+    });
+    expect(combined.map((file) => file.id).sort()).toEqual([
+      "mt-dng",
+      "mt-mp4",
+    ]);
+
+    // Unknown values are ignored: no extension matched means no results for
+    // this selection rather than an error or an unfiltered listing.
+    const invalid = await SearchDataListFiles(span, accountId, {
+      mediaTypes: ["document", "audio"],
+    });
+    expect(invalid).toHaveLength(0);
+  });
+
+  it("filters search results by folder subtree, permission and existence", async () => {
+    const accountId = "account-search-folderfacet";
+    const dateMedia = "2024-05-02T10:00:00.000Z";
+    insertFolders(accountId, [
+      { id: "folder-root", folderpath: "/root" },
+      { id: "folder-child", folderpath: "/root/child" },
+      { id: "folder-other", folderpath: "/other" },
+    ]);
+    insertFiles(accountId, [
+      { id: "ff-root", folderId: "folder-root", hash: "h1", dateMedia },
+      { id: "ff-child", folderId: "folder-child", hash: "h2", dateMedia },
+      { id: "ff-other", folderId: "folder-other", hash: "h3", dateMedia },
+    ]);
+
+    const subtree = await SearchDataListFiles(span, accountId, {
+      folderId: "folder-root",
+    });
+    expect(subtree.map((file) => file.id).sort()).toEqual([
+      "ff-child",
+      "ff-root",
+    ]);
+
+    const single = await SearchDataListFiles(span, accountId, {
+      folderId: "folder-child",
+    });
+    expect(single.map((file) => file.id)).toEqual(["ff-child"]);
+
+    // A folder outside the permitted list returns no results.
+    const restricted = await SearchDataListFiles(
+      span,
+      accountId,
+      { folderId: "folder-other" },
+      ["folder-root", "folder-child"],
+    );
+    expect(restricted).toHaveLength(0);
+
+    const permitted = await SearchDataListFiles(
+      span,
+      accountId,
+      { folderId: "folder-child" },
+      ["folder-root", "folder-child"],
+    );
+    expect(permitted.map((file) => file.id)).toEqual(["ff-child"]);
+
+    // An unknown folder id returns no results.
+    const unknown = await SearchDataListFiles(span, accountId, {
+      folderId: "folder-does-not-exist",
+    });
+    expect(unknown).toHaveLength(0);
+  });
+
+  it("filters search results by hasLocation and outtakesOnly", async () => {
+    const accountId = "account-search-location";
+    const dateMedia = "2024-05-03T10:00:00.000Z";
+    insertFiles(accountId, [
+      { id: "loc-gps", folderId: "folder-loc", hash: "h1", dateMedia },
+      { id: "loc-nogps", folderId: "folder-loc", hash: "h2", dateMedia },
+      { id: "loc-outtake", folderId: "folder-loc", hash: "h3", dateMedia, filename: "pic-outtake.jpg" },
+      { id: "loc-keep", folderId: "folder-loc", hash: "h4", dateMedia, filename: "pic.jpg" },
+    ]);
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files SET info = ? WHERE id = 'loc-gps'",
+      [
+        JSON.stringify({
+          exif: { GPSInfo: { GPSLatitudeDecimal: 10.5, GPSLongitudeDecimal: -20.5 } },
+        }),
+      ],
+    );
+
+    const located = await SearchDataListFiles(span, accountId, {
+      hasLocation: true,
+    });
+    expect(located.map((file) => file.id)).toEqual(["loc-gps"]);
+
+    const outtakes = await SearchDataListFiles(span, accountId, {
+      outtakesOnly: true,
+    });
+    expect(outtakes.map((file) => file.id)).toEqual(["loc-outtake"]);
+
+    const combined = await SearchDataListFiles(span, accountId, {
+      hasLocation: true,
+      outtakesOnly: true,
+    });
+    expect(combined).toHaveLength(0);
+  });
+
+  it("lists account labels with counts, ordering and scoping", async () => {
+    const accountId = "account-search-labels";
+    const dateMedia = "2024-05-04T10:00:00.000Z";
+    insertFolders(accountId, [
+      { id: "labels-p", folderpath: "/labels-p" },
+      { id: "labels-q", folderpath: "/labels-q" },
+    ]);
+    insertFiles(accountId, [
+      {
+        id: "lab-1",
+        folderId: "labels-p",
+        hash: "h1",
+        dateMedia,
+        filename: "beach1.jpg",
+        keywords: "beach1.jpg sand beach summer",
+      },
+      {
+        id: "lab-2",
+        folderId: "labels-p",
+        hash: "h2",
+        dateMedia,
+        filename: "beach2.jpg",
+        keywords: "beach2.jpg beach sand",
+      },
+      {
+        id: "lab-3",
+        folderId: "labels-q",
+        hash: "h3",
+        dateMedia,
+        filename: "mountain.jpg",
+        keywords: "mountain.jpg mountain beach",
+      },
+      {
+        id: "lab-4",
+        folderId: "labels-p",
+        hash: "h4",
+        dateMedia,
+        filename: "numbers.jpg",
+        keywords: "numbers.jpg 2024 42 dog",
+      },
+      // Trashed files must not contribute labels.
+      {
+        id: "lab-5",
+        folderId: "labels-p",
+        hash: "h5",
+        dateMedia,
+        filename: "gone.jpg",
+        keywords: "gone.jpg beach",
+      },
+    ]);
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files SET trashed = 1, dateTrashed = ? WHERE id = 'lab-5'",
+      [new Date().toISOString()],
+    );
+
+    const labels = await SearchDataListAccountLabels(span, accountId, null);
+    expect(labels).toEqual([
+      { label: "beach", count: 3 },
+      { label: "sand", count: 2 },
+      { label: "dog", count: 1 },
+      { label: "mountain", count: 1 },
+      { label: "summer", count: 1 },
+    ]);
+
+    // Folder permission scoping.
+    const scoped = await SearchDataListAccountLabels(span, accountId, [
+      "labels-q",
+    ]);
+    expect(scoped).toEqual([
+      { label: "beach", count: 1 },
+      { label: "mountain", count: 1 },
+    ]);
+
+    const none = await SearchDataListAccountLabels(span, accountId, []);
+    expect(none).toEqual([]);
+  });
+
+  it("caps the label list to SEARCH_LABELS_MAX sorted by count then label", async () => {
+    const accountId = "account-search-labels-cap";
+    const dateMedia = "2024-05-05T10:00:00.000Z";
+    const rows: FileRow[] = [];
+    for (let index = 0; index < SEARCH_LABELS_MAX + 10; index++) {
+      rows.push({
+        id: `caplab-${String(index).padStart(4, "0")}`,
+        folderId: "labels-cap",
+        hash: `hcap-${index}`,
+        dateMedia,
+        filename: `file${index}.jpg`,
+        keywords: `file${index}.jpg label${String(index).padStart(4, "0")}`,
+      });
+    }
+    insertFiles(accountId, rows);
+
+    const labels = await SearchDataListAccountLabels(span, accountId, null);
+    expect(labels).toHaveLength(SEARCH_LABELS_MAX);
+    // All counts equal: the alphabetical tiebreaker decides.
+    expect(labels[0].label).toBe("label0000");
+    expect(labels[labels.length - 1].label).toBe("label0199");
   });
 });
