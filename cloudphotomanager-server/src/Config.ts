@@ -29,6 +29,10 @@ export class Config extends ConfigBase {
   // deletes it from the cloud storage.
   public TRASH_RETENTION_DAYS = 30;
   public CRON_TRASH_PURGE = "30 3 * * *"; // every day at 3:30 AM
+  // Optional out-of-band webhook fired once per file when it reaches the sync
+  // retry cap (see SyncNotifications). Empty = disabled.
+  public SYNC_FAILURE_WEBHOOK_URL =
+    process.env.SYNC_FAILURE_WEBHOOK_URL || "";
 
   constructor() {
     super("cloudphotomanager-server");
@@ -58,6 +62,7 @@ export class Config extends ConfigBase {
     this.addConfigField({ field: "CRON_SCAN_DEEP" });
     this.addConfigField({ field: "TRASH_RETENTION_DAYS" });
     this.addConfigField({ field: "CRON_TRASH_PURGE" });
+    this.addConfigField({ field: "SYNC_FAILURE_WEBHOOK_URL" });
   }
 
   public async reload(): Promise<void> {

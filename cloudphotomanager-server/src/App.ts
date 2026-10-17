@@ -25,6 +25,7 @@ import { FolderDataInit } from "./folders/FolderData";
 import { SchedulerInit } from "./sync/Scheduler";
 import { ShareRoutes, ShareRoutesPublic } from "./shares/ShareRoutes";
 import { SyncFileCacheInit } from "./sync/SyncFileCache";
+import { SyncNotificationsInit } from "./sync/SyncNotifications";
 import { SyncRoutes } from "./sync/SyncRoutes";
 import { AuthInit } from "./users/Auth";
 import { UserRoutes } from "./users/UserRoutes";
@@ -69,6 +70,7 @@ Promise.resolve().then(async () => {
   await SyncQueueInit(span);
   await SyncFailuresInit(span);
   await SyncFileCacheInit(span, config);
+  SyncNotificationsInit(span, config);
   await AuthInit(span, config);
   await FileDataInit(span, config);
   await FolderDataInit(span);

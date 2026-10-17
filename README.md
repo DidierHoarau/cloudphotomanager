@@ -17,6 +17,9 @@ CloudPhotoManager is a self-hosted free and open source photo managegement tool.
 - Geo map: browse geo-tagged photos on a world map, reachable from a Map tab and "Show on map" entry points in the File Info dialog and the fullscreen viewer
 - Trash: deletes move files to a restorable Trash (30 days retention, automatic purge), with restore and permanent delete
 - Timeline: browse the whole library by month across folders
+- Sync notification center: the header sync icon opens a panel summarizing failed actions (with plain-language causes and suggested fixes), recently completed operations and queue activity, linking to the full failure list in Settings → Sync
+- Out-of-band webhook on persistent failure: when a file reaches the sync retry cap (5 consecutive failures), an optional `POST` notification is sent to `SYNC_FAILURE_WEBHOOK_URL` with the file, the operation and the likely cause
+- Plain-language sync failures: recurring technical errors are translated into user-actionable causes on the failure cards, and gallery items stuck at the retry cap show an explicit "Preview unavailable" state instead of an eternal "Syncing" placeholder
 - Download the original file from the fullscreen viewer or the File Info dialog
 - Bulk download a selection of gallery items as a zip archive
 - Read-only share links (optional expiry, revocable) for a folder subtree, usable without an account
@@ -76,6 +79,8 @@ spec:
             # Sync and scheduling (optional; defaults shown)
             - name: AUTO_SYNC
               value: "Y" # Set to "N" to disable automatic background sync
+            - name: SYNC_FAILURE_WEBHOOK_URL
+              value: "" # Optional webhook URL notified when a file reaches the sync retry cap
             # Session (optional; default shown)
             - name: JWT_VALIDITY_DURATION
               value: "8035200" # Session validity in seconds (~93 days); renewed automatically while in use

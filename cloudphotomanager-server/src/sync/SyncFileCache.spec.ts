@@ -50,6 +50,13 @@ jest.mock("./SyncInventory", () => ({
   SyncInventorySyncFolder: jest.fn(() => mockHoldPromise()),
 }));
 
+// The persistent-failure webhook is asserted as a mock: delivery is covered
+// end-to-end by SyncNotifications.spec.ts.
+jest.mock("./SyncNotifications", () => ({
+  SyncNotificationsInit: jest.fn(),
+  SyncNotificationsNotifyPersistentFailure: jest.fn(),
+}));
+
 type QueueRow = any;
 
 describe("SyncFileCache poison-file retry loop", () => {
@@ -300,12 +307,84 @@ describe("SyncFileCache poison-file retry loop", () => {
     expect(failure.errorMessage).toContain("Download failed");
     expect(failure.filePath).toBe("photos-fail/remote.jpg");
     expect(failure.accountName).toBe("acct-fail");
+    expect(failure.humanCause).toBeTruthy();
+    expect(failure.suggestedAction).toBeTruthy();
 
     const updated = await fileData.FileDataGet(span, file.id);
     expect(updated.syncFailCount).toBe(1);
     expect(updated.lastSyncError).toContain("syncPhotoFromFull Failed");
     expect(updated.lastSyncAttempt).toBeTruthy();
   });
+
+  it("notifies the persistent-failure webhook exactly once at the retry cap", async () => {
+    const syncNotifications = await import("./SyncNotifications");
+    const notifyMock =
+      syncNotifications.SyncNotificationsNotifyPersistentFailure as jest.Mock;
+    notifyMock.mockClear();
+
+    const accountDefinition = await createAccount("acct-webhook");
+    const folder = await createFolder(accountDefinition.id, "photos-webhook");
+    const file = await createVideoFile(accountDefinition.id, folder, "broken.mov");
+    const account =
+      await accountFactory.AccountFactoryGetAccountImplementation(
+        accountDefinition.id,
+      );
+    jest
+      .spyOn(account, "downloadFile")
+      .mockRejectedValue(new Error("Error getting Video Width"));
+
+    // Five consecutive failures reach the cap: notify once, on the 5th only.
+    for (let i = 1; i <= 5; i++) {
+      syncQueue.SyncQueueQueueItem(
+        accountDefinition.id,
+        `test-op-fail-${i}:${file.id}`,
+        { fileId: file.id },
+        "syncVideoFromFull",
+        SyncQueueItemPriority.NORMAL,
+        [file.id],
+      );
+      await waitForQueueDrain(`test-op-fail-${i}:${file.id}`, "syncVideoFromFull");
+    }
+    await waitUntil("webhook notified at the cap", () => notifyMock.mock.calls.length >= 1);
+
+    const payload = notifyMock.mock.calls[0][0];
+    expect(payload.fileId).toBe(file.id);
+    expect(payload.operation).toBe("syncVideoFromFull");
+    expect(payload.consecutiveFailures).toBe(5);
+    expect(payload.errorMessage).toContain("Error getting Video Width");
+    expect(payload.likelyCause).toContain("Video preview");
+    expect(payload.suggestedAction).toBeTruthy();
+
+    // A 6th failure is past the cap: no second notification.
+    syncQueue.SyncQueueQueueItem(
+      accountDefinition.id,
+      `test-op-fail-6:${file.id}`,
+      { fileId: file.id },
+      "syncVideoFromFull",
+      SyncQueueItemPriority.NORMAL,
+      [file.id],
+    );
+    await waitForQueueDrain(`test-op-fail-6:${file.id}`, "syncVideoFromFull");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(notifyMock).toHaveBeenCalledTimes(1);
+
+    // A success resets the streak: a new streak of 5 failures notifies again.
+    await fileData.FileDataRecordSyncSuccess(span, file.id);
+    for (let i = 7; i <= 11; i++) {
+      syncQueue.SyncQueueQueueItem(
+        accountDefinition.id,
+        `test-op-fail-${i}:${file.id}`,
+        { fileId: file.id },
+        "syncVideoFromFull",
+        SyncQueueItemPriority.NORMAL,
+        [file.id],
+      );
+      await waitForQueueDrain(`test-op-fail-${i}:${file.id}`, "syncVideoFromFull");
+    }
+    await waitUntil("webhook notified after reset", () => notifyMock.mock.calls.length >= 2);
+    expect(notifyMock).toHaveBeenCalledTimes(2);
+    expect(notifyMock.mock.calls[1][0].consecutiveFailures).toBe(5);
+  }, 30000);
 
   it("records a failure without filePath when the file row is gone", async () => {
     const accountDefinition = await createAccount("acct-missing-file");

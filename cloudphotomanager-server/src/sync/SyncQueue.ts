@@ -23,6 +23,9 @@ import {
   SyncFileCacheCheckFile,
   SyncFileCacheRemoveFile,
 } from "./SyncFileCache";
+import { SYNC_FAIL_MAX_AUTO_RETRY } from "./SyncRetryCap";
+import { SyncNotificationsNotifyPersistentFailure } from "./SyncNotifications";
+import { SyncErrorDescribeHumanCause } from "./SyncErrorCatalog";
 import { FileDataGet, FileDataUpdateKeywords, FileDataRecordSyncFailure, FileDataRecordSyncSuccess, FileDataMarkSyncGone } from "../files/FileData";
 import { AccountDataGet } from "../accounts/AccountData";
 import {
@@ -564,8 +567,21 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
               item.fileIds || [],
             );
           } else {
+            let cappedFileId: string | null = null;
+            let cappedCount = 0;
             for (const fid of item.fileIds || []) {
-              await FileDataRecordSyncFailure(failSpan, fid, errorMessage);
+              const count = await FileDataRecordSyncFailure(
+                failSpan,
+                fid,
+                errorMessage,
+              );
+              if (count === SYNC_FAIL_MAX_AUTO_RETRY && !cappedFileId) {
+                cappedFileId = fid;
+                cappedCount = count;
+              }
+            }
+            if (cappedFileId) {
+              notifyPersistentFailure(item, cappedFileId, cappedCount, errorMessage);
             }
           }
         } catch (failErr) {
@@ -614,8 +630,12 @@ function buildErrorMessage(err: unknown): string {
 // Lookups must never prevent the failure itself from being recorded.
 async function resolveFailureContext(
   item: SyncQueueItem,
-): Promise<{ filePath?: string; accountName?: string }> {
-  const details: { filePath?: string; accountName?: string } = {};
+): Promise<{ filePath?: string; accountName?: string; filename?: string }> {
+  const details: {
+    filePath?: string;
+    accountName?: string;
+    filename?: string;
+  } = {};
   const span = OTelTracer().startSpan("SyncQueueResolveFailureContext");
   try {
     const fileId =
@@ -624,6 +644,7 @@ async function resolveFailureContext(
       try {
         const file = await FileDataGet(span, fileId);
         if (file) {
+          details.filename = file.filename;
           const folder = await FolderDataGet(span, file.folderId);
           details.filePath = folder
             ? `${folder.folderpath ? `${folder.folderpath}/` : ""}${file.filename}`
@@ -643,6 +664,46 @@ async function resolveFailureContext(
     span.end();
   }
   return details;
+}
+
+// Out-of-band notification when a file reaches the sync retry cap: fires once
+// per failure streak (the count is reset on success or manual retry), so no
+// extra deduplication is needed. Never throws into the queue error path.
+function notifyPersistentFailure(
+  item: SyncQueueItem,
+  fileId: string,
+  consecutiveFailures: number,
+  errorMessage: string,
+): void {
+  try {
+    const described = SyncErrorDescribeHumanCause(
+      errorMessage,
+      item.functionName,
+    );
+    resolveFailureContext(item)
+      .then(({ filePath, accountName, filename }) => {
+        SyncNotificationsNotifyPersistentFailure({
+          accountId: item.accountId,
+          accountName,
+          fileId,
+          filename,
+          filePath,
+          operation: item.functionName,
+          consecutiveFailures,
+          errorMessage,
+          likelyCause: described?.cause,
+          suggestedAction: described?.action,
+        });
+      })
+      .catch((err) => {
+        logger.error("Error resolving persistent failure context", err);
+      });
+    logger.warn(
+      `File ${fileId} reached the sync retry cap (${consecutiveFailures} consecutive failures)`,
+    );
+  } catch (err) {
+    logger.error("Error notifying persistent sync failure", err);
+  }
 }
 
 function isMissingInCloudError(err: unknown): boolean {

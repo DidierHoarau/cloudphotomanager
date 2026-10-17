@@ -206,8 +206,8 @@
           @mouseleave="onImageMouseUp"
         />
         <div v-else class="media-unavailable">
-          <i class="bi bi-cloud-arrow-down"></i>
-          <p>Image not yet available &mdash; still synchronizing</p>
+          <i :class="unavailableIcon('bi bi-cloud-arrow-down')"></i>
+          <p>{{ imageUnavailableText }}</p>
         </div>
       </template>
       <template
@@ -228,8 +228,8 @@
           />
         </video>
         <div v-else class="media-unavailable">
-          <i class="bi bi-camera-video-off"></i>
-          <p>Video not yet available &mdash; still synchronizing</p>
+          <i :class="unavailableIcon('bi bi-camera-video-off')"></i>
+          <p>{{ videoUnavailableText }}</p>
         </div>
       </template>
     </div>
@@ -262,6 +262,7 @@ import { AuthService } from "~~/services/AuthService";
 import { FileUtils } from "~~/services/FileUtils";
 import { MediaUrls } from "~~/services/MediaUrls";
 import { GeoUtils } from "~~/services/GeoUtils";
+import { isSyncBlocked, isSyncGone } from "~~/utils/SyncHealth";
 import { findIndex } from "lodash";
 
 export default {
@@ -738,6 +739,15 @@ export default {
     onMediaLoaded() {
       this.mediaLoading = false;
     },
+    unavailableIcon(syncingIcon) {
+      if (this.fileIsSyncGone) {
+        return "bi bi-cloud-slash";
+      }
+      if (this.fileIsSyncBlocked) {
+        return "bi bi-file-earmark-x";
+      }
+      return syncingIcon;
+    },
     onImageError() {
       this.imageUnavailable = true;
       this.mediaLoading = false;
@@ -849,6 +859,33 @@ export default {
       if (!this.file || !this.file.filename) return false;
       const ext = FileUtils.getExtention(this.file);
       return this.file.filename.includes(`-outtake.${ext}`);
+    },
+    // A file stuck at the retry cap (or tombstoned as missing in the cloud)
+    // will never produce a preview by itself: say so instead of claiming the
+    // media is "still synchronizing".
+    fileIsSyncBlocked() {
+      return isSyncBlocked(this.file);
+    },
+    fileIsSyncGone() {
+      return isSyncGone(this.file);
+    },
+    imageUnavailableText() {
+      if (this.fileIsSyncGone) {
+        return "Image unavailable — missing in cloud";
+      }
+      if (this.fileIsSyncBlocked) {
+        return "Preview unavailable — the file may be unsupported or corrupt";
+      }
+      return "Image not yet available — still synchronizing";
+    },
+    videoUnavailableText() {
+      if (this.fileIsSyncGone) {
+        return "Video unavailable — missing in cloud";
+      }
+      if (this.fileIsSyncBlocked) {
+        return "Preview unavailable — the file may be unsupported or corrupt";
+      }
+      return "Video not yet available — still synchronizing";
     },
   },
 };

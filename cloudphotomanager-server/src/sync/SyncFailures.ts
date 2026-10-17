@@ -22,6 +22,7 @@ export {
   SyncFailureConflictSnapshot,
 } from "./SyncMoveConflict";
 import { SyncFailureConflict } from "./SyncMoveConflict";
+import { SyncErrorDescribeHumanCause } from "./SyncErrorCatalog";
 
 export interface SyncFailure {
   id: string;
@@ -37,6 +38,11 @@ export interface SyncFailure {
   // cards in the web UI can show what failed and where.
   filePath?: string;
   accountName?: string;
+  // Plain-language explanation of the error and the suggested user action,
+  // resolved from the error catalog when the failure is recorded (error-kind
+  // records only). Null/unset when no catalog pattern matched.
+  humanCause?: string;
+  suggestedAction?: string;
   dateCreated: string;
   conflict?: SyncFailureConflict;
 }
@@ -91,6 +97,18 @@ export function SyncFailuresAdd(
   failure: Omit<SyncFailure, "id" | "dateCreated"> &
     Partial<Pick<SyncFailure, "id" | "dateCreated">>,
 ): SyncFailure {
+  let humanCause: string | undefined;
+  let suggestedAction: string | undefined;
+  if (failure.kind === "error") {
+    const described = SyncErrorDescribeHumanCause(
+      failure.errorMessage,
+      failure.functionName,
+    );
+    if (described) {
+      humanCause = described.cause;
+      suggestedAction = described.action;
+    }
+  }
   const created: SyncFailure = {
     id: failure.id || uuidv4(),
     accountId: failure.accountId,
@@ -102,6 +120,8 @@ export function SyncFailuresAdd(
     errorMessage: failure.errorMessage,
     filePath: failure.filePath,
     accountName: failure.accountName,
+    humanCause,
+    suggestedAction,
     dateCreated: failure.dateCreated || new Date().toISOString(),
     conflict: failure.conflict,
   };

@@ -2,7 +2,21 @@ import { AuthService } from "~~/services/AuthService";
 import Config from "~~/services/Config";
 import { buildSyncWebSocketUrl } from "~~/services/WebSocketUrl";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
+import { syncOperationLabel } from "~~/utils/SyncOperationLabels";
 import axios from "axios";
+
+// Client-side history of recently completed priority-1 operations (delete,
+// trash, restore, move, rename) shown in the notification center. It lives
+// only in memory: it intentionally does not survive a page reload, unlike the
+// persistent failures which the server keeps for 24 h.
+const MAX_RECENT_OPERATIONS = 10;
+
+export interface RecentSyncOperation {
+  operationName: string;
+  label: string;
+  fileCount: number;
+  date: string;
+}
 
 export const SyncStore = defineStore("SyncStore", {
   state: () => ({
@@ -16,6 +30,7 @@ export const SyncStore = defineStore("SyncStore", {
     queueTruncated: false,
     failures: [] as any[],
     failuresCount: 0,
+    recentOperations: [] as RecentSyncOperation[],
     monitoring: false,
     wsConnected: false,
     // Fallback polling state
@@ -107,16 +122,19 @@ export const SyncStore = defineStore("SyncStore", {
               fileIds: msg.fileIds || [],
               priority: msg.priority,
             });
-            // Only show toast for interactive operations (priority 1)
+            // Only show toast and history entry for interactive operations
+            // (priority 1: delete/trash/restore/move/rename)
             if (msg.priority === 1) {
-              const opNames: Record<string, string> = {
-                fileDelete: "Delete complete",
-                fileTrash: "Moved to Trash",
-                fileRestore: "Restore complete",
-                folderMove: "Move complete",
-                fileRename: "Rename complete",
-              };
-              const text = opNames[msg.operationName] || "Operation complete";
+              const text = syncOperationLabel(msg.operationName);
+              this.recentOperations.unshift({
+                operationName: msg.operationName,
+                label: text,
+                fileCount: (msg.fileIds || []).length,
+                date: new Date().toISOString(),
+              });
+              if (this.recentOperations.length > MAX_RECENT_OPERATIONS) {
+                this.recentOperations.length = MAX_RECENT_OPERATIONS;
+              }
               EventBus.emit(EventTypes.ALERT_MESSAGE, { type: "info", text });
             }
           }
