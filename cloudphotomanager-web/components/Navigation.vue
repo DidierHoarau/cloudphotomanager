@@ -6,22 +6,30 @@
       </li>
     </ul>
     <ul class="menu-links">
-      <li v-if="syncStore.failuresCount > 0 || syncStore.countTotal > 0">
-        <NuxtLink
-          :to="
-            syncStore.failuresCount > 0
-              ? '/settings/sync?tab=failures'
-              : '/settings/sync'
-          "
+      <li
+        v-if="syncStore.failuresCount > 0 || syncStore.countTotal > 0"
+        class="sync-center-root"
+      >
+        <button
+          type="button"
           class="sync-indicator"
           :class="{
             'sync-indicator-error': syncStore.failuresCount > 0,
             'sync-indicator-blinking': syncStore.countTotal > 0,
           }"
           :title="syncIndicatorTitle"
+          :aria-expanded="syncCenterOpen ? 'true' : 'false'"
+          @click="toggleSyncCenter"
         >
           <i :class="syncIndicatorIcon"></i>
-        </NuxtLink>
+          <kbd v-if="syncStore.failuresCount > 0" class="sync-count-badge">{{
+            syncStore.failuresCount
+          }}</kbd>
+        </button>
+        <SyncNotificationCenter
+          v-if="syncCenterOpen"
+          @close="syncCenterOpen = false"
+        />
       </li>
       <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink
@@ -73,6 +81,11 @@
 import { AuthService } from "~~/services/AuthService";
 const authenticationStore = AuthenticationStore();
 const syncStore = SyncStore();
+
+const syncCenterOpen = ref(false);
+function toggleSyncCenter() {
+  syncCenterOpen.value = !syncCenterOpen.value;
+}
 
 const syncIndicatorIcon = computed(() =>
   syncStore.countTotal > 0
@@ -154,6 +167,29 @@ nav {
 }
 .sync-indicator {
   font-size: 1em;
+}
+.sync-center-root {
+  position: relative;
+}
+button.sync-indicator {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: inherit;
+  line-height: 1;
+  display: inline-flex;
+  align-items: flex-start;
+}
+.sync-count-badge {
+  font-size: 0.55em;
+  margin-left: 0.25em;
+  background: var(--color-danger);
+  color: var(--color-text-inverse);
+  border-radius: var(--radius-full);
+  padding: 0 0.45em;
+  line-height: 1.5;
 }
 .sync-indicator-error {
   color: var(--color-danger);

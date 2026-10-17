@@ -182,6 +182,12 @@
         <!-- Error layout -->
         <div v-else class="error-body">
           <div class="error-label">{{ describeError(failure) }}</div>
+          <div v-if="failure.humanCause" class="error-human-cause">
+            {{ failure.humanCause }}
+          </div>
+          <div v-if="failure.suggestedAction" class="error-suggested-action">
+            <strong>What you can do:</strong> {{ failure.suggestedAction }}
+          </div>
           <div v-if="failure.accountName" class="error-context">
             Account: {{ failure.accountName }}
           </div>
@@ -577,6 +583,13 @@ export default {
   font-size: var(--font-base);
   opacity: 0.75;
   word-break: break-all;
+}
+.error-human-cause {
+  font-size: var(--font-body);
+}
+.error-suggested-action {
+  font-size: var(--font-base);
+  opacity: 0.85;
 }
 .error-message {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;

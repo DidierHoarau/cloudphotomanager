@@ -246,20 +246,32 @@ export async function FileDataDelete(context: Span, id: string): Promise<void> {
   span.end();
 }
 
+// Returns the post-increment consecutive-failure count so callers can detect
+// the retry-cap transition (fires the persistent-failure webhook exactly once
+// per failure streak).
 export async function FileDataRecordSyncFailure(
   context: Span,
   fileId: string,
   errorMessage: string,
-): Promise<void> {
+): Promise<number | null> {
   const span = OTelTracer().startSpan("FileDataRecordSyncFailure", context);
-  await SqlDbUtilsExecSQL(
-    span,
-    "UPDATE files " +
-      " SET syncFailCount = COALESCE(syncFailCount, 0) + 1, lastSyncError = ?, lastSyncAttempt = ?" +
-      " WHERE id = ? ",
-    [errorMessage, new Date().toISOString(), fileId],
-  );
-  span.end();
+  try {
+    await SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files " +
+        " SET syncFailCount = COALESCE(syncFailCount, 0) + 1, lastSyncError = ?, lastSyncAttempt = ?" +
+        " WHERE id = ? ",
+      [errorMessage, new Date().toISOString(), fileId],
+    );
+    const rows = SqlDbUtilsQuerySQL(
+      span,
+      "SELECT syncFailCount FROM files WHERE id = ?",
+      [fileId],
+    );
+    return rows.length > 0 ? rows[0].syncFailCount : null;
+  } finally {
+    span.end();
+  }
 }
 
 export async function FileDataRecordSyncSuccess(

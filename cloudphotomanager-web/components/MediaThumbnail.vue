@@ -23,12 +23,20 @@
         class="media-thumb-placeholder"
         :class="{
           'media-thumb-skeleton': status === 'loading',
-          'media-thumb-missing': status === 'missing',
+          'media-thumb-missing': status !== 'loading',
         }"
       >
         <template v-if="status === 'missing'">
           <i class="bi bi-cloud-arrow-down"></i>
           <span>Syncing</span>
+        </template>
+        <template v-else-if="status === 'blocked'">
+          <i class="bi bi-file-earmark-x"></i>
+          <span>Preview unavailable</span>
+        </template>
+        <template v-else-if="status === 'gone'">
+          <i class="bi bi-cloud-slash"></i>
+          <span>Missing in cloud</span>
         </template>
       </div>
       <i
@@ -50,6 +58,7 @@
 <script>
 import { FileUtils } from "~~/services/FileUtils";
 import { MediaUrls } from "~~/services/MediaUrls";
+import { isSyncBlocked, isSyncGone } from "~~/utils/SyncHealth";
 
 export default {
   props: {
@@ -67,7 +76,8 @@ export default {
   data() {
     return {
       thumbnailUrl: "",
-      status: "loading", // loading | ready | missing | unknown
+      // loading | ready | missing | blocked | gone | unknown
+      status: "loading",
     };
   },
   computed: {
@@ -99,7 +109,16 @@ export default {
       this.status = "ready";
     },
     onError() {
-      this.status = "missing";
+      // A file stuck at the server retry cap will never be retried
+      // automatically: show an explicit unavailable state instead of an
+      // eternal "Syncing" placeholder.
+      if (isSyncBlocked(this.file)) {
+        this.status = "blocked";
+      } else if (isSyncGone(this.file)) {
+        this.status = "gone";
+      } else {
+        this.status = "missing";
+      }
     },
     onClick(event) {
       if (this.type === "unknown") return;
@@ -145,6 +164,11 @@ export default {
 .media-thumb-placeholder i {
   font-size: 2.5em;
   opacity: 0.4;
+}
+.media-thumb-placeholder .bi-file-earmark-x,
+.media-thumb-placeholder .bi-cloud-slash {
+  color: var(--color-danger);
+  opacity: 0.6;
 }
 .media-thumb-placeholder span {
   font-size: var(--font-xs);

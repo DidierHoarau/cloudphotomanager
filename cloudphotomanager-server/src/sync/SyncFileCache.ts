@@ -35,7 +35,9 @@ let config: Config;
 // Number of consecutive sync failures after which a file is no longer
 // auto re-queued by SyncFileCacheCheckFile / the nightly check. The counter
 // is reset by a successful sync or a manual retry from the Sync Failures UI.
-const SYNC_FAIL_MAX_AUTO_RETRY = 5;
+// Lives in SyncRetryCap.ts (dependency-free) so the queue can compare against
+// it without touching this module's exports mid-cycle.
+import { SYNC_FAIL_MAX_AUTO_RETRY } from "./SyncRetryCap";
 
 export async function SyncFileCacheInit(context: Span, configIn: Config) {
   const span = OTelTracer().startSpan("SyncFileCacheInit", context);
