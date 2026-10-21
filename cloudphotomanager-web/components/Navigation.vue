@@ -150,11 +150,29 @@ export default {
 
 <style scoped>
 nav {
-  height: 2rem;
+  min-height: 2rem;
+  height: auto;
+  flex-wrap: wrap;
+  row-gap: var(--space-xs);
+  column-gap: var(--space-sm);
+}
+.menu-links {
+  flex-wrap: wrap;
+  row-gap: var(--space-xs);
+  min-width: 0;
 }
 .menu-links li {
   padding-right: var(--space-base);
   font-size: var(--font-xl);
+}
+@media (max-width: 600px) {
+  .menu-links li {
+    font-size: var(--font-lg);
+    padding-right: var(--space-sm);
+  }
+  nav ul:last-of-type {
+    margin-left: auto;
+  }
 }
 .inactive {
   opacity: 0.4;

@@ -234,6 +234,7 @@ export default {
 .share-layout {
   display: grid;
   grid-template-rows: auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-base);
   height: calc(var(--app-height, 100vh) - 4em);
   overflow: hidden;

@@ -98,7 +98,6 @@
 
 <script setup>
 const authenticationStore = AuthenticationStore();
-const accountsStore = AccountsStore();
 </script>
 
 <script>
@@ -202,6 +201,7 @@ export default {
       }
     };
     EventBus.on(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
+    const accountsStore = AccountsStore();
     await accountsStore.fetch();
     if (accountsStore.accounts.length > 0) {
       this.currentAccountId = accountsStore.accounts[0].id;
@@ -430,13 +430,14 @@ export default {
 .timeline-layout {
   display: grid;
   grid-template-rows: auto auto auto 1fr;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-sm);
   overflow: hidden;
 }
 .timeline-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-sm);
 }
 .timeline-header h4 {
@@ -449,13 +450,14 @@ export default {
   font-size: var(--font-base);
 }
 .timeline-month-select {
-  max-width: 16em;
+  max-width: 100%;
   font-size: var(--font-base);
   padding: var(--space-xs) var(--space-sm);
 }
 .timeline-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-sm);
 }
 .timeline-actions button,

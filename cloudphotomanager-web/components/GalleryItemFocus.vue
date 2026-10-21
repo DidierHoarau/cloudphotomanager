@@ -926,6 +926,7 @@ export default {
   bottom: var(--space-3xl);
   left: 0;
   z-index: 200;
+  max-width: 100vw;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -933,9 +934,11 @@ export default {
 .action-bar-main {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-xs);
-  height: 2.6em;
-  padding: 0 var(--space-md);
+  min-height: 2.6em;
+  max-width: 100vw;
+  padding: var(--space-xs) var(--space-md);
   background: var(--color-accent-bg);
   backdrop-filter: blur(6px);
   border-top-right-radius: var(--radius-lg);

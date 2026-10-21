@@ -16,6 +16,9 @@
   display: grid;
   overflow: hidden;
   grid-template-rows: auto 1fr;
+  /* Keep the single column at viewport width: an auto column would grow to
+     the header's min-content width and clip every page on narrow screens. */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 header {

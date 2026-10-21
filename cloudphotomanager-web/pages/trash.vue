@@ -75,7 +75,6 @@
 
 <script setup>
 const authenticationStore = AuthenticationStore();
-const accountsStore = AccountsStore();
 </script>
 
 <script>
@@ -125,6 +124,7 @@ export default {
       }
     };
     EventBus.on(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
+    const accountsStore = AccountsStore();
     await accountsStore.fetch();
     if (accountsStore.accounts.length > 0) {
       this.currentAccountId = accountsStore.accounts[0].id;
@@ -287,7 +287,7 @@ export default {
 .trash-layout {
   display: grid;
   grid-template-rows: auto auto 1fr;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-sm);
   overflow: hidden;
 }
@@ -301,6 +301,7 @@ export default {
 .trash-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-sm);
 }
 .trash-actions button,
