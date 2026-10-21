@@ -106,27 +106,12 @@ import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import { find, findIndex } from "lodash";
+import { getSettingsTabs } from "~~/utils/SettingsTabs";
 
 export default {
   data() {
     return {
-      settingsTabs: [
-        {
-          id: "accounts",
-          label: "Accounts",
-          to: "/settings/accounts",
-        },
-        {
-          id: "sync",
-          label: "Sync Queue",
-          to: "/settings/sync",
-        },
-        {
-          id: "users",
-          label: "Users",
-          to: "/settings/users",
-        },
-      ],
+      settingsTabs: getSettingsTabs(),
       users: [],
       activeOperation: "",
       targetUserId: "",
@@ -141,7 +126,7 @@ export default {
     FoldersStore().fetch();
     await AuthenticationStore().ensureAuthenticated();
     if (!(await AuthenticationStore()).isAdmin) {
-      useRouter().push({ path: "/users" });
+      useRouter().push({ path: "/settings/profile" });
     }
     this.fetch();
   },

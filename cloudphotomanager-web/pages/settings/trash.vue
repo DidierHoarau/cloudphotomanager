@@ -1,5 +1,6 @@
 <template>
   <div class="trash-layout page">
+    <TabNavigation :tabs="settingsTabs" />
     <NavigationSearch class="trash-navigation" @onAccountSelected="onAccountSelected" />
     <div class="trash-header">
       <h4>
@@ -83,10 +84,12 @@ import { findIndex } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
+import { getSettingsTabs } from "~~/utils/SettingsTabs";
 
 export default {
   data() {
     return {
+      settingsTabs: getSettingsTabs(),
       files: [],
       serverUrl: "",
       currentAccountId: "",
@@ -286,7 +289,7 @@ export default {
 <style scoped>
 .trash-layout {
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto auto auto 1fr;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-sm);
   overflow: hidden;

@@ -40,37 +40,20 @@
       </li>
       <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink
-          to="/timeline"
-          :class="baseFolder === 'timeline' ? 'active' : 'inactive'"
-          ><i class="bi bi-clock-history"></i
-        ></NuxtLink>
-      </li>
-      <li v-if="authenticationStore.isAuthenticated">
-        <NuxtLink
           to="/search"
           :class="baseFolder === 'search' ? 'active' : 'inactive'"
           ><i class="bi bi-search"></i
         ></NuxtLink>
       </li>
-      <li v-if="authenticationStore.isAdmin">
+      <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink
-          to="/trash"
-          :class="baseFolder === 'trash' ? 'active' : 'inactive'"
-          ><i class="bi bi-trash"></i
-        ></NuxtLink>
-      </li>
-      <li v-if="authenticationStore.isAdmin">
-        <NuxtLink
-          to="/settings/accounts"
+          :to="
+            authenticationStore.isAdmin
+              ? '/settings/accounts'
+              : '/settings/profile'
+          "
           :class="baseFolder === 'settings' ? 'active' : 'inactive'"
           ><i class="bi bi-gear-fill"></i
-        ></NuxtLink>
-      </li>
-      <li>
-        <NuxtLink
-          to="/users"
-          :class="baseFolder === 'users' ? 'active' : 'inactive'"
-          ><i class="bi bi-people-fill"></i
         ></NuxtLink>
       </li>
     </ul>

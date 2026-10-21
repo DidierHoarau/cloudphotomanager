@@ -29,6 +29,11 @@ export default {
           label: "Duplicates",
           to: "/search/duplicates",
         },
+        {
+          id: "timeline",
+          label: "Timeline",
+          to: "/search/timeline",
+        },
       ],
     };
   },

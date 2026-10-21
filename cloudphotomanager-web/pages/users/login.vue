@@ -57,7 +57,7 @@ export default {
       useRouter().push({ path: "/users/new" });
     }
     if (await AuthService.isAuthenticated()) {
-      useRouter().push({ path: "/users" });
+      useRouter().push({ path: "/settings/profile" });
     }
   },
   methods: {
