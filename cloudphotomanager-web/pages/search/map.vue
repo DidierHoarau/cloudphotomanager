@@ -59,42 +59,12 @@
 
 <script>
 import axios from "axios";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { debounce, findIndex } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError } from "~~/services/EventBus";
-
-const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-
-// Lazily load Leaflet from CDN once per browser session.
-let leafletPromise = null;
-function loadLeaflet() {
-  if (typeof window === "undefined") return Promise.resolve(null);
-  if (window.L) return Promise.resolve(window.L);
-  if (leafletPromise) return leafletPromise;
-  leafletPromise = new Promise((resolve, reject) => {
-    if (!document.querySelector(`link[href="${LEAFLET_CSS}"]`)) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = LEAFLET_CSS;
-      document.head.appendChild(link);
-    }
-    const existing = document.querySelector(`script[src="${LEAFLET_JS}"]`);
-    if (existing) {
-      existing.addEventListener("load", () => resolve(window.L));
-      existing.addEventListener("error", reject);
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = LEAFLET_JS;
-    script.async = true;
-    script.onload = () => resolve(window.L);
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-  return leafletPromise;
-}
 
 const GRID_ROWS = 10;
 const GRID_COLS = 10;
@@ -126,11 +96,11 @@ export default {
       loadingGrid: false,
       // Map / Leaflet state
       map: null,
-      L: null,
       markersLayer: null,
       resizeObserver: null,
       // Grid state
       lastBbox: null,
+      gridRequestId: 0,
       cells: [],
       // Cell dialog state
       cellDialogOpen: false,
@@ -163,7 +133,6 @@ export default {
     const lat = parseCoordinate(route.query.lat);
     const lon = parseCoordinate(route.query.lon);
     try {
-      this.L = await loadLeaflet();
       // Wait for the map container to be laid out before instantiating
       // Leaflet so it can measure its size correctly. Otherwise tiles only
       // render in the top-left corner until the next resize event.
@@ -172,6 +141,9 @@ export default {
       if (lat !== null && lon !== null) {
         this.map.setView([lat, lon], parseZoom(route.query.zoom));
       }
+      // The account selection may have been received before the map existed,
+      // in which case its refresh was skipped: load the grid now.
+      if (this.currentAccountId) this.refreshGridDebounced();
     } catch (err) {
       handleError(err);
     } finally {
@@ -190,8 +162,7 @@ export default {
   },
   methods: {
     initMap() {
-      if (!this.L || !this.$refs.mapEl) return;
-      const L = this.L;
+      if (!this.$refs.mapEl) return;
       this.map = L.map(this.$refs.mapEl, {
         worldCopyJump: true,
       }).setView([20, 0], 2);
@@ -235,6 +206,8 @@ export default {
       if (!this.map || !this.currentAccountId) return;
       const bbox = this.getCurrentBbox();
       this.lastBbox = bbox;
+      this.gridRequestId += 1;
+      const requestId = this.gridRequestId;
       this.loadingGrid = true;
       try {
         const res = await axios.post(
@@ -242,9 +215,11 @@ export default {
           { bbox, gridRows: GRID_ROWS, gridCols: GRID_COLS },
           await AuthService.getAuthHeader(),
         );
-        // Drop the response if a more recent bbox has been requested in the
-        // meantime (debounce + slow network protection).
-        if (this.lastBbox !== bbox) return;
+        // Drop the response if a more recent request has been issued in the
+        // meantime (debounce + slow network protection). Compare request ids:
+        // lastBbox becomes a reactive proxy, which never matches `bbox` by
+        // identity.
+        if (requestId !== this.gridRequestId) return;
         this.cells = res.data.cells || [];
         this.renderMarkers();
       } catch (err) {
@@ -274,8 +249,7 @@ export default {
       };
     },
     renderMarkers() {
-      if (!this.markersLayer || !this.L) return;
-      const L = this.L;
+      if (!this.markersLayer) return;
       this.markersLayer.clearLayers();
       const maxCount = this.cells.reduce((acc, c) => Math.max(acc, c.count), 0);
       for (const cell of this.cells) {
