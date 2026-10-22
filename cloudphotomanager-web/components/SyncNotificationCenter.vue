@@ -1,89 +1,111 @@
 <template>
-  <div class="sync-center-panel" @click.stop>
-    <div class="sync-center-header">
-      <strong>Sync activity</strong>
-      <span class="sync-center-queue">
-        <span v-if="activeCount > 0" class="queue-pill"
-          ><i class="bi bi-hourglass-split"></i> {{ activeCount }} active</span
-        >
-        <span v-if="waitingCount > 0" class="queue-pill"
-          ><i class="bi bi-pause-circle"></i> {{ waitingCount }} waiting</span
-        >
-        <span
-          v-if="activeCount === 0 && waitingCount === 0"
-          class="queue-pill queue-pill-idle"
-          >Idle</span
-        >
-      </span>
-    </div>
+  <Teleport to="body">
+    <dialog open class="sync-center-dialog" @click.self="close()">
+      <article class="dialog-standard sync-center-panel">
+        <header>
+          <a
+            href="#close"
+            class="close"
+            aria-label="Close"
+            @click.prevent="close()"
+          ></a>
+          Sync activity
+        </header>
 
-    <div class="sync-center-section">
-      <div class="sync-center-section-title">
-        Failed actions
-        <kbd class="failure-badge" v-if="syncStore.failuresCount > 0">{{
-          syncStore.failuresCount
-        }}</kbd>
-      </div>
-      <div v-if="recentFailures.length === 0" class="sync-center-empty">
-        <i class="bi bi-check2-circle"></i> No failed actions
-      </div>
-      <ul v-else class="sync-center-list">
-        <li
-          v-for="failure in recentFailures"
-          :key="failure.id"
-          class="sync-center-failure"
-        >
-          <div class="failure-row">
-            <kbd class="badge" :class="'kind-' + failure.kind">
-              {{ failure.kind === "conflict" ? "Conflict" : "Error" }}
-            </kbd>
-            <span class="failure-target">{{ failureTarget(failure) }}</span>
-            <span class="failure-date">{{
-              formatDate(failure.dateCreated)
-            }}</span>
+        <div class="dialog-standard-body sync-center-body">
+          <div class="sync-summary">
+            <span v-if="activeCount > 0" class="sync-summary-pill pill-active">
+              <i class="bi bi-hourglass-split"></i> {{ activeCount }} active
+            </span>
+            <span
+              v-if="waitingCount > 0"
+              class="sync-summary-pill pill-waiting"
+            >
+              <i class="bi bi-pause-circle"></i> {{ waitingCount }} waiting
+            </span>
+            <span
+              v-if="activeCount === 0 && waitingCount === 0"
+              class="sync-summary-pill pill-idle"
+            >
+              <i class="bi bi-check2-circle"></i> Idle
+            </span>
           </div>
-          <div v-if="failure.humanCause" class="failure-cause">
-            {{ failure.humanCause }}
-          </div>
-          <details v-if="failure.errorMessage" class="failure-details">
-            <summary>Technical detail</summary>
-            <code>{{ failure.errorMessage }}</code>
-          </details>
-        </li>
-      </ul>
-      <NuxtLink
-        to="/settings/sync?tab=failures"
-        class="sync-center-link"
-        @click="close()"
-        >
-        Review all failures in Settings → Sync
-        <i class="bi bi-arrow-right-short"></i>
-      </NuxtLink>
-    </div>
 
-    <div
-      v-if="syncStore.recentOperations.length > 0"
-      class="sync-center-section"
-    >
-      <div class="sync-center-section-title">Recent operations</div>
-      <ul class="sync-center-list">
-        <li
-          v-for="(operation, index) in syncStore.recentOperations"
-          :key="operation.date + '-' + index"
-          class="sync-center-operation"
-        >
-          <i class="bi bi-check2"></i>
-          <span class="operation-label">{{ operation.label }}</span>
-          <span v-if="operation.fileCount > 1" class="operation-count"
-            >{{ operation.fileCount }} files</span
+          <section class="sync-section">
+            <h2 class="sync-section-title">
+              Failed actions
+              <span v-if="syncStore.failuresCount > 0" class="count-badge">{{
+                syncStore.failuresCount
+              }}</span>
+            </h2>
+            <p v-if="recentFailures.length === 0" class="sync-empty">
+              <i class="bi bi-check2-circle"></i> No failed actions
+            </p>
+            <ul v-else class="sync-failure-list">
+              <li
+                v-for="failure in recentFailures"
+                :key="failure.id"
+                class="sync-failure"
+                :class="'sync-failure-' + failure.kind"
+              >
+                <div class="failure-head">
+                  <span class="failure-kind" :class="'kind-' + failure.kind">
+                    {{ failure.kind === "conflict" ? "Conflict" : "Error" }}
+                  </span>
+                  <span class="failure-target">{{
+                    failureTarget(failure)
+                  }}</span>
+                  <time class="failure-date">{{
+                    formatDate(failure.dateCreated)
+                  }}</time>
+                </div>
+                <p v-if="failure.humanCause" class="failure-cause">
+                  {{ failure.humanCause }}
+                </p>
+                <details v-if="failure.errorMessage" class="failure-details">
+                  <summary>Technical details</summary>
+                  <code>{{ failure.errorMessage }}</code>
+                </details>
+              </li>
+            </ul>
+          </section>
+
+          <section
+            v-if="syncStore.recentOperations.length > 0"
+            class="sync-section"
           >
-          <span class="operation-date">{{
-            formatDate(operation.date)
-          }}</span>
-        </li>
-      </ul>
-    </div>
-  </div>
+            <h2 class="sync-section-title">Recent operations</h2>
+            <ul class="sync-operation-list">
+              <li
+                v-for="(operation, index) in syncStore.recentOperations"
+                :key="operation.date + '-' + index"
+                class="sync-operation"
+              >
+                <i class="bi bi-check2-circle"></i>
+                <span class="operation-label">{{ operation.label }}</span>
+                <span v-if="operation.fileCount > 1" class="operation-count"
+                  >{{ operation.fileCount }} files</span
+                >
+                <time class="operation-date">{{
+                  formatDate(operation.date)
+                }}</time>
+              </li>
+            </ul>
+          </section>
+        </div>
+
+        <footer class="dialog-standard-footer">
+          <button class="secondary outline" @click="close()">Close</button>
+          <NuxtLink
+            to="/settings/sync?tab=failures"
+            role="button"
+            @click="close()"
+            >Open Sync settings</NuxtLink
+          >
+        </footer>
+      </article>
+    </dialog>
+  </Teleport>
 </template>
 
 <script>
@@ -113,22 +135,14 @@ export default {
     },
   },
   mounted() {
-    document.addEventListener("click", this.onDocumentClick);
     document.addEventListener("keydown", this.onKeydown);
   },
   beforeUnmount() {
-    document.removeEventListener("click", this.onDocumentClick);
     document.removeEventListener("keydown", this.onKeydown);
   },
   methods: {
     close() {
       this.$emit("close");
-    },
-    onDocumentClick(event) {
-      const root = this.$el.closest(".sync-center-root");
-      if (root && !root.contains(event.target)) {
-        this.close();
-      }
     },
     onKeydown(event) {
       if (event.key === "Escape") {
@@ -159,189 +173,205 @@ export default {
 </script>
 
 <style scoped>
-.sync-center-panel {
-  position: absolute;
-  top: calc(100% + var(--space-sm));
-  right: 0;
-  width: 26rem;
-  max-width: calc(100vw - 2 * var(--space-base));
-  max-height: min(70vh, 34rem);
-  overflow-y: auto;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: 0 0.5rem 1.5rem var(--color-overlay);
-  z-index: 100;
-  padding: var(--space-md);
+.sync-center-dialog .sync-center-panel {
+  width: min(34em, 92vw);
+}
+
+.sync-center-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
-  font-size: var(--font-base);
-  text-align: left;
+  gap: var(--space-xl);
 }
 
-.sync-center-header {
+.sync-summary {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
   flex-wrap: wrap;
+  gap: var(--space-sm);
 }
-
-.sync-center-queue {
-  display: flex;
-  gap: var(--space-xs);
-  flex-wrap: wrap;
-}
-.queue-pill {
+.sync-summary-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.3em;
-  padding: 0.1em 0.5em;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--color-border-light);
   border-radius: var(--radius-full);
-  background: var(--color-bg-hover);
-  font-size: var(--font-sm);
+  background: var(--color-bg-secondary);
+  font-size: var(--font-base);
+  font-weight: 600;
 }
-.queue-pill-idle {
-  opacity: 0.6;
+.pill-active {
+  color: var(--color-primary-text);
+  border-color: var(--color-primary-light);
+  background: var(--color-primary-light);
+}
+.pill-waiting {
+  color: var(--color-warning);
+}
+.pill-idle {
+  color: var(--color-success);
 }
 
-.sync-center-section {
+.sync-section {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  margin: 0;
 }
-.sync-center-section-title {
-  font-size: var(--font-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  opacity: 0.7;
+.sync-section-title {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  font-size: var(--font-body);
+  font-weight: 700;
 }
-.failure-badge {
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.7em;
+  height: 1.7em;
+  padding: 0 0.4em;
+  border-radius: var(--radius-full);
   background: var(--color-danger);
   color: var(--color-text-inverse);
-  border-radius: var(--radius-full);
-  padding: 0 0.5em;
-  font-size: var(--font-xs);
-}
-
-.sync-center-empty {
-  opacity: 0.6;
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.sync-center-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-.sync-center-failure {
-  border: 1px solid var(--color-border);
-  border-left: 3px solid var(--color-danger);
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-.sync-center-failure .badge {
-  display: inline-block;
-  padding: 0 0.5em;
-  border-radius: var(--radius-sm);
   font-size: var(--font-xs);
   font-weight: 600;
 }
-.kind-conflict {
-  background: rgba(253, 126, 20, 0.2);
-  color: var(--color-warning);
+
+.sync-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0;
+  font-size: var(--font-base);
+  color: var(--color-text-muted);
 }
-.kind-error {
-  background: rgba(220, 53, 69, 0.2);
-  color: var(--color-danger);
+.sync-empty i {
+  color: var(--color-success);
+  font-size: 1.1em;
 }
-.failure-row {
+
+.sync-failure-list,
+.sync-operation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.sync-failure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border-light);
+  border-left: 3px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+}
+.sync-failure-conflict {
+  border-left-color: var(--color-warning);
+}
+.failure-head {
   display: flex;
   align-items: baseline;
   gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-.failure-target {
-  font-weight: 500;
-  word-break: break-all;
   min-width: 0;
 }
-.failure-date {
-  margin-left: auto;
-  opacity: 0.6;
+.failure-kind {
+  flex-shrink: 0;
+  padding: 0 0.5em;
+  border-radius: var(--radius-sm);
   font-size: var(--font-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.kind-conflict {
+  background: rgba(253, 126, 20, 0.16);
+  color: var(--color-warning);
+}
+.kind-error {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+.failure-target {
+  min-width: 0;
+  font-size: var(--font-base);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.failure-date {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 .failure-cause {
-  font-size: var(--font-sm);
+  margin: 0;
+  font-size: var(--font-base);
+  color: var(--color-text-secondary);
 }
 .failure-details summary {
-  font-size: var(--font-xs);
-  opacity: 0.6;
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
   cursor: pointer;
 }
 .failure-details code {
   display: block;
-  font-size: var(--font-xs);
-  background: var(--color-danger-bg);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  word-break: break-word;
-  white-space: pre-wrap;
   margin-top: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  font-size: var(--font-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.sync-center-link {
-  font-size: var(--font-sm);
-  display: inline-flex;
-  align-items: center;
-}
-
-.sync-center-operation {
+.sync-operation {
   display: flex;
   align-items: baseline;
   gap: var(--space-sm);
+  font-size: var(--font-base);
 }
-.sync-center-operation i {
+.sync-operation i {
+  flex-shrink: 0;
   color: var(--color-success);
 }
 .operation-label {
   min-width: 0;
 }
 .operation-count {
-  opacity: 0.7;
   font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 .operation-date {
   margin-left: auto;
-  opacity: 0.6;
   font-size: var(--font-xs);
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 
-@media (max-width: 640px) {
-  .sync-center-panel {
-    position: fixed;
-    top: 2rem;
-    left: 0;
-    right: 0;
-    width: 100%;
-    max-width: none;
-    max-height: 75vh;
-    border-radius: 0 0 var(--radius-md) var(--radius-md);
+@media (max-width: 480px) {
+  .failure-head {
+    flex-wrap: wrap;
+  }
+  .failure-date {
+    flex-basis: 100%;
+    margin-left: 0;
+    text-align: right;
+  }
+  .dialog-standard-footer > button,
+  .dialog-standard-footer > [role="button"] {
+    font-size: var(--font-base);
+    padding: var(--space-sm) var(--space-md);
   }
 }
 </style>
