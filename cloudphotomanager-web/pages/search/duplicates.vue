@@ -355,9 +355,19 @@ export default {
 /* ── Toolbar: count badge + filter input ─────────────────── */
 .duplicate-toolbar {
   display: grid;
-  grid-template-columns: 3fr 1fr;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
   align-items: center;
   gap: var(--space-md);
+}
+
+.duplicate-filter-input {
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .duplicate-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ── Duplicate card grid ─────────────────────────────────── */

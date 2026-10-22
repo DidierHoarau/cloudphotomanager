@@ -977,7 +977,7 @@ export default {
   .gallery-layout {
     display: grid;
     grid-template-rows: auto auto auto 1fr;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     column-gap: var(--space-base);
     overflow: hidden;
   }

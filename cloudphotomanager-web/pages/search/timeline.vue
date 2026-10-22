@@ -1,104 +1,108 @@
 <template>
-  <div class="timeline-layout page">
-    <NavigationSearch class="timeline-navigation" @onAccountSelected="onAccountSelected" />
-    <div class="timeline-header">
-      <button
-        class="secondary outline"
-        :disabled="!hasNewer"
-        v-on:click="selectAdjacentMonth(-1)"
-        title="Newer"
-      >
-        <i class="bi bi-chevron-left"></i>
-      </button>
-      <h4>{{ currentMonthLabel }}</h4>
-      <button
-        class="secondary outline"
-        :disabled="!hasOlder"
-        v-on:click="selectAdjacentMonth(1)"
-        title="Older"
-      >
-        <i class="bi bi-chevron-right"></i>
-      </button>
-      <select
-        v-if="months.length > 0"
-        class="timeline-month-select"
-        :value="currentMonthKey"
-        v-on:change="onMonthSelected($event)"
-      >
-        <option v-for="m in months" :key="m.year + m.month" :value="monthKey(m)">
-          {{ monthLabel(m) }} ({{ m.count }})
-        </option>
-      </select>
+  <SearchLayout @onAccountSelected="onAccountSelected">
+    <div class="timeline-layout">
+      <div class="timeline-header">
+        <button
+          class="secondary outline"
+          :disabled="!hasNewer"
+          v-on:click="selectAdjacentMonth(-1)"
+          title="Newer"
+        >
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        <h4>{{ currentMonthLabel }}</h4>
+        <button
+          class="secondary outline"
+          :disabled="!hasOlder"
+          v-on:click="selectAdjacentMonth(1)"
+          title="Older"
+        >
+          <i class="bi bi-chevron-right"></i>
+        </button>
+        <select
+          v-if="months.length > 0"
+          class="timeline-month-select"
+          :value="currentMonthKey"
+          v-on:change="onMonthSelected($event)"
+        >
+          <option
+            v-for="m in months"
+            :key="m.year + m.month"
+            :value="monthKey(m)"
+          >
+            {{ monthLabel(m) }} ({{ m.count }})
+          </option>
+        </select>
+      </div>
+      <div class="timeline-actions">
+        <button
+          v-if="files.length > 0 && authenticationStore.isAdmin"
+          class="secondary outline"
+          v-on:click="clickedSelect()"
+        >
+          <i class="bi bi-check2-square"></i> Select...
+        </button>
+        <kbd v-if="selectedFiles.length > 0"
+          >Selected: {{ selectedFiles.length }}</kbd
+        >
+        <button
+          v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
+          class="secondary outline"
+          v-on:click="clickedTrash()"
+        >
+          <i class="bi bi-trash-fill"></i> Trash
+        </button>
+        <button
+          v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
+          class="secondary outline"
+          :disabled="bulkDownloading"
+          v-on:click="clickedDownload()"
+        >
+          <i class="bi bi-download"></i>
+          {{ bulkDownloading ? "Zipping..." : "Download" }}
+        </button>
+      </div>
+      <div class="timeline-file-list">
+        <Loading v-if="loading" />
+        <template v-else>
+          <div v-if="files.length === 0" class="timeline-empty-state">
+            <i class="bi bi-clock-history"></i>
+            <p>No photos for this month.</p>
+          </div>
+          <Gallery
+            v-else
+            :files="files"
+            :enableSelection="authenticationStore.isAdmin"
+            :selectedFiles="selectedFiles"
+            @focusGalleryItem="focusGalleryItem"
+            @onFileSelected="onFileSelected"
+          />
+          <div ref="sentinel" class="sentinel"></div>
+          <Loading v-if="loadingMore" />
+        </template>
+      </div>
+      <GalleryItemFocus
+        v-if="displayFullScreen"
+        :galleryFiles="files"
+        :initialPosition="positionFocus"
+        :selectedFiles="selectedFiles"
+        class="gallery-item-focus"
+        @onFileClosed="displayFullScreen = false"
+        @onFileSelected="onFileSelected"
+      />
+      <DialogConfirm
+        v-if="activeOperation == 'confirm-trash'"
+        title="Move to Trash"
+        :message="confirmMessage"
+        @onConfirm="executeTrash"
+        @onCancel="activeOperation = ''"
+      />
     </div>
-    <div class="timeline-actions">
-      <button
-        v-if="files.length > 0 && authenticationStore.isAdmin"
-        class="secondary outline"
-        v-on:click="clickedSelect()"
-      >
-        <i class="bi bi-check2-square"></i> Select...
-      </button>
-      <kbd v-if="selectedFiles.length > 0"
-        >Selected: {{ selectedFiles.length }}</kbd
-      >
-      <button
-        v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
-        class="secondary outline"
-        v-on:click="clickedTrash()"
-      >
-        <i class="bi bi-trash-fill"></i> Trash
-      </button>
-      <button
-        v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
-        class="secondary outline"
-        :disabled="bulkDownloading"
-        v-on:click="clickedDownload()"
-      >
-        <i class="bi bi-download"></i>
-        {{ bulkDownloading ? "Zipping..." : "Download" }}
-      </button>
-    </div>
-    <div class="timeline-file-list">
-      <Loading v-if="loading" />
-      <template v-else>
-        <div v-if="files.length === 0" class="timeline-empty-state">
-          <i class="bi bi-clock-history"></i>
-          <p>No photos for this month.</p>
-        </div>
-        <Gallery
-          v-else
-          :files="files"
-          :enableSelection="authenticationStore.isAdmin"
-          :selectedFiles="selectedFiles"
-          @focusGalleryItem="focusGalleryItem"
-          @onFileSelected="onFileSelected"
-        />
-        <div ref="sentinel" class="sentinel"></div>
-        <Loading v-if="loadingMore" />
-      </template>
-    </div>
-    <GalleryItemFocus
-      v-if="displayFullScreen"
-      :galleryFiles="files"
-      :initialPosition="positionFocus"
-      :selectedFiles="selectedFiles"
-      class="gallery-item-focus"
-      @onFileClosed="displayFullScreen = false"
-      @onFileSelected="onFileSelected"
-    />
-    <DialogConfirm
-      v-if="activeOperation == 'confirm-trash'"
-      title="Move to Trash"
-      :message="confirmMessage"
-      @onConfirm="executeTrash"
-      @onCancel="activeOperation = ''"
-    />
-  </div>
+  </SearchLayout>
 </template>
 
 <script setup>
 const authenticationStore = AuthenticationStore();
-const accountsStore = AccountsStore();
 </script>
 
 <script>
@@ -202,11 +206,7 @@ export default {
       }
     };
     EventBus.on(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
-    await accountsStore.fetch();
-    if (accountsStore.accounts.length > 0) {
-      this.currentAccountId = accountsStore.accounts[0].id;
-      await this.fetchMonths();
-    }
+    await AccountsStore().fetch();
   },
   mounted() {
     this.observer = new IntersectionObserver(
@@ -429,14 +429,16 @@ export default {
 <style scoped>
 .timeline-layout {
   display: grid;
-  grid-template-rows: auto auto auto 1fr;
-  grid-template-columns: 1fr;
+  grid-template-rows: auto auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-sm);
+  min-height: 0;
   overflow: hidden;
 }
 .timeline-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-sm);
 }
 .timeline-header h4 {
@@ -449,13 +451,24 @@ export default {
   font-size: var(--font-base);
 }
 .timeline-month-select {
-  max-width: 16em;
+  max-width: 100%;
   font-size: var(--font-base);
   padding: var(--space-xs) var(--space-sm);
+}
+@media (max-width: 480px) {
+  .timeline-header h4 {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--font-lg);
+  }
+  .timeline-month-select {
+    width: 100%;
+  }
 }
 .timeline-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-sm);
 }
 .timeline-actions button,

@@ -37,27 +37,12 @@ import axios from "axios";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
+import { getSettingsTabs } from "~~/utils/SettingsTabs";
 
 export default {
   data() {
     return {
-      settingsTabs: [
-        {
-          id: "accounts",
-          label: "Accounts",
-          to: "/settings/accounts",
-        },
-        {
-          id: "sync",
-          label: "Sync Queue",
-          to: "/settings/sync",
-        },
-        {
-          id: "users",
-          label: "Users",
-          to: "/settings/users",
-        },
-      ],
+      settingsTabs: getSettingsTabs(),
       user: {},
       saving: false,
     };
@@ -65,7 +50,7 @@ export default {
   async created() {
     await AuthenticationStore().ensureAuthenticated();
     if (!(await AuthenticationStore()).isAdmin) {
-      useRouter().push({ path: "/settings/users" });
+      useRouter().push({ path: "/settings/profile" });
     }
   },
   methods: {

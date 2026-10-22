@@ -29,6 +29,11 @@ export default {
           label: "Duplicates",
           to: "/search/duplicates",
         },
+        {
+          id: "timeline",
+          label: "Timeline",
+          to: "/search/timeline",
+        },
       ],
     };
   },
@@ -44,7 +49,7 @@ export default {
 .search-layout {
   display: grid;
   grid-template-rows: auto auto 1fr;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-sm);
 }
 </style>

@@ -1,83 +1,86 @@
 <template>
-  <div class="user-page">
-    <!-- AUTHENTICATED: Profile Section -->
-    <div class="profile-content">
-      <!-- Account Info -->
-      <article>
-        <h3>
-          <i class="bi bi-person-circle"></i>
-          Account
-        </h3>
-        <p>
-          Logged in as <strong>{{ authenticationStore.userName }}</strong>
-          <span v-if="authenticationStore.isAdmin" class="badge badge-admin"
-            >Admin</span
-          >
-          <span v-else class="badge badge-user">User</span>
-        </p>
-        <div class="article-actions">
-          <button class="secondary outline" @click="logout()">
-            <i class="bi bi-box-arrow-right"></i> Logout
-          </button>
-        </div>
-      </article>
-
-      <!-- Change Password -->
-      <article>
-        <h3>
-          <i class="bi bi-key"></i>
-          Change Password
-        </h3>
-        <p>Update your account password.</p>
-        <div v-if="!isChangePasswordStarted">
-          <button @click="changePasswordStart(true)">
-            <i class="bi bi-pencil"></i> Change Password
-          </button>
-        </div>
-        <div v-else>
-          <label>
-            Current Password
-            <input
-              type="password"
-              v-model="user.passwordOld"
-              placeholder="Enter current password"
-            />
-          </label>
-          <label>
-            New Password
-            <input
-              type="password"
-              v-model="user.password"
-              placeholder="Enter new password"
-              @keyup.enter="changePassword()"
-            />
-          </label>
+  <div class="page">
+    <TabNavigation :tabs="settingsTabs" />
+    <div class="user-page">
+      <div class="profile-content">
+        <!-- Account Info -->
+        <article>
+          <h3>
+            <i class="bi bi-person-circle"></i>
+            Account
+          </h3>
+          <p>
+            Logged in as
+            <strong>{{ authenticationStore.userInfo.userName }}</strong>
+            <span v-if="authenticationStore.isAdmin" class="badge badge-admin"
+              >Admin</span
+            >
+            <span v-else class="badge badge-user">User</span>
+          </p>
           <div class="article-actions">
-            <button class="secondary" @click="changePasswordStart(false)">
-              Cancel
-            </button>
-            <button :disabled="savingPassword" @click="changePassword()">
-              <i class="bi bi-check-lg"></i>
-              {{ savingPassword ? "Saving…" : "Save" }}
+            <button class="secondary outline" @click="logout()">
+              <i class="bi bi-box-arrow-right"></i> Logout
             </button>
           </div>
-        </div>
-      </article>
+        </article>
 
-      <!-- Theme Preference -->
-      <article>
-        <h3>
-          <i class="bi bi-palette"></i>
-          Theme
-        </h3>
-        <p>Switch between dark and light mode.</p>
-        <div class="article-actions">
-          <button class="secondary outline" @click="toggleTheme">
-            <i :class="isDark ? 'bi bi-sun-fill' : 'bi bi-moon-fill'"></i>
-            {{ isDark ? "Switch to Light Mode" : "Switch to Dark Mode" }}
-          </button>
-        </div>
-      </article>
+        <!-- Change Password -->
+        <article>
+          <h3>
+            <i class="bi bi-key"></i>
+            Change Password
+          </h3>
+          <p>Update your account password.</p>
+          <div v-if="!isChangePasswordStarted">
+            <button @click="changePasswordStart(true)">
+              <i class="bi bi-pencil"></i> Change Password
+            </button>
+          </div>
+          <div v-else>
+            <label>
+              Current Password
+              <input
+                type="password"
+                v-model="user.passwordOld"
+                placeholder="Enter current password"
+              />
+            </label>
+            <label>
+              New Password
+              <input
+                type="password"
+                v-model="user.password"
+                placeholder="Enter new password"
+                @keyup.enter="changePassword()"
+              />
+            </label>
+            <div class="article-actions">
+              <button class="secondary" @click="changePasswordStart(false)">
+                Cancel
+              </button>
+              <button :disabled="savingPassword" @click="changePassword()">
+                <i class="bi bi-check-lg"></i>
+                {{ savingPassword ? "Saving…" : "Save" }}
+              </button>
+            </div>
+          </div>
+        </article>
+
+        <!-- Theme Preference -->
+        <article>
+          <h3>
+            <i class="bi bi-palette"></i>
+            Theme
+          </h3>
+          <p>Switch between dark and light mode.</p>
+          <div class="article-actions">
+            <button class="secondary outline" @click="toggleTheme">
+              <i :class="isDark ? 'bi bi-sun-fill' : 'bi bi-moon-fill'"></i>
+              {{ isDark ? "Switch to Light Mode" : "Switch to Dark Mode" }}
+            </button>
+          </div>
+        </article>
+      </div>
     </div>
   </div>
 </template>
@@ -93,10 +96,12 @@ import { AuthService } from "~~/services/AuthService";
 import { UserService } from "~~/services/UserService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import { ThemeService } from "~~/services/ThemeService";
+import { getSettingsTabs } from "~~/utils/SettingsTabs";
 
 export default {
   data() {
     return {
+      settingsTabs: getSettingsTabs(),
       user: {},
       isChangePasswordStarted: false,
       savingPassword: false,

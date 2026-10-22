@@ -18,13 +18,20 @@
             'sync-indicator-blinking': syncStore.countTotal > 0,
           }"
           :title="syncIndicatorTitle"
+          :aria-label="syncIndicatorTitle"
+          aria-haspopup="dialog"
           :aria-expanded="syncCenterOpen ? 'true' : 'false'"
           @click="toggleSyncCenter"
         >
           <i :class="syncIndicatorIcon"></i>
-          <kbd v-if="syncStore.failuresCount > 0" class="sync-count-badge">{{
-            syncStore.failuresCount
-          }}</kbd>
+          <span
+            v-if="syncStore.failuresCount > 0"
+            class="sync-count-badge"
+            aria-hidden="true"
+            >{{
+              syncStore.failuresCount > 99 ? "99+" : syncStore.failuresCount
+            }}</span
+          >
         </button>
         <SyncNotificationCenter
           v-if="syncCenterOpen"
@@ -40,37 +47,20 @@
       </li>
       <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink
-          to="/timeline"
-          :class="baseFolder === 'timeline' ? 'active' : 'inactive'"
-          ><i class="bi bi-clock-history"></i
-        ></NuxtLink>
-      </li>
-      <li v-if="authenticationStore.isAuthenticated">
-        <NuxtLink
           to="/search"
           :class="baseFolder === 'search' ? 'active' : 'inactive'"
           ><i class="bi bi-search"></i
         ></NuxtLink>
       </li>
-      <li v-if="authenticationStore.isAdmin">
+      <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink
-          to="/trash"
-          :class="baseFolder === 'trash' ? 'active' : 'inactive'"
-          ><i class="bi bi-trash"></i
-        ></NuxtLink>
-      </li>
-      <li v-if="authenticationStore.isAdmin">
-        <NuxtLink
-          to="/settings/accounts"
+          :to="
+            authenticationStore.isAdmin
+              ? '/settings/accounts'
+              : '/settings/profile'
+          "
           :class="baseFolder === 'settings' ? 'active' : 'inactive'"
           ><i class="bi bi-gear-fill"></i
-        ></NuxtLink>
-      </li>
-      <li>
-        <NuxtLink
-          to="/users"
-          :class="baseFolder === 'users' ? 'active' : 'inactive'"
-          ><i class="bi bi-people-fill"></i
         ></NuxtLink>
       </li>
     </ul>
@@ -150,46 +140,79 @@ export default {
 
 <style scoped>
 nav {
-  height: 2rem;
+  min-height: 2rem;
+  height: auto;
+  flex-wrap: wrap;
+  row-gap: var(--space-xs);
+  column-gap: var(--space-sm);
+}
+.menu-links {
+  flex-wrap: wrap;
+  row-gap: var(--space-xs);
+  column-gap: var(--space-sm);
+  min-width: 0;
 }
 .menu-links li {
   padding-right: var(--space-base);
   font-size: var(--font-xl);
 }
+@media (max-width: 600px) {
+  .menu-links {
+    column-gap: var(--space-md);
+  }
+  .menu-links li {
+    font-size: var(--font-lg);
+    padding-right: var(--space-sm);
+  }
+  nav ul:last-of-type {
+    margin-left: auto;
+  }
+}
 .inactive {
   opacity: 0.4;
-}
-.sync-count kbd {
-  font-size: 50%;
-  text-align: center;
-  padding: 0.3em 0.6em;
-  opacity: 0.3;
-}
-.sync-indicator {
-  font-size: 1em;
 }
 .sync-center-root {
   position: relative;
 }
 button.sync-indicator {
+  position: relative;
   background: none;
   border: none;
-  padding: 0;
-  margin: 0;
+  margin: calc(var(--space-sm) * -1);
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  color: inherit;
+  color: var(--color-primary);
   line-height: 1;
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
+}
+button.sync-indicator:hover {
+  background: var(--color-bg-hover);
+}
+button.sync-indicator:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 .sync-count-badge {
-  font-size: 0.55em;
-  margin-left: 0.25em;
+  position: absolute;
+  top: -0.35em;
+  right: -0.35em;
+  min-width: 1.7em;
+  height: 1.7em;
+  padding: 0 0.35em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.5em;
+  font-weight: 600;
+  line-height: 1;
   background: var(--color-danger);
   color: var(--color-text-inverse);
+  border: 2px solid var(--color-bg);
   border-radius: var(--radius-full);
-  padding: 0 0.45em;
-  line-height: 1.5;
+  pointer-events: none;
 }
 .sync-indicator-error {
   color: var(--color-danger);
@@ -200,7 +223,7 @@ button.sync-indicator {
 @keyframes pulse {
   0%,
   100% {
-    opacity: 0.4;
+    opacity: 0.55;
   }
   50% {
     opacity: 1;

@@ -111,27 +111,12 @@ import { find } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError } from "~~/services/EventBus";
+import { getSettingsTabs } from "~~/utils/SettingsTabs";
 
 export default {
   data() {
     return {
-      settingsTabs: [
-        {
-          id: "accounts",
-          label: "Accounts",
-          to: "/settings/accounts",
-        },
-        {
-          id: "sync",
-          label: "Sync Queue",
-          to: "/settings/sync",
-        },
-        {
-          id: "users",
-          label: "Users",
-          to: "/settings/users",
-        },
-      ],
+      settingsTabs: getSettingsTabs(),
       loading: false,
       failuresLoading: false,
       activeTab: "queue",
