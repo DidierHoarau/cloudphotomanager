@@ -78,7 +78,10 @@ describe("SQL migrations", () => {
   it("migrates a pre-init-0007 database at boot and stays idempotent", async () => {
     // Simulate the existing production DB: every migration except 0007+.
     const files = (await fs.readdir(realSqlDir))
-      .filter((name) => /^init-\d+\.sql$/.test(name) && name < "init-0007.sql")
+      .filter((name) => {
+        const match = /^init-(\d+)\.sql$/.exec(name);
+        return match !== null && Number(match[1]) < 7;
+      })
       .sort();
     for (const name of files) {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
@@ -102,15 +105,24 @@ describe("SQL migrations", () => {
       path.join(realSqlDir, "init-0009.sql"),
       path.join(sqlDir, "init-0009.sql"),
     );
+    await fs.copy(
+      path.join(realSqlDir, "init-0010.sql"),
+      path.join(sqlDir, "init-0010.sql"),
+    );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(9);
+    expect(dbVersion()).toBe(10);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
     const trashColumns = SqlDbUtilsQuerySQL(
       undefined,
       "SELECT name FROM pragma_table_info('files') WHERE name IN ('favorite', 'trashed', 'dateTrashed')",
     ).map((row) => row.name);
     expect(trashColumns.sort()).toEqual(["dateTrashed", "favorite", "trashed"]);
+    const userColumns = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM pragma_table_info('users') WHERE name = 'tokenVersion'",
+    ).map((row) => row.name);
+    expect(userColumns).toEqual(["tokenVersion"]);
 
     // A third boot re-applies nothing (idempotent re-run).
     const appliedLogBefore = SqlDbUtilsQuerySQL(
@@ -119,7 +131,7 @@ describe("SQL migrations", () => {
     );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(9);
+    expect(dbVersion()).toBe(10);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
     const appliedLogAfter = SqlDbUtilsQuerySQL(
       undefined,
@@ -136,7 +148,7 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(9);
+    expect(dbVersion()).toBe(10);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
   });
 });

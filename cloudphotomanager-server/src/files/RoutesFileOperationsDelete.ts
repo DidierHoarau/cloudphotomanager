@@ -1,5 +1,5 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { FileDataTrash } from "./FileData";
+import { FileDataGet, FileDataTrash } from "./FileData";
 import { SyncQueueBroadcastOperationComplete } from "../sync/SyncQueue";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
@@ -28,6 +28,16 @@ export class RoutesFileOperationsDelete {
 
       if (!req.body.fileIdList || req.body.fileIdList.length === 0) {
         return res.status(400).send({ error: "Missing parameter: fileIdList" });
+      }
+
+      for (const fileId of req.body.fileIdList) {
+        const file = await FileDataGet(span, fileId);
+        if (!file) {
+          return res.status(404).send({ error: "File not found" });
+        }
+        if (file.accountId !== req.params.accountId) {
+          return res.status(403).send({ error: "Access Denied" });
+        }
       }
 
       let trashedCount = 0;

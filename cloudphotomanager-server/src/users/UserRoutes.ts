@@ -11,6 +11,7 @@ import {
 } from "./Auth";
 import {
   UserDataAddStatement,
+  UserDataBumpTokenVersion,
   UserDataDeleteStatement,
   UserDataGet,
   UserDataGetByName,
@@ -21,13 +22,24 @@ import {
   UserPasswordCheckPassword,
   UserPasswordSetPassword,
 } from "./UserPassword";
+import { UserPasswordValidate } from "./UserPasswordPolicy";
 import {
+  UserPermissionDataCountAdmins,
   UserPermissionDataDeleteForUserStatement,
   UserPermissionDataGetForUser,
   UserPermissionDataUpdateForUser,
   UserPermissionDataUpdateForUserStatement,
 } from "./UserPermissionData";
+import { UserPermissionInfoValidate } from "./UserPermissionValidation";
+import { LoginThrottleHit } from "./LoginThrottle";
+import { SyncRoutesCloseUserSockets } from "../sync/SyncRoutes";
 import { SqlDbUtilsGetDatabase } from "@devopsplaybook.io/common-utils";
+import { OTelLogger } from "../OTelContext";
+
+const logger = OTelLogger().createModuleLogger("UserRoutes");
+
+const LOGIN_MAX_ATTEMPTS = 20;
+const PASSWORD_CHANGE_MAX_ATTEMPTS = 10;
 
 export class UserRoutes {
   //
@@ -73,8 +85,27 @@ export class UserRoutes {
       if (!req.body.password) {
         return res.status(400).send({ error: "Missing: Password" });
       }
+      // Throttle keyed by IP + lowercased name: a single account cannot be
+      // brute-forced even when the attacker rotates IPs partially, and a
+      // shared IP does not lock out other users.
+      const throttle = LoginThrottleHit(
+        `login:${req.ip || "unknown"}:${req.body.name.toLowerCase()}`,
+        LOGIN_MAX_ATTEMPTS,
+      );
+      if (!throttle.allowed) {
+        logger.warn(
+          `Login throttled for ${req.body.name} from ${req.ip || "unknown"}`,
+          span,
+        );
+        res.header("Retry-After", String(throttle.retryAfterSeconds));
+        return res.status(429).send({ error: "Too Many Attempts" });
+      }
       user = await UserDataGetByName(span, req.body.name);
       if (!user) {
+        logger.warn(
+          `Login failed for unknown user ${req.body.name} from ${req.ip || "unknown"}`,
+          span,
+        );
         return res.status(403).send({ error: "Authentication Failed" });
       } else if (
         await UserPasswordCheckPassword(span, user, req.body.password)
@@ -83,6 +114,10 @@ export class UserRoutes {
         (res as any).setCookie("token", token, AuthSessionCookieOptions());
         return res.status(201).send({ success: true, token });
       } else {
+        logger.warn(
+          `Login failed for ${req.body.name} from ${req.ip || "unknown"}`,
+          span,
+        );
         return res.status(403).send({ error: "Authentication Failed" });
       }
     });
@@ -97,17 +132,23 @@ export class UserRoutes {
       }
       // Sliding renewal: refresh the persistent cookie when the token is due.
       await AuthRenewSessionIfDue(span, req, res);
-      const user = await UserDataGet(span, userSession.userId);
       return res.status(200).send({
         isAuthenticated: true,
         userId: userSession.userId,
-        userName: user?.name,
+        userName: userSession.userName,
         permissions: userSession.permissions,
       });
     });
 
-    // Clears the httpOnly session cookie (JavaScript cannot).
+    // Clears the session cookie and revokes every token issued to the user:
+    // a copied JWT stops working as soon as the logout has been processed.
     fastify.post("/logout", async (req, res) => {
+      const span = OTelRequestSpan(req);
+      const userSession = await AuthGetUserSession(req);
+      if (userSession.isAuthenticated) {
+        await UserDataBumpTokenVersion(span, userSession.userId);
+        SyncRoutesCloseUserSockets(userSession.userId);
+      }
       (res as any).clearCookie("token", { path: "/" });
       return res.status(200).send({});
     });
@@ -142,6 +183,10 @@ export class UserRoutes {
       }
       if (!req.body.password) {
         return res.status(400).send({ error: "Missing: Password" });
+      }
+      const passwordError = UserPasswordValidate(req.body.password);
+      if (passwordError) {
+        return res.status(400).send({ error: passwordError });
       }
       if (await UserDataGetByName(span, req.body.name)) {
         return res.status(400).send({ error: "Username Already Exists" });
@@ -178,8 +223,24 @@ export class UserRoutes {
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      if (!(await UserDataGet(span, req.params.userId))) {
+      if (req.params.userId === userSession.userId) {
+        return res
+          .status(403)
+          .send({ error: "Cannot delete the current user" });
+      }
+      const target = await UserDataGet(span, req.params.userId);
+      if (!target) {
         return res.status(404).send({ error: "Not Found" });
+      }
+      const targetPermission = await UserPermissionDataGetForUser(
+        span,
+        req.params.userId,
+      );
+      if (
+        targetPermission?.info?.isAdmin === true &&
+        (await UserPermissionDataCountAdmins(span)) <= 1
+      ) {
+        return res.status(403).send({ error: "Cannot delete the last admin" });
       }
       // The user and its permission row must be deleted atomically.
       const applyDelete = SqlDbUtilsGetDatabase().transaction(() => {
@@ -187,6 +248,7 @@ export class UserRoutes {
         UserPermissionDataDeleteForUserStatement(span, req.params.userId);
       });
       applyDelete();
+      SyncRoutesCloseUserSockets(req.params.userId);
       res.status(202).send({});
     });
 
@@ -201,12 +263,24 @@ export class UserRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
+      const throttle = LoginThrottleHit(
+        `password:${userSession.userId}`,
+        PASSWORD_CHANGE_MAX_ATTEMPTS,
+      );
+      if (!throttle.allowed) {
+        res.header("Retry-After", String(throttle.retryAfterSeconds));
+        return res.status(429).send({ error: "Too Many Attempts" });
+      }
       const user = await UserDataGet(span, userSession.userId);
       if (!user) {
         return res.status(404).send({ error: "Not Found" });
       }
       if (!req.body.password) {
         return res.status(400).send({ error: "Missing: Password" });
+      }
+      const passwordError = UserPasswordValidate(req.body.password);
+      if (passwordError) {
+        return res.status(400).send({ error: passwordError });
       }
       if (
         !(await UserPasswordCheckPassword(span, user, req.body.passwordOld))
@@ -215,7 +289,17 @@ export class UserRoutes {
       }
       await UserPasswordSetPassword(span, user, req.body.password);
       await UserDataUpdate(span, user);
-      res.status(201).send({});
+      // Changing the password revokes every existing session, then the
+      // caller gets a fresh credential so it stays logged in.
+      await UserDataBumpTokenVersion(span, user.id);
+      SyncRoutesCloseUserSockets(user.id);
+      const refreshed = await UserDataGet(span, user.id);
+      const token = await AuthGenerateJWT(span, refreshed);
+      (res as any).setCookie("token", token, AuthSessionCookieOptions());
+      if (req.headers?.authorization) {
+        return res.status(201).send({ token });
+      }
+      return res.status(201).send({});
     });
 
     fastify.get<{
@@ -252,16 +336,45 @@ export class UserRoutes {
       if (!(await UserDataGet(span, req.params.userId))) {
         return res.status(404).send({ error: "Not Found" });
       }
+      const validation = await UserPermissionInfoValidate(span, req.body?.info);
+      if (!validation.info) {
+        return res.status(400).send({ error: validation.error });
+      }
+      const currentPermission = await UserPermissionDataGetForUser(
+        span,
+        req.params.userId,
+      );
+      if (
+        currentPermission?.info?.isAdmin === true &&
+        validation.info.isAdmin === false &&
+        (await UserPermissionDataCountAdmins(span)) <= 1
+      ) {
+        return res
+          .status(403)
+          .send({ error: "Cannot demote the last admin" });
+      }
       const permissions = await UserPermissionDataGetForUser(
         span,
         req.params.userId,
       );
-      permissions.info = req.body.info;
+      permissions.info = validation.info;
       await UserPermissionDataUpdateForUser(
         span,
         req.params.userId,
         permissions,
       );
+      // A permission change revokes the target's sessions so a demoted admin
+      // or a user whose grants were removed cannot keep the old context.
+      await UserDataBumpTokenVersion(span, req.params.userId);
+      SyncRoutesCloseUserSockets(req.params.userId);
+      if (req.params.userId === userSession.userId) {
+        const refreshed = await UserDataGet(span, userSession.userId);
+        const token = await AuthGenerateJWT(span, refreshed);
+        (res as any).setCookie("token", token, AuthSessionCookieOptions());
+        if (req.headers?.authorization) {
+          return res.status(201).send({ token });
+        }
+      }
       res.status(201).send({});
     });
 

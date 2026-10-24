@@ -11,10 +11,12 @@ import {
 import { FileDownloadStreamOriginal } from "../files/FileDownload";
 import { FolderDataGet, FolderDataListForAccount } from "../folders/FolderData";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
+import { MediaUrlsAttachForShare } from "../media/MediaUrls";
 import {
   ShareDataCreate,
   ShareDataDelete,
   ShareDataGetByToken,
+  ShareDataGetForFolder,
   ShareDataListForFolder,
 } from "./ShareData";
 
@@ -96,6 +98,10 @@ export class ShareRoutes {
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
+      const folder = await FolderDataGet(span, req.params.folderId);
+      if (!folder || folder.accountId !== req.params.accountId) {
+        return res.status(404).send({ error: "Folder Not Found" });
+      }
       const shares = await ShareDataListForFolder(
         span,
         req.params.accountId,
@@ -124,6 +130,15 @@ export class ShareRoutes {
       const userSession = await AuthGetUserSession(req);
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
+      }
+      const share = await ShareDataGetForFolder(
+        span,
+        req.params.accountId,
+        req.params.folderId,
+        req.params.shareId,
+      );
+      if (!share) {
+        return res.status(404).send({ error: "Share Not Found" });
       }
       await ShareDataDelete(span, req.params.shareId);
       return res.status(202).send({});
@@ -274,6 +289,7 @@ export class ShareRoutesPublic {
             pageSize,
           );
         }
+        MediaUrlsAttachForShare(result.files, resolved.share);
         return res.status(200).send({
           files: result.files,
           page,

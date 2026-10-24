@@ -73,6 +73,8 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
     AUTO_SYNC: false,
     JWT_VALIDITY_DURATION: 3600,
     TRASH_RETENTION_DAYS: 30,
+    MEDIA_URL_TTL_SECONDS: 3600,
+    MEDIA_CACHE_SECONDS: 300,
   };
 
   const syncQueue = await import("../sync/SyncQueue");
@@ -85,6 +87,7 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   const userPermissionData = await import("../users/UserPermissionData");
   const userPassword = await import("../users/UserPassword");
   const auth = await import("../users/Auth");
+  const mediaSigning = await import("../media/MediaSigning");
 
   await syncFailures.SyncFailuresInit(span);
   await syncQueue.SyncQueueInit(span);
@@ -92,10 +95,12 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   // AuthInit generates and persists JWT_KEY when it is not set, exactly like
   // the real boot path.
   await auth.AuthInit(span, config);
+  mediaSigning.MediaSigningInit(span, config);
   await fileData.FileDataInit(span, config);
   await folderData.FolderDataInit(span);
 
   const { UserRoutes } = await import("../users/UserRoutes");
+  const { AccountRoutes } = await import("../accounts/AccountRoutes");
   const { FileRoutes } = await import("../files/FileRoutes");
   const { FolderRoutes } = await import("../folders/FolderRoutes");
   const { RoutesFileOperationsDelete } = await import(
@@ -104,6 +109,13 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   const { RoutesFileOperationsFavorite } = await import(
     "../files/RoutesFileOperationsFavorite"
   );
+  const { RoutesFileOperationsRename } = await import(
+    "../files/RoutesFileOperationsRename"
+  );
+  const { RoutesFileOperationsFolderMove } = await import(
+    "../files/RoutesFileOperationsFolderMove"
+  );
+  const { MediaRoutes } = await import("../media/MediaRoutes");
   const { TrashRoutes } = await import("../files/TrashRoutes");
   const { TimelineRoutes } = await import("../folders/TimelineRoutes");
   const { RoutesFileOperationsDownload } = await import(
@@ -129,6 +141,9 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   await fastify.register(new UserRoutes().getRoutes, {
     prefix: "/api/users",
   });
+  await fastify.register(new AccountRoutes().getRoutes, {
+    prefix: "/api/accounts",
+  });
   await fastify.register(new FileRoutes().getRoutes, {
     prefix: "/api/files",
   });
@@ -140,6 +155,15 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   });
   await fastify.register(new RoutesFileOperationsFavorite().getRoutes, {
     prefix: "/api/accounts/:accountId/files/batch/operations/fileFavorite",
+  });
+  await fastify.register(new RoutesFileOperationsRename().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/batch/operations/fileRename",
+  });
+  await fastify.register(new RoutesFileOperationsFolderMove().getRoutes, {
+    prefix: "/api/accounts/:accountId/files/batch/operations/folderMove",
+  });
+  await fastify.register(new MediaRoutes(config as any).getRoutes, {
+    prefix: "/api/media",
   });
   await fastify.register(new TrashRoutes(config as any).getRoutes, {
     prefix: "/api/accounts/:accountId/trash",
@@ -274,6 +298,34 @@ export async function routeSpecCreateFile(
   await fs.writeFile(file.idCloud, "file-content");
   await ctx.fileData.FileDataAdd(ctx.span, file);
   return file;
+}
+
+export async function routeSpecCreateFileCacheAssets(
+  ctx: RouteSpecContext,
+  file: File,
+  assets?: {
+    thumbnail?: Buffer | string;
+    preview?: Buffer | string;
+    videoPreview?: Buffer | string;
+  },
+): Promise<string> {
+  const cacheDir = await ctx.fileData.FileDataGetFileCacheDir(
+    ctx.span,
+    file.accountId,
+    file.id,
+  );
+  await fs.ensureDir(cacheDir);
+  const files: Record<string, Buffer | string | undefined> = {
+    "thumbnail.webp": assets?.thumbnail ?? "thumbnail-content",
+    "preview.webp": assets?.preview ?? "preview-content",
+    "preview.mp4": assets?.videoPreview,
+  };
+  for (const [name, content] of Object.entries(files)) {
+    if (content !== undefined) {
+      await fs.writeFile(path.join(cacheDir, name), content);
+    }
+  }
+  return cacheDir;
 }
 
 export async function routeSpecSetFileMeta(

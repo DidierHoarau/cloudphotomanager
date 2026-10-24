@@ -51,6 +51,7 @@ export async function AuthGenerateJWT(
         exp: Math.floor(Date.now() / 1000) + config.JWT_VALIDITY_DURATION,
         userId: user.id,
         userName: user.name,
+        tokenVersion: user.tokenVersion ?? 0,
         permissions: { isAdmin: userPermission.info.isAdmin },
       },
       config.JWT_KEY,
@@ -79,40 +80,71 @@ export async function AuthMustBeAuthenticated(
   }
 }
 
+// Resolves the raw JWT from the Authorization header (API clients) or from
+// the signed httpOnly session cookie (web app).
+function AuthRequestTokenGet(req: any): string | undefined {
+  if (req.headers?.authorization) {
+    return req.headers.authorization.split(" ")[1];
+  }
+  try {
+    const signedToken = req.cookies?.token;
+    if (signedToken && typeof req.unsignCookie === "function") {
+      const unsigned = req.unsignCookie(signedToken);
+      if (unsigned?.valid) {
+        return unsigned.value;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 export async function AuthGetUserSession(req: any): Promise<UserSession> {
   const userSession: UserSession = { isAuthenticated: false };
 
-  // The Authorization header wins (API clients); otherwise the signed
-  // httpOnly session cookie is used (web app). `req.unsignCookie` is provided
-  // by @fastify/cookie.
-  let token: string | undefined;
-  if (req.headers?.authorization) {
-    token = req.headers.authorization.split(" ")[1];
-  } else {
-    try {
-      const signedToken = req.cookies?.token;
-      if (signedToken && typeof req.unsignCookie === "function") {
-        const unsigned = req.unsignCookie(signedToken);
-        if (unsigned?.valid) {
-          token = unsigned.value;
-        }
-      }
-    } catch {
-      token = undefined;
-    }
+  const token = AuthRequestTokenGet(req);
+  if (!token) {
+    return userSession;
   }
 
-  if (token) {
-    try {
-      const info = jwt.verify(token, config.JWT_KEY) as jwt.JwtPayload;
-      userSession.userId = info.userId;
-      userSession.isAuthenticated = true;
-      userSession.permissions = info.permissions;
-    } catch (err) {
-      logger.error("Error Getting User Session", err);
-    }
+  let info: jwt.JwtPayload;
+  try {
+    info = jwt.verify(token, config.JWT_KEY) as jwt.JwtPayload;
+  } catch (err) {
+    logger.error("Error Getting User Session", err);
+    return userSession;
   }
-  return userSession;
+  if (!info.userId) {
+    return userSession;
+  }
+
+  const span = OTelTracer().startSpan("Auth_getUserSession");
+  try {
+    // The user row and the live permissions are reloaded on every request: a
+    // deleted user, a demoted admin or a revoked token version must lose
+    // access at the next request instead of when the JWT expires.
+    const user = await UserDataGet(span, info.userId);
+    if (!user) {
+      return userSession;
+    }
+    const tokenVersion = Number(info.tokenVersion ?? 0);
+    if (tokenVersion !== (user.tokenVersion ?? 0)) {
+      return userSession;
+    }
+    const userPermission = await UserPermissionDataGetForUser(span, user.id);
+    userSession.userId = user.id;
+    userSession.userName = user.name;
+    userSession.permissions = {
+      isAdmin: userPermission?.info?.isAdmin === true,
+    };
+    userSession.tokenVersion = tokenVersion;
+    userSession.tokenExp = typeof info.exp === "number" ? info.exp : undefined;
+    userSession.isAuthenticated = true;
+    return userSession;
+  } finally {
+    span.end();
+  }
 }
  
 // Validates a WebSocket upgrade request with the same credentials as the
@@ -180,7 +212,7 @@ export async function AuthRenewSessionIfDue(
   }
   // jsonwebtoken stamps `iat` at signing time; renew once the token is older
   // than half of its validity.
-  if (!info.iat) {
+  if (!info.iat || !info.userId) {
     return;
   }
   const ageSeconds = Math.floor(Date.now() / 1000) - info.iat;
@@ -189,6 +221,11 @@ export async function AuthRenewSessionIfDue(
   }
   const user = await UserDataGet(context, info.userId);
   if (!user) {
+    return;
+  }
+  // A token that was revoked (logout, password/permission change) must never
+  // be traded for a fresh one.
+  if (Number(info.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
     return;
   }
   const freshToken = await AuthGenerateJWT(context, user);

@@ -29,6 +29,14 @@ export class Config extends ConfigBase {
   // deletes it from the cloud storage.
   public TRASH_RETENTION_DAYS = 30;
   public CRON_TRASH_PURGE = "30 3 * * *"; // every day at 3:30 AM
+  // Lifetime of the signed media URLs handed out by the API. The signature
+  // is bound to the file, the account, the asset and the subject (user
+  // session or share) and expires after this many seconds.
+  public MEDIA_URL_TTL_SECONDS = 3600;
+  // Browser/PWA cache lifetime for media responses. Kept short because
+  // revocation is enforced server-side on every request, so a cached copy
+  // must not outlive the authorization for long.
+  public MEDIA_CACHE_SECONDS = 300;
   // Optional out-of-band webhook fired once per file when it reaches the sync
   // retry cap (see SyncNotifications). Empty = disabled.
   public SYNC_FAILURE_WEBHOOK_URL =
@@ -62,6 +70,8 @@ export class Config extends ConfigBase {
     this.addConfigField({ field: "CRON_SCAN_DEEP" });
     this.addConfigField({ field: "TRASH_RETENTION_DAYS" });
     this.addConfigField({ field: "CRON_TRASH_PURGE" });
+    this.addConfigField({ field: "MEDIA_URL_TTL_SECONDS" });
+    this.addConfigField({ field: "MEDIA_CACHE_SECONDS" });
     this.addConfigField({ field: "SYNC_FAILURE_WEBHOOK_URL" });
   }
 

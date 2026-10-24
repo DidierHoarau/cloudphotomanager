@@ -292,7 +292,6 @@ export default {
   data() {
     return {
       serverUrl: "",
-      staticUrl: "",
       activeOperation: "",
       actionsMenuOpen: false,
       showFileInfo: false,
@@ -353,7 +352,6 @@ export default {
   },
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
-    this.staticUrl = (await Config.get()).STATIC_URL;
 
     this.files = this.galleryFiles;
     this.position = this.initialPosition;
@@ -722,13 +720,13 @@ export default {
       img.src = this.getImageSource(file);
     },
     getImageSource(file) {
-      return MediaUrls.imagePreviewFromBase(this.staticUrl, file);
+      return MediaUrls.imagePreview(file);
     },
     getVideoSource(file) {
-      return MediaUrls.videoPreviewFromBase(this.staticUrl, file);
+      return MediaUrls.videoPreview(file);
     },
     getThumbnailSource(file) {
-      return MediaUrls.thumbnailFromBase(this.staticUrl, file);
+      return MediaUrls.thumbnail(file);
     },
     downloadOriginalHref(disposition) {
       if (this.shareToken) {

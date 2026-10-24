@@ -6,6 +6,7 @@ import {
 } from "../files/FileData";
 import { File } from "../model/File";
 import { AuthGetUserSession } from "../users/Auth";
+import { MediaUrlsAttachForUser } from "../media/MediaUrls";
 import {
   UserPermissionContextFolderIdsGet,
   UserPermissionContextGet,
@@ -94,6 +95,7 @@ export class TimelineRoutes {
           page,
           pageSize,
         );
+      MediaUrlsAttachForUser(result.files, userSession);
       return res.status(200).send({
         files: result.files,
         page,

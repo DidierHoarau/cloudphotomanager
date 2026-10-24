@@ -39,6 +39,7 @@ describe("User", () => {
         id: user.id,
         name: "testuser",
         passwordEncrypted: "$2b$10$abc123",
+        tokenVersion: 0,
       });
     });
 

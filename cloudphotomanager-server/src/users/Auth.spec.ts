@@ -76,6 +76,8 @@ describe("Auth", () => {
   it("generates a JWT that AuthGetUserSession accepts via the Authorization header", async () => {
     const user = new User();
     user.name = "alice";
+    user.passwordEncrypted = "unused";
+    await userData.UserDataAdd(span, user);
     const token = await auth.AuthGenerateJWT(span, user);
     const decoded = jwt.verify(token, config.JWT_KEY) as jwt.JwtPayload;
     expect(decoded.userId).toBe(user.id);
@@ -92,6 +94,8 @@ describe("Auth", () => {
   it("accepts a valid signed session cookie", async () => {
     const user = new User();
     user.name = "bob";
+    user.passwordEncrypted = "unused";
+    await userData.UserDataAdd(span, user);
     const token = await auth.AuthGenerateJWT(span, user);
     const userSession = await auth.AuthGetUserSession({
       headers: {},
@@ -140,6 +144,8 @@ describe("Auth", () => {
   it("AuthValidateWsRequest accepts the same credentials as the REST API", async () => {
     const user = new User();
     user.name = "carol";
+    user.passwordEncrypted = "unused";
+    await userData.UserDataAdd(span, user);
     const token = await auth.AuthGenerateJWT(span, user);
 
     const fromHeader = await auth.AuthValidateWsRequest({

@@ -1,47 +1,25 @@
 import Config from "./Config";
 
-let cachedStaticUrl: string | null = null;
-
-async function getStaticUrl(): Promise<string> {
-  if (cachedStaticUrl === null) {
-    cachedStaticUrl = (await Config.get()).STATIC_URL;
-  }
-  return cachedStaticUrl as string;
-}
-
-function buildPath(staticUrl: string, file: any, assetName: string): string {
-  return `${staticUrl}/${file.accountId}/${file.id[0]}/${file.id[1]}/${file.id}/${assetName}`;
-}
-
+// Media assets are served through short-lived signed URLs minted by the API
+// (file.thumbnailUrl / file.previewUrl / file.videoPreviewUrl). Files without
+// URLs (e.g. sync-failure panels) fall back to the authenticated legacy
+// endpoints.
 export class MediaUrls {
   //
-  public static async thumbnail(file: any): Promise<string> {
+  public static thumbnail(file: any): string {
     if (!file) return "";
-    return buildPath(await getStaticUrl(), file, "thumbnail.webp");
+    if (file.thumbnailUrl) return file.thumbnailUrl;
+    return `${Config.sync.SERVER_URL}/files/${encodeURIComponent(file.id)}/thumbnail`;
   }
 
-  public static async imagePreview(file: any): Promise<string> {
+  public static imagePreview(file: any): string {
     if (!file) return "";
-    return buildPath(await getStaticUrl(), file, "preview.webp");
+    if (file.previewUrl) return file.previewUrl;
+    return `${Config.sync.SERVER_URL}/files/${encodeURIComponent(file.id)}/preview`;
   }
 
-  public static async videoPreview(file: any): Promise<string> {
+  public static videoPreview(file: any): string {
     if (!file) return "";
-    return buildPath(await getStaticUrl(), file, "preview.mp4");
-  }
-
-  public static thumbnailFromBase(staticUrl: string, file: any): string {
-    if (!file || !staticUrl) return "";
-    return buildPath(staticUrl, file, "thumbnail.webp");
-  }
-
-  public static imagePreviewFromBase(staticUrl: string, file: any): string {
-    if (!file || !staticUrl) return "";
-    return buildPath(staticUrl, file, "preview.webp");
-  }
-
-  public static videoPreviewFromBase(staticUrl: string, file: any): string {
-    if (!file || !staticUrl) return "";
-    return buildPath(staticUrl, file, "preview.mp4");
+    return file.videoPreviewUrl || "";
   }
 }
