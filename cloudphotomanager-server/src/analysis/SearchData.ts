@@ -9,6 +9,7 @@ import {
 } from "../model/FileMediaType";
 import { FolderDataGet, FolderDataListForAccount } from "../folders/FolderData";
 import { OTelTracer } from "../OTelContext";
+import { SqlEscapeLike } from "../utils-std-ts/SqlLike";
 import {
   buildGeoBoxConditionSql,
   GeoBox,
@@ -155,11 +156,12 @@ export async function SearchDataListFiles(
       span.end();
       return [];
     }
-    const folderpathSubPattern =
-      folder.folderpath === "/" ? `/%` : `${folder.folderpath}/%`;
+    const subtreePrefix =
+      folder.folderpath === "/" ? "/" : `${folder.folderpath}/`;
+    const folderpathSubPattern = `${SqlEscapeLike(subtreePrefix)}%`;
     queryCondition +=
       " AND folderId IN (SELECT id FROM folders WHERE accountId = ? " +
-      " AND (folderpath = ? OR folderpath LIKE ?)) ";
+      " AND (folderpath = ? OR folderpath LIKE ? ESCAPE '\\')) ";
     queryParameters.push(accountId, folder.folderpath, folderpathSubPattern);
   }
   if (filters.dateFrom) {

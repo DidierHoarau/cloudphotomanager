@@ -1,14 +1,17 @@
 import * as fs from "fs-extra";
+import * as path from "path";
 import {
   routeSpecAuthHeaders,
   routeSpecAddUser,
   routeSpecCreateAccount,
   routeSpecCreateFile,
+  routeSpecCreateFileCacheAssets,
   routeSpecCreateFolder,
   routeSpecSetup,
   routeSpecTokenFor,
   RouteSpecContext,
 } from "../specTestUtils/RouteSpecHarness";
+import { UtilsMd5 } from "../Utils";
 
 jest.mock("../analysis/AnalysisImages", () => ({
   AnalysisImagesGetLabels: jest.fn().mockResolvedValue([]),
@@ -254,7 +257,7 @@ describe("FolderRoutes permissions", () => {
     expect(favorites.json().total).toBe(1);
     expect(favorites.json().files.map((f: any) => f.id)).toEqual([fileP.id]);
 
-    await ctx.fileData.FileDataTrash(ctx.span, fileP2.id);
+    await ctx.fileData.FileDataTrash(ctx.span, fileP2.id, accountA.id);
 
     const afterTrash = await ctx.fastify.inject({
       method: "GET",
@@ -383,6 +386,214 @@ describe("FolderRoutes permissions", () => {
       payload: { newName: "a/b" },
     });
     expect(renameInvalidName.statusCode).toBe(400);
+  });
+
+  it("rejects invalid pagination parameters on files-recursive with 400", async () => {
+    for (const pagination of [
+      "pageSize=-1",
+      "pageSize=0",
+      "pageSize=201",
+      "pageSize=abc",
+      "page=-1",
+      "page=abc",
+    ]) {
+      const res = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/accounts/${accountA.id}/folders/${folderP.id}/files-recursive?includeSubFolders=true&${pagination}`,
+        headers: routeSpecAuthHeaders(tokenAdmin),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Invalid parameter");
+    }
+    const ok = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/folders/${folderP.id}/files-recursive?page=0&pageSize=200`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(ok.statusCode).toBe(200);
+  });
+
+  it("rename keeps curation, shares, grants and cache dirs in place (M6)", async () => {
+    queueItemMock.mockClear();
+    const folderRen = await routeSpecCreateFolder(ctx, accountA.id, "/ren-me");
+    const folderRenChild = await routeSpecCreateFolder(
+      ctx,
+      accountA.id,
+      "/ren-me/child",
+    );
+    const fileFav = await routeSpecCreateFile(
+      ctx,
+      accountA.id,
+      folderRen,
+      "fav.jpg",
+    );
+    const fileTrash = await routeSpecCreateFile(
+      ctx,
+      accountA.id,
+      folderRenChild,
+      "gone.jpg",
+    );
+    const fileShared = await routeSpecCreateFile(
+      ctx,
+      accountA.id,
+      folderRenChild,
+      "shared.jpg",
+    );
+    await ctx.fileData.FileDataUpdateFavorite(ctx.span, fileFav.id, true);
+    await ctx.fileData.FileDataUpdateKeywords(ctx.span, {
+      ...fileFav,
+      keywords: "holiday",
+    } as any);
+    await ctx.fileData.FileDataTrash(ctx.span, fileTrash.id, accountA.id);
+    const oldCacheDir = await routeSpecCreateFileCacheAssets(ctx, fileFav);
+
+    // A share on the renamed subtree must keep serving its token.
+    const shareRes = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/folders/${folderRenChild.id}/share`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { expiresInDays: 7 },
+    });
+    expect(shareRes.statusCode).toBe(201);
+    const shareToken = decodeURIComponent(
+      shareRes.json().sharePath.split("t=")[1],
+    );
+
+    // A grant on the subtree must keep granting after the rename.
+    const grantUser = await routeSpecAddUser(ctx, {
+      name: "user-ren",
+      password: "pw",
+      grants: [{ folderId: folderRen.id, scope: "ro_recursive" }],
+    });
+    const grantToken = await routeSpecTokenFor(ctx, grantUser);
+
+    const res = await ctx.fastify.inject({
+      method: "PUT",
+      url: `/api/accounts/${accountA.id}/folders/${folderRen.id}/operations/rename`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { newName: "renamed" },
+    });
+    expect(res.statusCode).toBe(202);
+
+    // Folder ids are md5(accountId + "/" + folderpath) with the path's own
+    // leading slash — same derivation as the Folder constructor.
+    const expectedFolderId = UtilsMd5(
+      encodeURI(`${accountA.id}/${"/renamed"}`),
+    );
+    const expectedChildId = UtilsMd5(
+      encodeURI(`${accountA.id}/${"/renamed/child"}`),
+    );
+    const renamedFolder = await ctx.folderData.FolderDataGet(
+      ctx.span,
+      expectedFolderId,
+    );
+    expect(renamedFolder.folderpath).toBe("/renamed");
+    const renamedChild = await ctx.folderData.FolderDataGet(
+      ctx.span,
+      expectedChildId,
+    );
+    expect(renamedChild.folderpath).toBe("/renamed/child");
+    expect(
+      await ctx.folderData.FolderDataGet(ctx.span, folderRen.id),
+    ).toBeNull();
+
+    // Files are re-keyed with curation and keywords preserved.
+    const expectedFavId = UtilsMd5(
+      encodeURI(`${accountA.id}/${expectedFolderId}/fav.jpg`),
+    );
+    const favAfter = await ctx.fileData.FileDataGet(ctx.span, expectedFavId);
+    expect(favAfter.favorite).toBe(1);
+    expect(favAfter.keywords).toBe("holiday");
+    const expectedTrashId = UtilsMd5(
+      encodeURI(`${accountA.id}/${expectedChildId}/gone.jpg`),
+    );
+    const trashAfter = await ctx.fileData.FileDataGet(
+      ctx.span,
+      expectedTrashId,
+    );
+    expect(trashAfter.trashed).toBe(1);
+    expect(
+      await ctx.fileData.FileDataGet(ctx.span, fileFav.id),
+    ).toBeNull();
+    expect(
+      await ctx.fileData.FileDataGet(ctx.span, fileTrash.id),
+    ).toBeNull();
+
+    // The share token still resolves and lists the files at their new ids
+    // (trashed files stay hidden from listings, as before the rename).
+    const expectedSharedId = UtilsMd5(
+      encodeURI(`${accountA.id}/${expectedChildId}/shared.jpg`),
+    );
+    const shareList = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/share/${shareToken}/folders/${expectedChildId}/files-recursive?includeSubFolders=false`,
+    });
+    expect(shareList.statusCode).toBe(200);
+    expect(shareList.json().files.map((f: any) => f.id)).toEqual([
+      expectedSharedId,
+    ]);
+    expect(
+      await ctx.fileData.FileDataGet(ctx.span, fileShared.id),
+    ).toBeNull();
+
+    // The granted user still sees the renamed folder (cache refreshed: the
+    // rename path refreshes it debounced).
+    await ctx.folderData.FolderDataRefreshCacheFolders(ctx.span);
+    const grantedList = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/folders/`,
+      headers: routeSpecAuthHeaders(grantToken),
+    });
+    expect(
+      grantedList.json().folders.map((f: any) => f.id),
+    ).toEqual([expectedFolderId, expectedChildId]);
+
+    // The media cache directory moved with the file id.
+    const newCacheDir = await ctx.fileData.FileDataGetFileCacheDir(
+      ctx.span,
+      accountA.id,
+      expectedFavId,
+    );
+    expect(fs.existsSync(path.join(newCacheDir, "thumbnail.webp"))).toBe(true);
+    expect(fs.existsSync(path.join(oldCacheDir, "thumbnail.webp"))).toBe(false);
+
+    // The cloud folder was renamed on disk.
+    expect(fs.existsSync(path.join(ctx.rootPath, "renamed", "fav.jpg"))).toBe(
+      true,
+    );
+    expect(fs.existsSync(path.join(ctx.rootPath, "ren-me"))).toBe(false);
+
+    // The renamed root and its parent are queued for re-sync.
+    const queuedIds = queueItemMock.mock.calls.map((call) => call[1]);
+    expect(queuedIds).toContain(expectedFolderId);
+    expect(queuedIds).toContain(folderRoot.id);
+  });
+
+  it("rename into an existing destination is rejected with 409 without touching the cloud", async () => {
+    queueItemMock.mockClear();
+    const folderSrc = await routeSpecCreateFolder(
+      ctx,
+      accountA.id,
+      "/ren-conflict",
+    );
+    await routeSpecCreateFolder(ctx, accountA.id, "/ren-conflict/inner");
+    const account = await AccountFactoryGetAccountImplementation(accountA.id);
+    const renameSpy = jest.spyOn(account, "renameFolder");
+
+    // /q already exists: both the direct row and the subtree checks collide.
+    const res = await ctx.fastify.inject({
+      method: "PUT",
+      url: `/api/accounts/${accountA.id}/folders/${folderSrc.id}/operations/rename`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { newName: "q" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(renameSpy).not.toHaveBeenCalled();
+    expect(
+      await ctx.folderData.FolderDataGet(ctx.span, folderSrc.id),
+    ).toBeTruthy();
+    expect(queueItemMock).not.toHaveBeenCalled();
+    renameSpy.mockRestore();
   });
 
   it("deletes the cloud folder before reporting success", async () => {

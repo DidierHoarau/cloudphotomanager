@@ -119,16 +119,17 @@ export async function SyncInventorySyncFolder(
     }
     knownSubFilesFull.length = 0;
 
-    // New folders: persist and queue each for its own sync.
+    // New folders: persist and queue each for its own sync. FolderDataAdd
+    // returns the stored folder: a legacy row for the same path keeps its id.
     for (const cloudSubFolder of cloudSubFolders) {
       if (!knownSubFolderIds.has(cloudSubFolder.id)) {
         updated = true;
         folderStructureChanged = true;
-        await FolderDataAdd(span, cloudSubFolder);
+        const storedFolder = await FolderDataAdd(span, cloudSubFolder);
         SyncQueueQueueItem(
           accountId,
-          cloudSubFolder.id,
-          { folderId: cloudSubFolder.id },
+          storedFolder.id,
+          { folderId: storedFolder.id },
           "SyncInventorySyncFolder",
           priority,
         );
@@ -172,7 +173,7 @@ export async function SyncInventorySyncFolder(
         if (knownFile) {
           await SyncFileCacheRemoveFile(span, account, knownFile);
         }
-        await FileDataDelete(span, id);
+        await FileDataDelete(span, id, accountId);
       }
       fileIdsToDelete.length = 0;
     }

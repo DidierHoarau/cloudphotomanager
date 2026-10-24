@@ -452,6 +452,45 @@ describe("SearchData limits", () => {
     expect(unknown).toHaveLength(0);
   });
 
+  it("matches % and _ in folder names literally in the folder facet", async () => {
+    const accountId = "account-search-folder-wildcard";
+    const dateMedia = "2024-05-02T11:00:00.000Z";
+    insertFolders(accountId, [
+      { id: "folder-percent", folderpath: "/100%_done" },
+      { id: "folder-percent-child", folderpath: "/100%_done/sub_1" },
+      { id: "folder-underscore", folderpath: "/100x_done" },
+    ]);
+    insertFiles(accountId, [
+      { id: "wp-percent", folderId: "folder-percent", hash: "h1", dateMedia },
+      {
+        id: "wp-percent-child",
+        folderId: "folder-percent-child",
+        hash: "h2",
+        dateMedia,
+      },
+      {
+        id: "wp-underscore",
+        folderId: "folder-underscore",
+        hash: "h3",
+        dateMedia,
+      },
+    ]);
+
+    const percent = await SearchDataListFiles(span, accountId, {
+      folderId: "folder-percent",
+    });
+    expect(percent.map((file) => file.id).sort()).toEqual([
+      "wp-percent",
+      "wp-percent-child",
+    ]);
+
+    // The sibling that differs only at the "_" position stays out.
+    const underscore = await SearchDataListFiles(span, accountId, {
+      folderId: "folder-underscore",
+    });
+    expect(underscore.map((file) => file.id)).toEqual(["wp-underscore"]);
+  });
+
   it("filters search results by hasLocation and outtakesOnly", async () => {
     const accountId = "account-search-location";
     const dateMedia = "2024-05-03T10:00:00.000Z";

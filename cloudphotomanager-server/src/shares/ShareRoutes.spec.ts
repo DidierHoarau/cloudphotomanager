@@ -237,6 +237,41 @@ describe("ShareRoutes", () => {
     expect(inline.headers["content-disposition"]).toContain("inline");
   });
 
+  it("rejects invalid pagination parameters on the public listing with 400", async () => {
+    const created = await ctx.fastify.inject({
+      method: "POST",
+      url: shareUrl(accountA.id, folderChild.id),
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { expiresInDays: 7 },
+    });
+    expect(created.statusCode).toBe(201);
+    const token = decodeURIComponent(
+      created.json().sharePath.split("t=")[1],
+    );
+
+    for (const query of [
+      "pageSize=-1",
+      "pageSize=0",
+      "pageSize=201",
+      "pageSize=abc",
+      "page=-1",
+      "page=abc",
+    ]) {
+      const res = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/share/${token}/folders/${folderChild.id}/files-recursive?${query}`,
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Invalid parameter");
+    }
+
+    const ok = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/share/${token}/folders/${folderChild.id}/files-recursive?page=0&pageSize=200`,
+    });
+    expect(ok.statusCode).toBe(200);
+  });
+
   it("returns 404 for unknown tokens on every public endpoint", async () => {
     const meta = await ctx.fastify.inject({
       method: "GET",

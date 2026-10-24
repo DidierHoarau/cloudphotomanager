@@ -11,6 +11,7 @@ import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFacto
 import {
   FolderDataAdd,
   FolderDataGet,
+  FolderDataGetByPath,
   FolderDataGetParent,
 } from "../folders/FolderData";
 import { SyncInventorySyncFolder } from "./SyncInventory";
@@ -21,12 +22,13 @@ import {
   syncThumbnail,
   syncThumbnailFromVideoPreview,
   SyncFileCacheCheckFile,
+  SyncFileCacheMoveFileCacheDir,
   SyncFileCacheRemoveFile,
 } from "./SyncFileCache";
 import { SYNC_FAIL_MAX_AUTO_RETRY } from "./SyncRetryCap";
 import { SyncNotificationsNotifyPersistentFailure } from "./SyncNotifications";
 import { SyncErrorDescribeHumanCause } from "./SyncErrorCatalog";
-import { FileDataGet, FileDataUpdateKeywords, FileDataRecordSyncFailure, FileDataRecordSyncSuccess, FileDataMarkSyncGone } from "../files/FileData";
+import { FileDataGet, FileDataReKey, FileDataUpdateKeywords, FileDataRecordSyncFailure, FileDataRecordSyncSuccess, FileDataMarkSyncGone } from "../files/FileData";
 import { AccountDataGet } from "../accounts/AccountData";
 import {
   SqlDbUtilsExecSQL,
@@ -1121,7 +1123,7 @@ async function fileDeleteOperation(
   }
 }
 
-async function folderMoveOperation(
+export async function folderMoveOperation(
   account: Account,
   data: any,
 ): Promise<void> {
@@ -1168,6 +1170,40 @@ async function folderMoveOperation(
       throw moveErr;
     }
 
+    // Re-key the local row before any folder sync is queued: the source
+    // folder sync would otherwise delete the row at its old path. Curation
+    // state survives; only the id, folderId and filename change.
+    let targetFolderDb = await FolderDataGetByPath(
+      spanSubProcess,
+      account.getAccountDefinition().id,
+      data.folderpath,
+    );
+    if (!targetFolderDb) {
+      const targetFolderCloud = await account.getFolderByPath(
+        spanSubProcess,
+        data.folderpath,
+      );
+      if (targetFolderCloud) {
+        // New folder — persist it so SyncInventorySyncFolder can run on it
+        targetFolderCloud.dateSync = new Date(0);
+        targetFolderDb = await FolderDataAdd(spanSubProcess, targetFolderCloud);
+      }
+    }
+    if (targetFolderDb) {
+      const newFileId = await FileDataReKey(
+        spanSubProcess,
+        file.id,
+        targetFolderDb.id,
+        file.filename,
+      );
+      await SyncFileCacheMoveFileCacheDir(
+        spanSubProcess,
+        account.getAccountDefinition().id,
+        file.id,
+        newFileId,
+      );
+    }
+
     // Re-sync the source folder
     const initialFolder = await FolderDataGet(spanSubProcess, initialFolderId);
     if (initialFolder) {
@@ -1180,23 +1216,9 @@ async function folderMoveOperation(
       );
     }
 
-    // Get (or create) the target folder in the local DB, then re-sync it
-    // and also queue a re-sync of its parent so the parent discovers the new child
-    const targetFolderCloud = await account.getFolderByPath(
-      spanSubProcess,
-      data.folderpath,
-    );
-    if (targetFolderCloud) {
-      let targetFolderDb = await FolderDataGet(
-        spanSubProcess,
-        targetFolderCloud.id,
-      );
-      if (!targetFolderDb) {
-        // New folder — persist it so SyncInventorySyncFolder can run on it
-        targetFolderCloud.dateSync = new Date(0);
-        await FolderDataAdd(spanSubProcess, targetFolderCloud);
-        targetFolderDb = targetFolderCloud;
-      }
+    // Re-sync the target folder and its parent so the parent discovers the
+    // new child.
+    if (targetFolderDb) {
       SyncQueueQueueItem(
         account.getAccountDefinition().id,
         targetFolderDb.id,
@@ -1224,7 +1246,7 @@ async function folderMoveOperation(
   }
 }
 
-async function fileRenameOperation(
+export async function fileRenameOperation(
   account: Account,
   data: any,
 ): Promise<void> {
@@ -1239,6 +1261,18 @@ async function fileRenameOperation(
       spanSubProcess,
     );
     await account.renameFile(spanSubProcess, file, data.filename);
+    const newFileId = await FileDataReKey(
+      spanSubProcess,
+      file.id,
+      file.folderId,
+      data.filename,
+    );
+    await SyncFileCacheMoveFileCacheDir(
+      spanSubProcess,
+      account.getAccountDefinition().id,
+      file.id,
+      newFileId,
+    );
     const folder = await FolderDataGet(spanSubProcess, file.folderId);
     if (folder) {
       SyncQueueQueueItem(

@@ -132,6 +132,31 @@ describe("TimelineRoutes", () => {
     expect(badYear.statusCode).toBe(400);
   });
 
+  it("rejects invalid pagination parameters with 400", async () => {
+    for (const pagination of [
+      "pageSize=-1",
+      "pageSize=0",
+      "pageSize=201",
+      "pageSize=abc",
+      "page=-1",
+      "page=abc",
+    ]) {
+      const res = await ctx.fastify.inject({
+        method: "GET",
+        url: timelineUrl(`year=2024&month=3&${pagination}`),
+        headers: routeSpecAuthHeaders(tokenAdmin),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Invalid parameter");
+    }
+    const ok = await ctx.fastify.inject({
+      method: "GET",
+      url: timelineUrl("year=2024&month=3&page=0&pageSize=200"),
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(ok.statusCode).toBe(200);
+  });
+
   it("summarizes months across folders", async () => {
     const res = await ctx.fastify.inject({
       method: "GET",
@@ -190,8 +215,8 @@ describe("TimelineRoutes", () => {
   });
 
   it("excludes trashed files from months and month listings", async () => {
-    await ctx.fileData.FileDataTrash(ctx.span, p1.id);
-    await ctx.fileData.FileDataTrash(ctx.span, q2.id);
+    await ctx.fileData.FileDataTrash(ctx.span, p1.id, accountA.id);
+    await ctx.fileData.FileDataTrash(ctx.span, q2.id, accountA.id);
 
     const months = await ctx.fastify.inject({
       method: "GET",
@@ -210,8 +235,8 @@ describe("TimelineRoutes", () => {
       [p2.id, q1.id].sort(),
     );
 
-    await ctx.fileData.FileDataRestore(ctx.span, p1.id);
-    await ctx.fileData.FileDataRestore(ctx.span, q2.id);
+    await ctx.fileData.FileDataRestore(ctx.span, p1.id, accountA.id);
+    await ctx.fileData.FileDataRestore(ctx.span, q2.id, accountA.id);
   });
 
   it("filters timeline data per user grants", async () => {

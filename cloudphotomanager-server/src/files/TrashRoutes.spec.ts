@@ -160,7 +160,7 @@ describe("TrashRoutes", () => {
     expect(unknown.statusCode).toBe(404);
 
     // Trash then purge: one fileDelete queue item per file.
-    await ctx.fileData.FileDataTrash(ctx.span, fileQ1.id);
+    await ctx.fileData.FileDataTrash(ctx.span, fileQ1.id, accountA.id);
     const purgeRes = await ctx.fastify.inject({
       method: "POST",
       url: `/api/accounts/${accountA.id}/trash/purge`,
@@ -179,7 +179,7 @@ describe("TrashRoutes", () => {
   });
 
   it("rejects non-admins on restore and purge", async () => {
-    await ctx.fileData.FileDataTrash(ctx.span, fileP2.id);
+    await ctx.fileData.FileDataTrash(ctx.span, fileP2.id, accountA.id);
     for (const token of [tokenUserP, tokenUserNon]) {
       const restore = await ctx.fastify.inject({
         method: "POST",
@@ -203,6 +203,31 @@ describe("TrashRoutes", () => {
       headers: routeSpecAuthHeaders(tokenUserP),
     });
     expect(list.statusCode).toBe(200);
+  });
+
+  it("rejects invalid pagination parameters with 400", async () => {
+    for (const query of [
+      "pageSize=-1",
+      "pageSize=0",
+      "pageSize=201",
+      "pageSize=abc",
+      "page=-1",
+      "page=abc",
+    ]) {
+      const res = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/accounts/${accountA.id}/trash?${query}`,
+        headers: routeSpecAuthHeaders(tokenAdmin),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Invalid parameter");
+    }
+    const ok = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/trash?page=0&pageSize=200`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(ok.statusCode).toBe(200);
   });
 
   it("GET /trash respects folder permissions and purge requires auth", async () => {

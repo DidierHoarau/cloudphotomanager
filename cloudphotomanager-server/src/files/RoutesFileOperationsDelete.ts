@@ -43,7 +43,11 @@ export class RoutesFileOperationsDelete {
       let trashedCount = 0;
       const trashedFileIds: string[] = [];
       for (const fileId of req.body.fileIdList) {
-        const rowsAffected = await FileDataTrash(span, fileId);
+        const rowsAffected = await FileDataTrash(
+          span,
+          fileId,
+          req.params.accountId,
+        );
         if (rowsAffected > 0) {
           trashedCount += rowsAffected;
           trashedFileIds.push(fileId);

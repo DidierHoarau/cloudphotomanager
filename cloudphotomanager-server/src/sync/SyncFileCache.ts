@@ -1,7 +1,6 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
 import * as exifr from "exifr";
 import * as fs from "fs-extra";
-import { find } from "lodash";
 import * as path from "path";
 import sharp from "sharp";
 import { AnalysisImagesGetLabels } from "../analysis/AnalysisImages";
@@ -11,8 +10,8 @@ import {
   FileDataGetFileCacheDir,
   FileDataGetFileTmpDir,
   FileDataListByFolder,
-  FileDataListForAccount,
   FileDataListForAccountPaginated,
+  FileDataListIdsForAccount,
   FileDataUpdateInfo,
   FileDataUpdateKeywords,
 } from "../files/FileData";
@@ -110,6 +109,37 @@ export async function SyncFileCacheRemoveFile(
   );
   await fs.rm(cacheDir, { recursive: true, force: true });
   span.end();
+}
+
+// Cache dirs are derived data and keyed by file id: move them after a file
+// rename/move so generated previews are not regenerated. Failures are logged
+// and swallowed.
+export async function SyncFileCacheMoveFileCacheDir(
+  context: Span,
+  accountId: string,
+  oldFileId: string,
+  newFileId: string,
+): Promise<void> {
+  if (oldFileId === newFileId) {
+    return;
+  }
+  const span = OTelTracer().startSpan("SyncFileCacheMoveFileCacheDir", context);
+  try {
+    const from = await FileDataGetFileCacheDir(span, accountId, oldFileId);
+    const to = await FileDataGetFileCacheDir(span, accountId, newFileId);
+    if (!fs.existsSync(from)) {
+      return;
+    }
+    await fs.ensureDir(path.dirname(to));
+    await fs.move(from, to, { overwrite: true });
+  } catch (err) {
+    logger.warn(
+      `Failed to move file cache dir ${oldFileId} -> ${newFileId}: ${err?.message ?? err}`,
+      span,
+    );
+  } finally {
+    span.end();
+  }
 }
 
 export async function SyncFileCacheCheckAsync(
@@ -235,27 +265,38 @@ export async function SyncFileCacheCheckFile(
 export async function SyncFileCacheCleanUp(context: Span, account: Account) {
   const span = OTelTracer().startSpan("SyncFileCacheCleanUp", context);
   try {
-    const accountFiles = await FileDataListForAccount(
-      span,
-      account.getAccountDefinition().id,
+    const accountId = account.getAccountDefinition().id;
+    // Ids only: no File objects, no per-file lookups. The cache tree is
+    // shard/subshard/fileId, so two directory levels then the id dirs.
+    const knownFileIds = new Set(
+      await FileDataListIdsForAccount(span, accountId),
     );
-    const accountCacheRoot = `${config.DATA_DIR}/cache/${account.getAccountDefinition().id}/`;
+    const accountCacheRoot = `${config.DATA_DIR}/cache/${accountId}`;
     if (!fs.existsSync(accountCacheRoot)) {
       return;
     }
-    const cacheFolders = listFoldersRecursively(accountCacheRoot);
-    for (const cacheFolder of cacheFolders) {
-      const targetFileId = path.basename(cacheFolder);
-      if (
-        targetFileId &&
-        countSlashesInPath(cacheFolder.replace(accountCacheRoot, "")) === 2 &&
-        !find(accountFiles, { id: targetFileId })
-      ) {
-        logger.info(
-          `Cleaning Cache: ${account.getAccountDefinition().id} ${targetFileId}`,
-          span,
-        );
-        await fs.remove(cacheFolder);
+    const shards = await fs.readdir(accountCacheRoot, { withFileTypes: true });
+    for (const shard of shards) {
+      if (!shard.isDirectory()) {
+        continue;
+      }
+      const shardPath = path.join(accountCacheRoot, shard.name);
+      const subShards = await fs.readdir(shardPath, { withFileTypes: true });
+      for (const subShard of subShards) {
+        if (!subShard.isDirectory()) {
+          continue;
+        }
+        const subShardPath = path.join(shardPath, subShard.name);
+        const cacheDirs = await fs.readdir(subShardPath, {
+          withFileTypes: true,
+        });
+        for (const cacheDir of cacheDirs) {
+          if (!cacheDir.isDirectory() || knownFileIds.has(cacheDir.name)) {
+            continue;
+          }
+          logger.info(`Cleaning Cache: ${accountId} ${cacheDir.name}`, span);
+          await fs.remove(path.join(subShardPath, cacheDir.name));
+        }
       }
     }
   } finally {
@@ -853,103 +894,87 @@ export async function syncThumbnailFromVideoPreview(
 
 // Private Fucntions
 
-function listFoldersRecursively(folderPath: string) {
-  const folders = [];
-
-  function traverseDirectory(currentPath: string) {
-    const files = fs.readdirSync(currentPath);
-
-    files.forEach((file) => {
-      const filePath = path.join(currentPath, file);
-      const stat = fs.statSync(filePath);
-
-      if (stat.isDirectory()) {
-        folders.push(filePath);
-        traverseDirectory(filePath);
-      }
-    });
-  }
-
-  traverseDirectory(folderPath);
-  return folders;
-}
-
-function countSlashesInPath(folderPath: string) {
-  let count = 0;
-  for (const char of folderPath) {
-    if (char === "/") {
-      count++;
-    }
-  }
-  return count;
-}
+// Daily-check batch throttle: the batch queues are drained by the workers, but
+// a saturated queue must never block the daily scan forever.
+const BATCH_MAX_QUEUE_SIZE = 20;
+const BATCH_WAIT_POLL_MS = 5_000;
+const BATCH_MAX_WAIT_MS = 30 * 60_000;
 
 export async function SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews(
   context: Span,
   accountId: string,
 ) {
-  const BATCH_MAX_QUEUE_SIZE = 20;
-  const BATCH_WAIT_MS = 60_000;
   const span = OTelTracer().startSpan(
     "SyncFileCacheCheckAndQueueMissingThumbnailsAndPreviews",
     context,
   );
-
-  logger.info(
-    `Starting daily check for files missing thumbnails or previews for account ${accountId}`,
-    span,
-  );
-
-  const pageSize = 20;
-  let page = 0;
-  let totalQueued = 0;
-  const account = await AccountFactoryGetAccountImplementation(accountId);
-
-  while (true) {
-    // Wait until the batch queue has drained below the threshold before adding more
-    while (SyncQueueGetBatchWaitingCount() >= BATCH_MAX_QUEUE_SIZE) {
-      await new Promise((resolve) => setTimeout(resolve, BATCH_WAIT_MS));
-    }
-
-    const { files, total } = await FileDataListForAccountPaginated(
+  try {
+    logger.info(
+      `Starting daily check for files missing thumbnails or previews for account ${accountId}`,
       span,
-      accountId,
-      page,
-      pageSize,
     );
 
-    if (files.length === 0) {
-      break;
-    }
+    const pageSize = 20;
+    let page = 0;
+    let totalQueued = 0;
+    const account = await AccountFactoryGetAccountImplementation(accountId);
 
-    for (const file of files) {
-      try {
-        await SyncFileCacheCheckFile(
-          span,
-          account,
-          file,
-          SyncQueueItemPriority.BATCH,
-        );
-        totalQueued++;
-      } catch (error) {
-        logger.error(
-          `Error checking file ${file.id} for missing thumbnail/preview`,
-          error,
-          span,
-        );
+    while (true) {
+      // Wait until the batch queue has drained below the threshold before
+      // adding more, but give up after BATCH_MAX_WAIT_MS: the next daily run
+      // picks up the remaining files.
+      const waitedSince = Date.now();
+      while (SyncQueueGetBatchWaitingCount() >= BATCH_MAX_QUEUE_SIZE) {
+        if (Date.now() - waitedSince >= BATCH_MAX_WAIT_MS) {
+          logger.warn(
+            `Batch queue still saturated after ${BATCH_MAX_WAIT_MS}ms; stopping the daily check for account ${accountId}. Remaining files are handled by the next run.`,
+            span,
+          );
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, BATCH_WAIT_POLL_MS));
+      }
+
+      const { files, total } = await FileDataListForAccountPaginated(
+        span,
+        accountId,
+        page,
+        pageSize,
+      );
+
+      if (files.length === 0) {
+        break;
+      }
+
+      for (const file of files) {
+        try {
+          await SyncFileCacheCheckFile(
+            span,
+            account,
+            file,
+            SyncQueueItemPriority.BATCH,
+          );
+          totalQueued++;
+        } catch (error) {
+          logger.error(
+            `Error checking file ${file.id} for missing thumbnail/preview`,
+            error,
+            span,
+          );
+        }
+      }
+
+      page++;
+      if (page * pageSize >= total) {
+        break;
       }
     }
 
-    page++;
-    if (page * pageSize >= total) {
-      break;
-    }
+    logger.info(
+      `Daily check completed for account ${accountId}: ${totalQueued} files checked for synchronization`,
+      span,
+    );
+  } finally {
+    span.end();
   }
-
-  logger.info(
-    `Daily check completed for account ${accountId}: ${totalQueued} files checked for synchronization`,
-    span,
-  );
-
-  span.end();
 }

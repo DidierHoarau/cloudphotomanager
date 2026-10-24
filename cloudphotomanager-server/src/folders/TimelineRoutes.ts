@@ -11,6 +11,7 @@ import {
   UserPermissionContextFolderIdsGet,
   UserPermissionContextGet,
 } from "../users/UserPermissionCheck";
+import { PaginationParse } from "../utils-std-ts/Pagination";
 
 export class TimelineRoutes {
   //
@@ -67,6 +68,12 @@ export class TimelineRoutes {
           .status(400)
           .send({ error: "Missing or invalid parameters: year, month" });
       }
+      const pagination = PaginationParse(req.query);
+      if (!pagination) {
+        return res
+          .status(400)
+          .send({ error: "Invalid parameter: page or pageSize" });
+      }
       const permissionContext = await UserPermissionContextGet(
         span,
         userSession.userId,
@@ -82,8 +89,8 @@ export class TimelineRoutes {
       const monthEndExclusive = new Date(Date.UTC(year, month, 1));
       const sortOrder: "asc" | "desc" =
         req.query.sortOrder === "asc" ? "asc" : "desc";
-      const page = parseInt(req.query.page || "0", 10);
-      const pageSize = parseInt(req.query.pageSize || "60", 10);
+      const page = pagination.page;
+      const pageSize = pagination.pageSize;
       const result: { files: File[]; total: number } =
         await FileDataListByMonthPaginated(
           span,
