@@ -97,6 +97,7 @@ import { UserService } from "~~/services/UserService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import { ThemeService } from "~~/services/ThemeService";
 import { getSettingsTabs } from "~~/utils/SettingsTabs";
+import { clearClientData } from "~~/services/ClientDataCleanup";
 
 export default {
   data() {
@@ -149,9 +150,14 @@ export default {
       }
     },
     async logout() {
+      // Wipe IndexedDB, service-worker data caches and markers before the
+      // session ends, so the next user on a shared browser sees nothing.
+      await clearClientData();
       await AuthService.logout();
       AuthenticationStore().isAuthenticated = false;
-      useRouter().push({ path: "/users/login" });
+      AuthenticationStore().userInfo = {};
+      // Full reload so all in-memory Pinia state is discarded too.
+      window.location.assign("/users/login");
     },
     changePasswordStart(enable) {
       this.isChangePasswordStarted = enable;

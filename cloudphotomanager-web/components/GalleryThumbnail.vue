@@ -71,10 +71,8 @@ export default {
       return SyncStore().isFileProcessing(this.file.id);
     },
     folderPath() {
-      const folder = FoldersStore().folders.find(
-        (f) => f.id === this.file.folderId,
-      );
-      return folder ? folder.folderpath : this.file.folderId;
+      // Empty (instead of the raw folder ID) while the folders store loads.
+      return FoldersStore().folderPathById.get(this.file.folderId) ?? "";
     },
   },
   methods: {

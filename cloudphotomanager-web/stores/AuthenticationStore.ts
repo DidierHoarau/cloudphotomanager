@@ -1,4 +1,5 @@
 import { AuthService } from "~~/services/AuthService";
+import { initClientCacheForUser } from "~~/services/ClientDataCleanup";
 
 export const AuthenticationStore = defineStore("AuthenticationStore", {
   state: () => ({
@@ -17,6 +18,10 @@ export const AuthenticationStore = defineStore("AuthenticationStore", {
         const sessionInfo = await AuthService.getSessionInfo();
         if (sessionInfo) {
           this.userInfo = sessionInfo;
+          if (sessionInfo.userId) {
+            // Fire-and-forget: cache scoping must never block authentication.
+            initClientCacheForUser(sessionInfo.userId).catch(() => {});
+          }
         }
       }
       this.isAdmin = !!(this.userInfo as any)?.permissions?.isAdmin;

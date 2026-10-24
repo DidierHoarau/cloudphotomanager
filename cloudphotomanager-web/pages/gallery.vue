@@ -378,14 +378,17 @@ export default {
       },
       { threshold: 0.1 },
     );
-    if (this.$refs.sentinel) {
-      this.observer.observe(this.$refs.sentinel);
-    }
+    this.observeSentinel();
   },
-  updated() {
-    if (this.observer && this.$refs.sentinel) {
-      this.observer.observe(this.$refs.sentinel);
-    }
+  watch: {
+    // The sentinel sits behind <Loading v-if="loading"> and is re-created
+    // after each full fetch — observe once when loading finishes instead of
+    // on every DOM update.
+    loading(to) {
+      if (!to) {
+        this.$nextTick(() => this.observeSentinel());
+      }
+    },
   },
   beforeUnmount() {
     if (this.observer) {
@@ -398,6 +401,12 @@ export default {
     EventBus.off(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
   },
   methods: {
+    observeSentinel() {
+      // Observing the same element twice is a no-op, so this is idempotent.
+      if (this.observer && this.$refs.sentinel) {
+        this.observer.observe(this.$refs.sentinel);
+      }
+    },
     filterOuttakes(files) {
       if (!this.showOutakes) {
         return filter(files, { isOuttake: false });
@@ -727,16 +736,22 @@ export default {
     clickedOptions() {
       this.activeOperation = "options";
     },
-    clickedToggleFavoriteOnly() {
-      this.favoriteOnly = !this.favoriteOnly;
+    /** Persist the current options merged into the saved ones. */
+    _persistGalleryOptions() {
       try {
         const saved = localStorage.getItem("galleryOptions");
         const o = saved ? JSON.parse(saved) : {};
+        o.includeSubFolders = this.includeSubFolders;
+        o.sortOrder = this.sortOrder;
         o.favoriteOnly = this.favoriteOnly;
         localStorage.setItem("galleryOptions", JSON.stringify(o));
       } catch (e) {
         // ignore
       }
+    },
+    clickedToggleFavoriteOnly() {
+      this.favoriteOnly = !this.favoriteOnly;
+      this._persistGalleryOptions();
       if (this.currentAccountId && this.currentFolderId) {
         this.fetchFiles(this.currentAccountId, this.currentFolderId, true);
       }
@@ -744,17 +759,7 @@ export default {
     onOptionsSaved(options) {
       this.includeSubFolders = options.includeSubFolders;
       this.sortOrder = options.sortOrder;
-      try {
-        localStorage.setItem(
-          "galleryOptions",
-          JSON.stringify({
-            includeSubFolders: this.includeSubFolders,
-            sortOrder: this.sortOrder,
-          }),
-        );
-      } catch (e) {
-        // ignore
-      }
+      this._persistGalleryOptions();
       this.activeOperation = "";
       if (this.currentAccountId && this.currentFolderId) {
         this.fetchFiles(this.currentAccountId, this.currentFolderId, true);

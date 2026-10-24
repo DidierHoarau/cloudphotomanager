@@ -123,4 +123,16 @@ export class ShareService {
   public static buildShareUrl(token: string): string {
     return `${window.location.origin}/share?t=${encodeURIComponent(token)}`;
   }
+
+  /** Extract the `t` token from a share path/URL; "" when absent/invalid. */
+  public static parseShareToken(
+    sharePath: string,
+    base = window.location.origin,
+  ): string {
+    try {
+      return new URL(sharePath, base).searchParams.get("t") ?? "";
+    } catch {
+      return "";
+    }
+  }
 }

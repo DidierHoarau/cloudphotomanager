@@ -86,10 +86,21 @@ export default {
     },
   },
   watch: {
-    "file.id": {
-      immediate: false,
+    // Watch the file reference (the parent passes fresh file objects after a
+    // sync): a newly resolved URL (e.g. thumbnail available after sync
+    // completion) triggers a reload; an identical URL keeps the current
+    // state without flicker.
+    file: {
       handler() {
-        this.resolveUrl();
+        if (this.type === "unknown") {
+          this.status = "unknown";
+          return;
+        }
+        const url = MediaUrls.thumbnail(this.file);
+        if (url && url !== this.thumbnailUrl) {
+          this.status = "loading";
+          this.thumbnailUrl = url;
+        }
       },
     },
   },
