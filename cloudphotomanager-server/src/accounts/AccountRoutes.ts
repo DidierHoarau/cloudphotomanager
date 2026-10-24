@@ -43,6 +43,8 @@ async function AccountCapabilitiesForDefinition(
 }
 
 export class AccountRoutes {
+  constructor(private readonly dataDir?: string) {}
+
   //
   public async getRoutes(fastify: FastifyInstance): Promise<void> {
     //
@@ -219,7 +221,7 @@ export class AccountRoutes {
       if (!account) {
         return res.status(404).send({ error: "Account Not Found" });
       }
-      await AccountDataDelete(span, account.id);
+      await AccountDataDelete(span, account.id, this.dataDir);
       return res.status(202).send({});
     });
 

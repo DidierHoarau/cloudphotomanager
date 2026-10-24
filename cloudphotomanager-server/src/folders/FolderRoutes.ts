@@ -333,7 +333,7 @@ export class FolderRoutes {
       await FolderDataDelete(
         span,
         account.getAccountDefinition().id,
-        folder.folderpath,
+        folder.id,
       );
       SyncQueueQueueItem(
         req.params.accountId,

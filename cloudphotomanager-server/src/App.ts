@@ -110,7 +110,7 @@ Promise.resolve().then(async () => {
     prefix: "/api/users",
   });
 
-  fastify.register(new AccountRoutes().getRoutes, {
+  fastify.register(new AccountRoutes(config.DATA_DIR).getRoutes, {
     prefix: "/api/accounts",
   });
 

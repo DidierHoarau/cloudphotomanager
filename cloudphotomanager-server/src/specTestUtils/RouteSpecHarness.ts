@@ -141,7 +141,7 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   await fastify.register(new UserRoutes().getRoutes, {
     prefix: "/api/users",
   });
-  await fastify.register(new AccountRoutes().getRoutes, {
+  await fastify.register(new AccountRoutes(config.DATA_DIR).getRoutes, {
     prefix: "/api/accounts",
   });
   await fastify.register(new FileRoutes().getRoutes, {
