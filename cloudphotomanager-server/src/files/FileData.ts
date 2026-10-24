@@ -49,28 +49,6 @@ export async function FileDataGet(context: Span, id: string): Promise<File> {
   }
 }
 
-export async function FileDataGetByFolderId(
-  context: Span,
-  accountId: string,
-  folderId: string,
-  filename: string,
-): Promise<File> {
-  const span = OTelTracer().startSpan("FileDataGetByFolderId", context);
-  try {
-    const rawData = await SqlDbUtilsQuerySQL(
-      span,
-      "SELECT * FROM files WHERE accountId = ? AND folderpath = folderId AND filename = ? ",
-      [accountId, folderId, filename],
-    );
-    if (rawData.length === 0) {
-      return null;
-    }
-    return fromRaw(rawData[0]);
-  } finally {
-    span.end();
-  }
-}
-
 export async function FileDataListForAccount(
   context: Span,
   accountId: string,
