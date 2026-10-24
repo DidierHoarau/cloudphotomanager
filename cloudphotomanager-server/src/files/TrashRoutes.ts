@@ -9,6 +9,7 @@ import {
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { SyncQueueBroadcastOperationComplete, SyncQueueQueueItem } from "../sync/SyncQueue";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
+import { MediaUrlsAttachForUser } from "../media/MediaUrls";
 import {
   UserPermissionContextFolderIdsGet,
   UserPermissionContextGet,
@@ -59,6 +60,7 @@ export class TrashRoutes {
         page,
         pageSize,
       );
+      MediaUrlsAttachForUser(result.files, userSession);
       return res.status(200).send({
         files: result.files,
         page,
@@ -89,6 +91,13 @@ export class TrashRoutes {
       let restoredCount = 0;
       const restoredFileIds: string[] = [];
       for (const fileId of req.body.fileIdList) {
+        const file = await FileDataGet(span, fileId);
+        if (!file) {
+          return res.status(404).send({ error: "File not found" });
+        }
+        if (file.accountId !== req.params.accountId) {
+          return res.status(403).send({ error: "Access Denied" });
+        }
         const rowsAffected = await FileDataRestore(span, fileId);
         if (rowsAffected > 0) {
           restoredCount += rowsAffected;
@@ -115,6 +124,9 @@ export class TrashRoutes {
         const file = await FileDataGet(span, fileId);
         if (!file) {
           return res.status(404).send({ error: "File not found" });
+        }
+        if (file.accountId !== req.params.accountId) {
+          return res.status(403).send({ error: "Access Denied" });
         }
         if (!file.trashed) {
           return res

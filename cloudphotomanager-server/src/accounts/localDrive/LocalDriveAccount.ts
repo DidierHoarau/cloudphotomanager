@@ -14,6 +14,7 @@ import { pathExistsSync, stat } from "fs-extra";
 import * as fs from "fs-extra";
 import * as path from "path";
 import { OTelTracer } from "../../OTelContext";
+import { PathIsInsideRoot } from "../../files/PathValidation";
 
 export class LocalAccount implements Account {
   //
@@ -35,7 +36,16 @@ export class LocalAccount implements Account {
     };
   }
 
+  private assertInsideRoot(...targets: string[]): void {
+    for (const target of targets) {
+      if (!PathIsInsideRoot(this.accountDefinition.rootpath, target)) {
+        throw new Error("Path outside account root");
+      }
+    }
+  }
+
   async deleteFile(context: Span, file: File): Promise<void> {
+    this.assertInsideRoot(file.idCloud);
     await fs.remove(file.idCloud);
   }
 
@@ -56,14 +66,13 @@ export class LocalAccount implements Account {
     file: File,
     folderpathDestination: string,
   ): Promise<void> {
-    await fs.move(
-      file.idCloud,
-      path.join(
-        this.accountDefinition.rootpath,
-        folderpathDestination,
-        file.filename,
-      ),
+    const destination = path.join(
+      this.accountDefinition.rootpath,
+      folderpathDestination,
+      file.filename,
     );
+    this.assertInsideRoot(file.idCloud, destination);
+    await fs.move(file.idCloud, destination);
   }
 
   async listFilesInFolder(context: Span, folder: Folder): Promise<File[]> {
@@ -75,10 +84,9 @@ export class LocalAccount implements Account {
   }
 
   async renameFile(context: Span, file: File, filename: string): Promise<void> {
-    await fs.move(
-      file.idCloud,
-      path.join(path.dirname(file.idCloud), filename),
-    );
+    const destination = path.join(path.dirname(file.idCloud), filename);
+    this.assertInsideRoot(file.idCloud, destination);
+    await fs.move(file.idCloud, destination);
   }
 
   public async downloadFile(
@@ -87,6 +95,7 @@ export class LocalAccount implements Account {
     destinationFolderpath: string,
     destinationFilename: string,
   ): Promise<void> {
+    this.assertInsideRoot(file.idCloud);
     await fs.copyFile(
       file.idCloud,
       path.join(destinationFolderpath, destinationFilename),
@@ -94,6 +103,7 @@ export class LocalAccount implements Account {
   }
 
   public async deleteFolder(context: Span, folder: Folder): Promise<void> {
+    this.assertInsideRoot(folder.idCloud);
     await fs.rm(folder.idCloud, { recursive: true, force: true });
   }
 
@@ -104,6 +114,7 @@ export class LocalAccount implements Account {
   ): Promise<void> {
     const parentDir = path.dirname(folder.idCloud);
     const destination = path.join(parentDir, newName);
+    this.assertInsideRoot(folder.idCloud, destination);
     await fs.move(folder.idCloud, destination);
   }
 

@@ -74,7 +74,12 @@ export class AccountRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const account = await AccountDataGet(span, req.params.accountId);
+      let account: AccountDefinition;
+      try {
+        account = await AccountDataGet(span, req.params.accountId);
+      } catch {
+        return res.status(404).send({ error: "Account Not Found" });
+      }
       delete account.infoPrivate;
       (account as any).capabilities = await AccountCapabilitiesForDefinition(
         span,
@@ -85,6 +90,8 @@ export class AccountRoutes {
 
     interface PostAccountValidation extends RequestGenericInterface {
       Body: {
+        name?: string;
+        rootpath?: string;
         info: string;
         infoPrivate: any;
       };
@@ -92,16 +99,24 @@ export class AccountRoutes {
     fastify.post<PostAccountValidation>("/validation", async (req, res) => {
       const span = OTelRequestSpan(req);
       const userSession = await AuthGetUserSession(req);
-      if (!userSession.isAuthenticated) {
+      // The probe performs outbound network/filesystem flows configured by
+      // the caller: admin only.
+      if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
       const accountDefinition = new AccountDefinition();
-      accountDefinition.info = req.body.info;
-      accountDefinition.infoPrivate = req.body.infoPrivate;
-      const account =
-        await AccountFactoryGetAccountFromDefinition(accountDefinition);
-      if (await account.validate(span)) {
-        return res.status(200).send({});
+      accountDefinition.name = req.body?.name || "validation";
+      accountDefinition.rootpath = req.body?.rootpath;
+      accountDefinition.info = req.body?.info;
+      accountDefinition.infoPrivate = req.body?.infoPrivate;
+      try {
+        const account =
+          await AccountFactoryGetAccountFromDefinition(accountDefinition);
+        if (await account.validate(span)) {
+          return res.status(200).send({});
+        }
+      } catch (err) {
+        logger.error("Account validation error", err, span);
       }
       return res.status(400).send({ error: "Account Validation Failed" });
     });
@@ -165,8 +180,11 @@ export class AccountRoutes {
 
       const accountDefinition = await AccountDataGet(
         span,
-        req.params.accountId
-      );
+        req.params.accountId,
+      ).catch(() => null);
+      if (!accountDefinition) {
+        return res.status(404).send({ error: "Account Not Found" });
+      }
       accountDefinition.name = req.body.name;
       accountDefinition.rootpath = req.body.rootpath;
       accountDefinition.info = req.body.info;
@@ -194,7 +212,10 @@ export class AccountRoutes {
       if (!AuthIsAdmin(userSession)) {
         return res.status(403).send({ error: "Access Denied" });
       }
-      const account = await AccountDataGet(span, req.params.accountId);
+      const account = await AccountDataGet(
+        span,
+        req.params.accountId,
+      ).catch(() => null);
       if (!account) {
         return res.status(404).send({ error: "Account Not Found" });
       }

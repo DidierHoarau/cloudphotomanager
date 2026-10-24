@@ -358,7 +358,7 @@ describe("UserRoutes", () => {
       method: "POST",
       url: "/api/users/",
       headers: routeSpecAuthHeaders(adminToken),
-      payload: { name: "bob", password: "pw-bob" },
+      payload: { name: "bob", password: "pw-bob-1234" },
     });
     expect(createAllowed.statusCode).toBe(201);
 
@@ -366,7 +366,7 @@ describe("UserRoutes", () => {
       method: "POST",
       url: "/api/users/",
       headers: routeSpecAuthHeaders(adminToken),
-      payload: { name: "bob", password: "pw-bob" },
+      payload: { name: "bob", password: "pw-bob-1234" },
     });
     expect(createDuplicate.statusCode).toBe(400);
 

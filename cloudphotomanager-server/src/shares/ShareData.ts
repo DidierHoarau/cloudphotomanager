@@ -95,6 +95,54 @@ export async function ShareDataGetByToken(
   }
 }
 
+// Resolves an active share by its id. Revoked or expired shares return null,
+// which is what makes previously issued media URLs stop working.
+export async function ShareDataGet(
+  context: Span,
+  shareId: string,
+): Promise<ShareLink> {
+  const span = OTelTracer().startSpan("ShareData_get", context);
+  try {
+    const rawData = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT * FROM shares WHERE id = ? " +
+        "AND (dateExpires IS NULL OR dateExpires > ?)",
+      [shareId, new Date().toISOString()],
+    );
+    if (rawData.length === 0) {
+      return null;
+    }
+    return fromRaw(rawData[0]);
+  } finally {
+    span.end();
+  }
+}
+
+// Resolves a share by id only when it belongs to the account/folder in the
+// URL. Used by the admin revoke endpoint so a share of another account can
+// never be deleted through a mismatched path.
+export async function ShareDataGetForFolder(
+  context: Span,
+  accountId: string,
+  folderId: string,
+  shareId: string,
+): Promise<ShareLink> {
+  const span = OTelTracer().startSpan("ShareData_getForFolder", context);
+  try {
+    const rawData = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT * FROM shares WHERE id = ? AND accountId = ? AND folderId = ?",
+      [shareId, accountId, folderId],
+    );
+    if (rawData.length === 0) {
+      return null;
+    }
+    return fromRaw(rawData[0]);
+  } finally {
+    span.end();
+  }
+}
+
 export async function ShareDataDelete(
   context: Span,
   shareId: string,

@@ -77,6 +77,33 @@ export async function UserDataUpdate(context: Span, user: User): Promise<void> {
   span.end();
 }
 
+export async function UserDataBumpTokenVersion(
+  context: Span,
+  id: string,
+): Promise<void> {
+  const span = OTelTracer().startSpan("UserData_bumpTokenVersion", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE users SET tokenVersion = COALESCE(tokenVersion, 0) + 1 WHERE id = ?",
+    [id],
+  );
+  span.end();
+}
+
+export async function UserDataSetTokenVersion(
+  context: Span,
+  id: string,
+  tokenVersion: number,
+): Promise<void> {
+  const span = OTelTracer().startSpan("UserData_setTokenVersion", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE users SET tokenVersion = ? WHERE id = ?",
+    [tokenVersion, id],
+  );
+  span.end();
+}
+
 export async function UserDataDelete(context: Span, id: string): Promise<void> {
   const span = OTelTracer().startSpan("UserData_delete", context);
   UserDataDeleteStatement(span, id);
@@ -99,5 +126,6 @@ function fromRaw(userRaw: any, includePasswordEncrypted = true): User {
   if (includePasswordEncrypted) {
     user.passwordEncrypted = userRaw.passwordEncrypted;
   }
+  user.tokenVersion = userRaw.tokenVersion ?? 0;
   return user;
 }

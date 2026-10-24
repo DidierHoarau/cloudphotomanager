@@ -16,6 +16,7 @@ import {
 } from "./SyncFailures";
 import { FolderDataGet, FolderDataRegisterOnCacheRefreshed } from "../folders/FolderData";
 import { FileDataGet } from "../files/FileData";
+import { UserDataGet } from "../users/UserData";
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { OTelTracer } from "../OTelContext";
 import {
@@ -25,7 +26,27 @@ import {
   UserPermissionFolderRef,
 } from "../users/UserPermissionCheck";
 
-const wsClients = new Map<WebSocket, { userId: string }>();
+const wsClients = new Map<
+  WebSocket,
+  { userId: string; tokenVersion: number; tokenExp?: number }
+>();
+
+// Closes every live socket of a user. Called when the user is deleted or its
+// sessions are revoked (logout, password/permission change) so the client
+// stops receiving data immediately instead of on the next broadcast.
+export function SyncRoutesCloseUserSockets(userId: string): void {
+  for (const [client, entry] of wsClients) {
+    if (entry.userId !== userId) {
+      continue;
+    }
+    wsClients.delete(client);
+    try {
+      client.close(1008, "Session revoked");
+    } catch {
+      // already closed
+    }
+  }
+}
 
 interface ViewerPermissionCache {
   permissionContext: UserPermissionContext;
@@ -258,7 +279,7 @@ function broadcastToClients(message: object): void {
   const sends: Promise<void>[] = [];
   for (const [client, entry] of wsClients) {
     sends.push(
-      broadcastToClient(span, client, entry.userId, message).catch(() => {
+      broadcastToClient(span, client, entry, message).catch(() => {
         /* per-client send errors are non-fatal */
       }),
     );
@@ -269,13 +290,22 @@ function broadcastToClients(message: object): void {
 async function broadcastToClient(
   span: Span,
   client: WebSocket,
-  userId: string,
+  entry: { userId: string; tokenVersion: number; tokenExp?: number },
   message: any,
 ): Promise<void> {
   if (client.readyState !== 1 /* OPEN */) {
     return;
   }
-  const cache = await viewerCacheGet(span, userId);
+  if (!(await wsSessionIsValid(span, entry))) {
+    wsClients.delete(client);
+    try {
+      client.close(1008, "Session revoked");
+    } catch {
+      // already closed
+    }
+    return;
+  }
+  const cache = await viewerCacheGet(span, entry.userId);
   const filtered = await messageForViewer(span, cache, message);
   if (filtered === null) {
     return;
@@ -285,6 +315,25 @@ async function broadcastToClient(
   } catch {
     wsClients.delete(client);
   }
+}
+
+// Revalidates the live session of a socket: the user must still exist, the
+// token must not be expired and its version must match the current one.
+async function wsSessionIsValid(
+  span: Span,
+  entry: { userId: string; tokenVersion: number; tokenExp?: number },
+): Promise<boolean> {
+  if (
+    entry.tokenExp &&
+    entry.tokenExp <= Math.floor(Date.now() / 1000)
+  ) {
+    return false;
+  }
+  const user = await UserDataGet(span, entry.userId);
+  if (!user) {
+    return false;
+  }
+  return (user.tokenVersion ?? 0) === (entry.tokenVersion ?? 0);
 }
 
 export class SyncRoutes {
@@ -384,7 +433,11 @@ export class SyncRoutes {
       }
       const span = OTelTracer().startSpan("SyncRoutesWsConnect");
       try {
-        wsClients.set(socket, { userId: userSession.userId });
+        wsClients.set(socket, {
+          userId: userSession.userId,
+          tokenVersion: userSession.tokenVersion ?? 0,
+          tokenExp: userSession.tokenExp,
+        });
 
         // Send current state immediately on connect, filtered for this user.
         const cache = await viewerCacheGet(span, userSession.userId);

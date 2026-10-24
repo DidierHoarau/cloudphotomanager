@@ -2,6 +2,7 @@ import {
   FileDataAdd,
   FileDataClearSyncGone,
   FileDataDelete,
+  FileDataGet,
   FileDataListByFolder,
   FileDataRecordSyncSuccess,
   FileDataUpdate,
@@ -165,6 +166,12 @@ export async function SyncInventorySyncFolder(
     if (fileIdsToDelete.length > 0) {
       updated = true;
       for (const id of fileIdsToDelete) {
+        // Purge the cached media before dropping the row: a deleted file must
+        // stop being served even if a signed URL is still around.
+        const knownFile = await FileDataGet(span, id);
+        if (knownFile) {
+          await SyncFileCacheRemoveFile(span, account, knownFile);
+        }
         await FileDataDelete(span, id);
       }
       fileIdsToDelete.length = 0;

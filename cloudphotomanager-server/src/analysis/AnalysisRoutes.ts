@@ -2,6 +2,7 @@ import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { AuthGetUserSession } from "../users/Auth";
+import { MediaUrlsAttachForUser } from "../media/MediaUrls";
 import {
   AnalysisDataGetFileDuplicates,
   AnalysisDataGetFilesDuplicateCounts,
@@ -53,6 +54,9 @@ export class AnalysisRoutes {
             req.params.accountId,
           ),
         );
+        for (const duplicate of duplicates) {
+          MediaUrlsAttachForUser(duplicate.files, userSession);
+        }
         return res.send({ duplicates });
       },
     );
@@ -81,6 +85,9 @@ export class AnalysisRoutes {
             req.params.accountId,
           ),
         );
+        if (duplicate?.files) {
+          MediaUrlsAttachForUser(duplicate.files, userSession);
+        }
         return res.send({ duplicate });
       },
     );

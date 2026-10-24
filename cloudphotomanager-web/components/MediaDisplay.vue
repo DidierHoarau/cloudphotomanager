@@ -16,7 +16,7 @@
 </template>
 
 <script>
-import Config from "~~/services/Config.ts";
+import { MediaUrls } from "~~/services/MediaUrls";
 import { FileUtils } from "~~/services/FileUtils";
 
 export default {
@@ -26,13 +26,10 @@ export default {
   data() {
     return {
       serverUrl: "",
-      staticUrl: "",
       videoDelayedLoadingDone: false,
     };
   },
   async created() {
-    this.serverUrl = (await Config.get()).SERVER_URL;
-    this.staticUrl = (await Config.get()).STATIC_URL;
     const mediaContainer = document.querySelector("#media-container");
   },
   methods: {
@@ -40,32 +37,10 @@ export default {
       return FileUtils.getType(file);
     },
     getImageSource(file) {
-      return (
-        this.staticUrl +
-        "/" +
-        file.accountId +
-        "/" +
-        file.id[0] +
-        "/" +
-        file.id[1] +
-        "/" +
-        file.id +
-        "/preview.webp"
-      );
+      return MediaUrls.imagePreview(file);
     },
     getVideoSource(file) {
-      return (
-        this.staticUrl +
-        "/" +
-        file.accountId +
-        "/" +
-        file.id[0] +
-        "/" +
-        file.id[1] +
-        "/" +
-        file.id +
-        "/preview.mp4"
-      );
+      return MediaUrls.videoPreview(file);
     },
   },
 };

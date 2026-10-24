@@ -93,6 +93,33 @@ export function UserPermissionDataDeleteForUserStatement(
   ]);
 }
 
+// Number of users that currently hold the admin permission. Used to protect
+// the last admin from being deleted or demoted.
+export async function UserPermissionDataCountAdmins(
+  context: Span,
+): Promise<number> {
+  const span = OTelTracer().startSpan("UserPermissionData_countAdmins", context);
+  try {
+    const rawData = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT info FROM users_permissions",
+    );
+    let count = 0;
+    for (const row of rawData) {
+      try {
+        if (JSON.parse(row.info)?.isAdmin === true) {
+          count++;
+        }
+      } catch {
+        // ignore malformed permission rows
+      }
+    }
+    return count;
+  } finally {
+    span.end();
+  }
+}
+
 function fromRaw(json: any): UserPermission {
   if (!json) {
     return null;

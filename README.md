@@ -30,6 +30,18 @@ CloudPhotoManager is a self-hosted free and open source photo managegement tool.
 - The cookie is persistent (`Max-Age` aligned with the JWT validity), so it survives closing and re-opening the browser without a new login.
 - Sessions are renewed automatically while the application is used: the server re-issues the token once it is older than half of its validity, and a tab left open also renews the cookie daily.
 - Sessions survive an application restart as long as the `/data` volume (which holds the database containing the JWT signing key) is persistent.
+- Logout, password changes, permission changes and user deletion revoke the user's sessions server-side (the JWT carries a token version checked against the database on every request): every previously issued token, including copies, stops working at the next request.
+- Users and permissions are reloaded on every request, so a deleted user or a demoted admin loses access immediately.
+
+# Media access
+
+- Thumbnails and previews are not served from a public static tree. The API mints short-lived HMAC-signed URLs (`file.thumbnailUrl`, `file.previewUrl`, `file.videoPreviewUrl`) bound to the account, file, asset and subject.
+- Every media request re-checks the live session and folder permission (or the live share link), so revoking a grant, a share, or a session stops serving already-delivered URLs.
+- URLs are valid for `MEDIA_URL_TTL_SECONDS` (default `3600`) and bucket-aligned so repeated listings reuse the same URL; browsers cache each asset for at most `MEDIA_CACHE_SECONDS` (default `300`). Both can be overridden by environment variable.
+
+# Identifier opacity
+
+- File and folder IDs are deterministic (md5 of the account path), but they are never exposed as an access control: media URLs are HMAC-signed and every API route validates the session, the account boundary and the folder permission before returning data.
 
 # Installation
 
@@ -84,6 +96,10 @@ spec:
             # Session (optional; default shown)
             - name: JWT_VALIDITY_DURATION
               value: "8035200" # Session validity in seconds (~93 days); renewed automatically while in use
+            - name: MEDIA_URL_TTL_SECONDS
+              value: "3600" # Lifetime of signed media URLs
+            - name: MEDIA_CACHE_SECONDS
+              value: "300" # Browser cache lifetime for media assets
             - name: SOURCE_FETCH_FREQUENCY
               value: "1800000" # Base sync interval in milliseconds (30 min)
             - name: SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR

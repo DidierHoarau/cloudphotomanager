@@ -32,6 +32,12 @@ export class File {
   public info: any;
   public metadata: any;
 
+  // Short-lived signed media URLs attached by the API to listings. They are
+  // not persisted: each listing mints fresh ones bound to the caller.
+  public thumbnailUrl?: string;
+  public previewUrl?: string;
+  public videoPreviewUrl?: string;
+
   constructor(accountId: string, folderId: string, filename: string) {
     this.id = UtilsMd5(encodeURI(`${accountId}/${folderId}/${filename}`));
     this.accountId = accountId;

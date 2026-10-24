@@ -1,6 +1,5 @@
 const CONFIG = {
   SERVER_URL: "/api",
-  STATIC_URL: "/static",
 } as const;
 
 let _cachedPromise: Promise<typeof CONFIG> | null = null;

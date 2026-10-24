@@ -1,5 +1,5 @@
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { FileDataUpdateFavorite } from "./FileData";
+import { FileDataGet, FileDataUpdateFavorite } from "./FileData";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 
@@ -28,6 +28,16 @@ export class RoutesFileOperationsFavorite {
       }
       if (typeof req.body.favorite !== "boolean") {
         return res.status(400).send({ error: "Missing parameter: favorite" });
+      }
+
+      for (const fileId of req.body.fileIdList) {
+        const file = await FileDataGet(span, fileId);
+        if (!file) {
+          return res.status(404).send({ error: "File not found" });
+        }
+        if (file.accountId !== req.params.accountId) {
+          return res.status(403).send({ error: "Access Denied" });
+        }
       }
 
       for (const fileId of req.body.fileIdList) {

@@ -7,6 +7,7 @@ import {
   SearchDataListFiles,
 } from "./SearchData";
 import { AuthGetUserSession } from "../users/Auth";
+import { MediaUrlsAttachForUser } from "../media/MediaUrls";
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { GeoBox, isValidGeoBox } from "./SearchGeoSql";
 import {
@@ -50,6 +51,9 @@ export class SearchRoutes {
           req.params.accountId,
         ),
       );
+      for (const duplicate of duplicates) {
+        MediaUrlsAttachForUser(duplicate.files, userSession);
+      }
       return res.send({ duplicates });
     });
 
@@ -96,6 +100,7 @@ export class SearchRoutes {
           req.params.accountId,
         ),
       );
+      MediaUrlsAttachForUser(files, userSession);
       return res.status(200).send({ files });
     });
 

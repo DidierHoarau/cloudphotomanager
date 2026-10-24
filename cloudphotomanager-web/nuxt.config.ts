@@ -107,16 +107,17 @@ export default defineNuxtConfig({
             cacheableResponse: { statuses: [0, 200] },
           },
         },
-        // Thumbnails (webp) – Cache First with LRU; huge UX win for scrolling
+        // Thumbnails (webp) – Cache First with LRU; short lifetime because
+        // media URLs are signed and revocation is enforced server-side.
         {
           urlPattern: ({ url }) =>
-            /\/static\/.*\/thumbnail\.webp$/.test(url.pathname),
+            /\/api\/media\/.*\/thumbnail\.webp$/.test(url.pathname),
           handler: "CacheFirst",
           options: {
             cacheName: "thumbnails",
             expiration: {
               maxEntries: 2000,
-              maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+              maxAgeSeconds: 300,
             },
             cacheableResponse: { statuses: [0, 200] },
           },
@@ -124,13 +125,13 @@ export default defineNuxtConfig({
         // Preview images (webp) – Cache First with tight LRU
         {
           urlPattern: ({ url }) =>
-            /\/static\/.*\/preview\.webp$/.test(url.pathname),
+            /\/api\/media\/.*\/preview\.webp$/.test(url.pathname),
           handler: "CacheFirst",
           options: {
             cacheName: "preview-images",
             expiration: {
               maxEntries: 200,
-              maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+              maxAgeSeconds: 300,
             },
             cacheableResponse: { statuses: [0, 200] },
           },

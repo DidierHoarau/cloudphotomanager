@@ -3,7 +3,6 @@ import { StandardTracerFastifyRegisterHooks } from "@devopsplaybook.io/otel-util
 import type { FastifyCookieOptions } from "@fastify/cookie";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
-import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify from "fastify";
 import { watchFile } from "fs-extra";
@@ -29,6 +28,8 @@ import { SyncNotificationsInit } from "./sync/SyncNotifications";
 import { SyncRoutes } from "./sync/SyncRoutes";
 import { AuthInit } from "./users/Auth";
 import { UserRoutes } from "./users/UserRoutes";
+import { MediaSigningInit } from "./media/MediaSigning";
+import { MediaRoutes } from "./media/MediaRoutes";
 import {
   OTelLogger,
   OTelSetMeter,
@@ -72,6 +73,7 @@ Promise.resolve().then(async () => {
   await SyncFileCacheInit(span, config);
   SyncNotificationsInit(span, config);
   await AuthInit(span, config);
+  MediaSigningInit(span, config);
   await FileDataInit(span, config);
   await FolderDataInit(span);
   await SchedulerInit(span, config);
@@ -100,7 +102,8 @@ Promise.resolve().then(async () => {
   } as FastifyCookieOptions);
 
   StandardTracerFastifyRegisterHooks(fastify, OTelTracer(), OTelLogger(), {
-    ignoreList: ["GET-/api/status"],
+    // Media URLs carry signatures; keep them out of the spans.
+    ignoreList: ["GET-/api/status", "GET-/api/media"],
   });
 
   fastify.register(new UserRoutes().getRoutes, {
@@ -175,16 +178,13 @@ Promise.resolve().then(async () => {
     prefix: "/api/sync/failures",
   });
 
+  fastify.register(new MediaRoutes(config).getRoutes, {
+    prefix: "/api/media",
+  });
+
   fastify.get("/api/status", async () => {
     return { started: true };
   });
-
-  if (process.env.DEV_MODE) {
-    fastify.register(fastifyStatic, {
-      root: path.resolve(path.join(config.DATA_DIR, "/cache/")),
-      prefix: "/static",
-    });
-  }
 
   fastify.listen({ port: config.API_PORT, host: "0.0.0.0" }, (err) => {
     if (err) {

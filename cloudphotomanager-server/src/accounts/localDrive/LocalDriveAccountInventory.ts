@@ -6,6 +6,7 @@ import { LocalAccount } from "./LocalDriveAccount";
 import { File } from "../../model/File";
 import * as fs from "fs";
 import * as crypto from "crypto";
+import { PathIsInsideRoot } from "../../files/PathValidation";
 
 const dateEmptyFolder = new Date("1900-01-01 00:00:00");
 
@@ -31,6 +32,14 @@ export async function LocalAccountInventoryGetFolderByPath(
     localAccount.getAccountDefinition().rootpath,
     folderpath
   );
+  if (
+    !PathIsInsideRoot(
+      localAccount.getAccountDefinition().rootpath,
+      folder.idCloud
+    )
+  ) {
+    throw new Error("Path outside account root");
+  }
   folder.folderpath = folderpath;
   folder.dateSync = new Date();
   folder.dateUpdated = dateEmptyFolder;

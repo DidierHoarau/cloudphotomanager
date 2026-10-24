@@ -2,6 +2,7 @@ import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance } from "fastify";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { FileDataListByFolder } from "../files/FileData";
+import { FileNameValidate } from "../files/PathValidation";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
 import { AuthGetUserSession, AuthIsAdmin } from "../users/Auth";
@@ -24,6 +25,7 @@ import {
   FileDataListByFolderRecursivePaginated,
 } from "../files/FileData";
 import { File } from "../model/File";
+import { MediaUrlsAttachForUser } from "../media/MediaUrls";
 import { OTelLogger } from "../OTelContext";
 
 const logger = OTelLogger().createModuleLogger("FolderRoutes");
@@ -107,6 +109,12 @@ export class FolderRoutes {
           .status(200)
           .send({ files: [], page: 0, pageSize: 50, total: 0 });
       }
+      // The folder must belong to the account in the URL: with
+      // includeSubFolders, a grant on an account-A folder must never expose
+      // the same-path files of another account.
+      if (folder.accountId !== req.params.accountId) {
+        return res.status(404).send({ error: "Folder not found" });
+      }
       const permissionContext = await UserPermissionContextGet(
         span,
         userSession.userId,
@@ -148,6 +156,7 @@ export class FolderRoutes {
           favoriteOnly,
         );
       }
+      MediaUrlsAttachForUser(result.files, userSession);
       return res.status(200).send({
         files: result.files,
         page,
@@ -171,6 +180,9 @@ export class FolderRoutes {
       if (!folder) {
         return res.status(200).send({ files: [] });
       }
+      if (folder.accountId !== req.params.accountId) {
+        return res.status(404).send({ error: "Folder not found" });
+      }
       const permissionContext = await UserPermissionContextGet(
         span,
         userSession.userId,
@@ -189,6 +201,7 @@ export class FolderRoutes {
         req.params.accountId,
         req.params.folderId,
       );
+      MediaUrlsAttachForUser(files, userSession);
       return res.status(200).send({ files });
     });
 
@@ -299,7 +312,7 @@ export class FolderRoutes {
         return res.status(403).send({ error: "Access Denied" });
       }
       const folder = await FolderDataGet(span, req.params.folderId);
-      if (!folder) {
+      if (!folder || folder.accountId !== req.params.accountId) {
         return res.status(404).send({ error: "Folder not found" });
       }
       if (folder.folderpath === "/") {
@@ -350,11 +363,11 @@ export class FolderRoutes {
       if (!newName) {
         return res.status(400).send({ error: "Missing parameter: newName" });
       }
-      if (newName.includes("/") || newName === "." || newName === "..") {
+      if (FileNameValidate(newName)) {
         return res.status(400).send({ error: "Invalid folder name" });
       }
       const folder = await FolderDataGet(span, req.params.folderId);
-      if (!folder) {
+      if (!folder || folder.accountId !== req.params.accountId) {
         return res.status(404).send({ error: "Folder not found" });
       }
       if (folder.folderpath === "/") {
