@@ -43,6 +43,17 @@ CloudPhotoManager is a self-hosted free and open source photo managegement tool.
 
 - File and folder IDs are deterministic (md5 of the account path), but they are never exposed as an access control: media URLs are HMAC-signed and every API route validates the session, the account boundary and the folder permission before returning data.
 
+# Dependency security notes
+
+`npm audit` state that is intentionally accepted, and why:
+
+- **`aws-sdk` v2 (server, 2 moderate advisories — accepted until the v3 migration)**
+  - [GHSA-j965-2qgj-vjmq](https://github.com/advisories/GHSA-j965-2qgj-vjmq): v2 does not validate the S3 region parameter. S3 region strings in CloudPhotoManager come only from admin-defined account definitions, not from end-user input.
+  - [GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq): a vulnerable `uuid` version is bundled inside `aws-sdk` v2; application code uses `uuid` directly at a fixed version.
+  - Never run `npm audit fix --force` to clear them: it would downgrade `aws-sdk` to 1.x and break the S3 integration.
+  - **Migration plan (v2 → `@aws-sdk/client-s3`, follow-up task):** S3 is the only consumer (4 files under `cloudphotomanager-server/src/accounts/awsS3/`). Replace `aws-sdk` with `@aws-sdk/client-s3`; build a per-account `new S3Client({ region, credentials: { accessKeyId, secretAccessKey } })` in `getS3Client()` (removing the global `AWS.config.update` mutation); convert the 5 operations (`listObjectsV2`, `getObject` + `createReadStream`, `deleteObject`, `copyObject`, `deleteObjects`) to `client.send(new ListObjectsV2Command/DeleteObjectCommand/CopyObjectCommand/DeleteObjectsCommand/GetObjectCommand)` (drop `.promise()`; response fields `Contents`/`IsTruncated`/`NextContinuationToken` keep their names — re-check the pagination loops in `AwsS3AccountInventory.ts`); for `GetObject` read the body from the command response (`Body` is a Node stream in v3) to keep `createReadStream` behaviour; update the fake S3 clients in `AwsS3Account.spec.ts` to the `send(command)` shape. v3's region validation also resolves GHSA-j965-2qgj-vjmq.
+- **Web dev-only advisories (not shipped to production)**: `npm audit --omit=dev` for the web client reports 0 vulnerabilities. The remaining full-audit findings live in development tooling only and have no non-breaking fix: `vitest` 3/4 (`@vitest/mocker` moderate, `tinypool` criticals — fixed in vitest 5) and the Nuxt dev-server chain (`node-forge` via `listhen`/`nitropack` — no fixed version in Nuxt 4 yet). Neither affects the built application image; they are revisited when those stacks release fixes.
+
 # Installation
 
 The only supported way to setup the application is with Docker containers.

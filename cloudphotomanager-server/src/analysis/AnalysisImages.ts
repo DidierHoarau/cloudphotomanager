@@ -33,7 +33,7 @@ export async function AnalysisImagesGetLabels(
   imagePath: string,
 ): Promise<{ label: string; score: number }[]> {
   const span = OTelTracer().startSpan("AnalysisImagesGetLabels", context);
-  if (config && !config.IMAGE_CLASSIFICATION_ENABLED) {
+  if (!config || !config.IMAGE_CLASSIFICATION_ENABLED) {
     span.end();
     return [];
   }
@@ -50,7 +50,7 @@ export async function AnalysisImagesGetLabels(
   try {
     await prev;
     dateLastUsed = new Date();
-    await ensurePipeline();
+    await ensurePipeline(config.IMAGE_CLASSIFICATION_MODEL);
 
     // Ask the pipeline for only the top-K labels to avoid retaining a long
     // result array (some models default to the full label space).
@@ -94,10 +94,10 @@ let releaseTimer: NodeJS.Timeout | null = null;
 // Single-flight pipeline initialization: concurrent callers share one
 // Promise instead of each racing to load the model (which previously could
 // double-load on the first burst of parallel requests).
-async function ensurePipeline(): Promise<void> {
+async function ensurePipeline(model: string): Promise<void> {
   if (pipe) return;
   if (!pipePromise) {
-    pipePromise = pipeline("image-classification")
+    pipePromise = pipeline("image-classification", model)
       .then((p) => {
         pipe = p;
         return p;
