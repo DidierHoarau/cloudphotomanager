@@ -195,8 +195,7 @@ async function refreshTargetFolderIndex(
   if (!targetFolderDb) {
     try {
       targetFolderCloud.dateSync = new Date(0);
-      await FolderDataAdd(span, targetFolderCloud);
-      targetFolderDb = targetFolderCloud;
+      targetFolderDb = await FolderDataAdd(span, targetFolderCloud);
     } catch (err) {
       logger.warn(
         `refreshTargetFolderIndex: FolderDataAdd failed: ${(err as Error)?.message}`,

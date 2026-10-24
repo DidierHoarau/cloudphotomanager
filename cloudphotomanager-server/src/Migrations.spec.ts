@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { StandardLogger, StandardTracer } from "@devopsplaybook.io/otel-utils";
 import {
+  SqlDbUtilsExecSQL,
   SqlDbUtilsGetDatabase,
   SqlDbUtilsInit,
   SqlDbUtilsQuerySQL,
@@ -15,7 +16,7 @@ const realSqlDir = path.resolve(__dirname, "../sql");
 
 const NEW_INDEXES = [
   "files_accountId_hash",
-  "folders_accountId_folderpath",
+  "folders_accountId_folderpath_unique",
   "files_accountId_folderId",
 ];
 
@@ -113,9 +114,13 @@ describe("SQL migrations", () => {
       path.join(realSqlDir, "init-0011.sql"),
       path.join(sqlDir, "init-0011.sql"),
     );
+    await fs.copy(
+      path.join(realSqlDir, "init-0012.sql"),
+      path.join(sqlDir, "init-0012.sql"),
+    );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(11);
+    expect(dbVersion()).toBe(12);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
     const trashColumns = SqlDbUtilsQuerySQL(
       undefined,
@@ -140,7 +145,7 @@ describe("SQL migrations", () => {
     );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(11);
+    expect(dbVersion()).toBe(12);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
     const appliedLogAfter = SqlDbUtilsQuerySQL(
       undefined,
@@ -157,7 +162,158 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(11);
+    expect(dbVersion()).toBe(12);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
+  });
+
+  it("init-0012 dedupes duplicate folders, repoints references and adds the unique index", async () => {
+    // Boot at 0011, then seed the legacy state init-0012 has to repair.
+    const files = (await fs.readdir(realSqlDir))
+      .filter((name) => {
+        const match = /^init-(\d+)\.sql$/.exec(name);
+        return match !== null && Number(match[1]) < 12;
+      })
+      .sort();
+    for (const name of files) {
+      await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
+    }
+    await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
+    expect(dbVersion()).toBe(11);
+
+    const accountId = "account-dedupe";
+    SqlDbUtilsExecSQL(
+      undefined,
+      "INSERT INTO accounts (id, name, rootpath, info, infoPrivate) VALUES (?, ?, ?, ?, ?)",
+      [accountId, "Test", "/", "{}", "{}"],
+    );
+    // Two rows for the same (accountId, folderpath): the canonical one keeps
+    // the lowest rowid (inserted first).
+    const canonicalId = "folder-canonical";
+    const duplicateId = "folder-duplicate";
+    for (const [folderId, idCloud] of [
+      [canonicalId, "/cloud/2023"],
+      [duplicateId, "/cloud/2023-legacy"],
+    ]) {
+      SqlDbUtilsExecSQL(
+        undefined,
+        "INSERT INTO folders (id, idCloud, accountId, folderpath, dateSync, dateUpdated, info) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          folderId,
+          idCloud,
+          accountId,
+          "/2023",
+          new Date().toISOString(),
+          new Date().toISOString(),
+          "{}",
+        ],
+      );
+    }
+    // One file under each duplicate folder id, a share on the duplicate and a
+    // permission grant on the duplicate: all must be repointed.
+    for (const [fileId, folderId] of [
+      ["file-canonical", canonicalId],
+      ["file-duplicate", duplicateId],
+    ]) {
+      SqlDbUtilsExecSQL(
+        undefined,
+        "INSERT INTO files (id, idCloud, accountId, folderId, filename, dateSync, dateUpdated, dateMedia, hash, info, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          fileId,
+          `/cloud/2023/${fileId}.jpg`,
+          accountId,
+          folderId,
+          `${fileId}.jpg`,
+          new Date().toISOString(),
+          new Date().toISOString(),
+          new Date().toISOString(),
+          "hash",
+          "{}",
+          "{}",
+        ],
+      );
+    }
+    SqlDbUtilsExecSQL(
+      undefined,
+      "INSERT INTO shares (id, accountId, folderId, tokenHash, dateCreated, info) VALUES (?, ?, ?, ?, ?, ?)",
+      [
+        "share-dedupe",
+        accountId,
+        duplicateId,
+        "tokenhash",
+        new Date().toISOString(),
+        "{}",
+      ],
+    );
+    SqlDbUtilsExecSQL(
+      undefined,
+      "INSERT INTO users_permissions (id, userId, info) VALUES (?, ?, ?)",
+      [
+        "perm-dedupe",
+        "user-dedupe",
+        JSON.stringify({
+          isAdmin: false,
+          folders: [
+            { folderId: canonicalId, scope: "read" },
+            { folderId: duplicateId, scope: "write" },
+          ],
+        }),
+      ],
+    );
+
+    // Apply init-0012: duplicates are merged onto the canonical row.
+    closeCurrentDb();
+    await fs.copy(
+      path.join(realSqlDir, "init-0012.sql"),
+      path.join(sqlDir, "init-0012.sql"),
+    );
+    await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
+    expect(dbVersion()).toBe(12);
+    expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
+
+    const folderRows = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT id FROM folders WHERE accountId = ?",
+      [accountId],
+    );
+    expect(folderRows.map((row) => row.id)).toEqual([canonicalId]);
+    const fileFolders = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT id, folderId FROM files WHERE accountId = ? ORDER BY id",
+      [accountId],
+    );
+    expect(fileFolders).toEqual([
+      { id: "file-canonical", folderId: canonicalId },
+      { id: "file-duplicate", folderId: canonicalId },
+    ]);
+    const shareFolders = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT folderId FROM shares WHERE id = ?",
+      ["share-dedupe"],
+    );
+    expect(shareFolders[0].folderId).toBe(canonicalId);
+    const permRows = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT info FROM users_permissions WHERE id = ?",
+      ["perm-dedupe"],
+    );
+    const permInfo = JSON.parse(permRows[0].info);
+    expect(permInfo.folders).toEqual([
+      { folderId: canonicalId, scope: "read" },
+      { folderId: canonicalId, scope: "write" },
+    ]);
+
+    // Re-boot: the migration does not run again and nothing is lost.
+    const folderCountBefore = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT COUNT(*) as count FROM folders",
+    );
+    closeCurrentDb();
+    await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
+    expect(dbVersion()).toBe(12);
+    const folderCountAfter = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT COUNT(*) as count FROM folders",
+    );
+    expect(folderCountAfter[0].count).toBe(folderCountBefore[0].count);
   });
 });

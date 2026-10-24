@@ -88,6 +88,47 @@ describe("FileData", () => {
     expect(stored.hash).toBe("");
   });
 
+  it("re-adding an existing id refreshes sync fields but preserves curation (L2)", async () => {
+    const file = makeFile("upsert.jpg");
+    file.idCloud = "cloud-item-v1";
+    await fileData.FileDataAdd(span, file);
+
+    // Curate the file and mark a sync failure + tombstone state.
+    await fileData.FileDataUpdateFavorite(span, file.id, true);
+    await fileData.FileDataUpdateKeywords(span, {
+      ...file,
+      keywords: "family",
+    } as File);
+    await fileData.FileDataTrash(span, file.id, file.accountId);
+    await fileData.FileDataRecordSyncFailure(
+      span,
+      file.id,
+      "thumbnail failed",
+    );
+    await fileData.FileDataMarkSyncGone(span, file.id, "404 from provider");
+
+    // The next folder sync re-lists the file: same id, new cloud metadata.
+    const reAdded = makeFile("upsert.jpg");
+    reAdded.idCloud = "cloud-item-v2";
+    reAdded.hash = "hash-v2";
+    await fileData.FileDataAdd(span, reAdded);
+
+    const stored = await fileData.FileDataGet(span, file.id);
+    expect(stored).not.toBeNull();
+    // Curation state survives the re-add.
+    expect(stored.favorite).toBe(1);
+    expect(stored.trashed).toBe(1);
+    expect(stored.keywords).toBe("family");
+    expect(stored.dateTrashed).not.toBeNull();
+    // Sync fields are refreshed from the cloud listing.
+    expect(stored.idCloud).toBe("cloud-item-v2");
+    expect(stored.hash).toBe("hash-v2");
+    expect(stored.syncGone).toBe(0);
+    expect(stored.syncFailCount).toBe(0);
+    expect(stored.lastSyncError).toBeNull();
+    expect(stored.lastSyncAttempt).toBeNull();
+  });
+
   // Pagination determinism (D6): files sharing the same dateMedia must not
   // repeat or disappear across pages; every page reports the full total.
 
@@ -288,28 +329,34 @@ describe("FileData", () => {
     const accountId = "account-paging-wildcard";
     const folderId = "folder-wildcard";
     const childId = "folder-wildcard-child";
+    const siblingId = "folder-wildcard-sibling";
+    const percentId = "folder-wildcard-percent";
+    const percentChildId = "folder-wildcard-percent-child";
     const date = new Date("2023-08-01T12:00:00.000Z").toISOString();
-    SqlDbUtilsExecSQL(
-      span,
-      "INSERT INTO folders (id, idCloud, accountId, folderpath, dateSync, dateUpdated, info) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [folderId, "cloud/wc", accountId, "/trip_2024.summer", date, date, "{}"],
-    );
-    SqlDbUtilsExecSQL(
-      span,
-      "INSERT INTO folders (id, idCloud, accountId, folderpath, dateSync, dateUpdated, info) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [
-        childId,
-        "cloud/wc-child",
-        accountId,
-        "/trip_2024.summer/seq_01",
-        date,
-        date,
-        "{}",
-      ],
+    const insertFolder = (id: string, folderpath: string, idCloud: string) => {
+      SqlDbUtilsExecSQL(
+        span,
+        "INSERT INTO folders (id, idCloud, accountId, folderpath, dateSync, dateUpdated, info) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [id, idCloud, accountId, folderpath, date, date, "{}"],
+      );
+    };
+    insertFolder(folderId, "/trip_2024.summer", "cloud/wc");
+    insertFolder(childId, "/trip_2024.summer/seq_01", "cloud/wc-child");
+    // "tripX2024" would match "trip_" if "_" were still a wildcard; "100%_done"
+    // exercises "%" in names, with a nested child.
+    insertFolder(siblingId, "/tripX2024.summer", "cloud/wc-sibling");
+    insertFolder(percentId, "/100%_done", "cloud/wc-percent");
+    insertFolder(
+      percentChildId,
+      "/100%_done/sub_1",
+      "cloud/wc-percent-child",
     );
     insertFileRow(accountId, folderId, "wc-root-1", date);
     insertFileRow(accountId, childId, "wc-child-1", date);
     insertFileRow(accountId, childId, "wc-child-2", date);
+    insertFileRow(accountId, siblingId, "wc-sibling-1", date);
+    insertFileRow(accountId, percentId, "wc-percent-1", date);
+    insertFileRow(accountId, percentChildId, "wc-percent-2", date);
 
     const result = await fileData.FileDataListByFolderRecursivePaginated(
       span,
@@ -325,6 +372,44 @@ describe("FileData", () => {
       "wc-child-2",
       "wc-root-1",
     ]);
+
+    // The sibling that differs only at the "_" position stays out.
+    const sibling = await fileData.FileDataListByFolderRecursivePaginated(
+      span,
+      accountId,
+      "/tripX2024.summer",
+      "asc",
+      0,
+      10,
+    );
+    expect(sibling.total).toBe(1);
+    expect(sibling.files.map((file) => file.id)).toEqual(["wc-sibling-1"]);
+
+    // A "%" in the folder name matches literally, including its subtree.
+    const percent = await fileData.FileDataListByFolderRecursivePaginated(
+      span,
+      accountId,
+      "/100%_done",
+      "asc",
+      0,
+      10,
+    );
+    expect(percent.total).toBe(2);
+    expect(percent.files.map((file) => file.id).sort()).toEqual([
+      "wc-percent-1",
+      "wc-percent-2",
+    ]);
+
+    // The root lists every file of the account exactly once.
+    const root = await fileData.FileDataListByFolderRecursivePaginated(
+      span,
+      accountId,
+      "/",
+      "asc",
+      0,
+      20,
+    );
+    expect(root.total).toBe(6);
   });
 
   it("pages an account by dateMedia with a deterministic tiebreaker", async () => {
@@ -377,7 +462,7 @@ describe("FileData", () => {
     insertFileRowAt(accountId, folderId, "crt-trashed", date);
 
     await fileData.FileDataUpdateFavorite(span, "crt-fav", true);
-    await fileData.FileDataTrash(span, "crt-trashed");
+    await fileData.FileDataTrash(span, "crt-trashed", accountId);
 
     const plain = await fileData.FileDataGet(span, "crt-plain");
     expect(plain.favorite).toBe(0);
@@ -403,23 +488,23 @@ describe("FileData", () => {
     insertFileRowAt(accountId, folderId, "idem-a", date);
 
     // First trash affects the row; trashing again changes nothing.
-    await expect(fileData.FileDataTrash(span, "idem-a")).resolves.toBe(1);
+    await expect(fileData.FileDataTrash(span, "idem-a", accountId)).resolves.toBe(1);
     const firstTrashDate = (await fileData.FileDataGet(span, "idem-a"))
       .dateTrashed;
-    await expect(fileData.FileDataTrash(span, "idem-a")).resolves.toBe(0);
+    await expect(fileData.FileDataTrash(span, "idem-a", accountId)).resolves.toBe(0);
     expect(
       (await fileData.FileDataGet(span, "idem-a")).dateTrashed,
     ).toEqual(firstTrashDate);
 
     // Unknown file: no row affected.
-    await expect(fileData.FileDataTrash(span, "idem-unknown")).resolves.toBe(0);
+    await expect(fileData.FileDataTrash(span, "idem-unknown", accountId)).resolves.toBe(0);
 
     // Restore returns the row; restoring again changes nothing.
-    await expect(fileData.FileDataRestore(span, "idem-a")).resolves.toBe(1);
+    await expect(fileData.FileDataRestore(span, "idem-a", accountId)).resolves.toBe(1);
     const restored = await fileData.FileDataGet(span, "idem-a");
     expect(restored.trashed).toBe(0);
     expect(restored.dateTrashed).toBeNull();
-    await expect(fileData.FileDataRestore(span, "idem-a")).resolves.toBe(0);
+    await expect(fileData.FileDataRestore(span, "idem-a", accountId)).resolves.toBe(0);
   });
 
   it("folder listings exclude trashed files and honor favoriteOnly", async () => {
@@ -438,8 +523,8 @@ describe("FileData", () => {
     insertFileRowAt(accountId, folderId, "cl-trashed", date);
     await fileData.FileDataUpdateFavorite(span, "cl-fav", true);
     await fileData.FileDataUpdateFavorite(span, "cl-fav-trashed", true);
-    await fileData.FileDataTrash(span, "cl-trashed");
-    await fileData.FileDataTrash(span, "cl-fav-trashed");
+    await fileData.FileDataTrash(span, "cl-trashed", accountId);
+    await fileData.FileDataTrash(span, "cl-fav-trashed", accountId);
 
     const folderAll = await fileData.FileDataListByFolderPaginated(
       span,
@@ -510,7 +595,7 @@ describe("FileData", () => {
     insertFileRowAt(accountId, folderId, "tr-keep", date);
     for (let index = 0; index < 5; index++) {
       insertFileRowAt(accountId, folderId, `tr-${index}`, date);
-      await fileData.FileDataTrash(span, `tr-${index}`);
+      await fileData.FileDataTrash(span, `tr-${index}`, accountId);
     }
 
     const page0 = await fileData.FileDataListTrashPaginated(
@@ -567,7 +652,7 @@ describe("FileData", () => {
     expect(expired.sort()).toEqual(["tr-0", "tr-1", "tr-2", "tr-3", "tr-4"]);
 
     // Restore removes a file from the trash listing.
-    await fileData.FileDataRestore(span, "tr-0");
+    await fileData.FileDataRestore(span, "tr-0", accountId);
     const afterRestore = await fileData.FileDataListTrashPaginated(
       span,
       accountId,
@@ -588,7 +673,7 @@ describe("FileData", () => {
     insertFileRowAt(accountId, folderA, "mo-a1", marA);
     insertFileRowAt(accountId, folderB, "mo-b1", marB);
     insertFileRowAt(accountId, folderA, "mo-a2", apr);
-    await fileData.FileDataTrash(span, "mo-b1");
+    await fileData.FileDataTrash(span, "mo-b1", accountId);
 
     const months = await fileData.FileDataListAccountMonths(
       span,
@@ -630,7 +715,7 @@ describe("FileData", () => {
     expect(april.files.map((f) => f.id)).toEqual(["mo-a2"]);
 
     // Restoring the trashed file brings it back into the month summary.
-    await fileData.FileDataRestore(span, "mo-b1");
+    await fileData.FileDataRestore(span, "mo-b1", accountId);
     const monthsAfter = await fileData.FileDataListAccountMonths(
       span,
       accountId,

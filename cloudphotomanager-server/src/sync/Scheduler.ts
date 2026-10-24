@@ -11,7 +11,6 @@ import {
 } from "../files/FileData";
 import {
   FolderDataAdd,
-  FolderDataDeleteFoldersWithDuplicates,
   FolderDataGet,
   FolderDataGetCount,
   FolderDataGetNewestSync,
@@ -136,11 +135,11 @@ export async function SchedulerStartAccountSync(
   const rootFolderKnown = await FolderDataGet(span, rootFolderCloud.id);
   if (!rootFolderKnown) {
     rootFolderCloud.dateSync = new Date(0);
-    await FolderDataAdd(span, rootFolderCloud);
+    const storedRoot = await FolderDataAdd(span, rootFolderCloud);
     SyncQueueQueueItem(
       accountId,
-      rootFolderCloud.id,
-      { folderId: rootFolderCloud.id },
+      storedRoot.id,
+      { folderId: storedRoot.id },
       "SyncInventorySyncFolder",
       SyncQueueItemPriority.NORMAL,
     );
@@ -171,8 +170,6 @@ async function SchedulerStartSchedule() {
     const span = OTelTracer().startSpan("SchedulerStartSchedule");
 
     try {
-      await FolderDataDeleteFoldersWithDuplicates(span);
-
       const accountDefinitions = await AccountDataList(span);
       for (const accountDefinition of accountDefinitions) {
         logger.info(`Start Sync of Account ${accountDefinition.name}`, span);

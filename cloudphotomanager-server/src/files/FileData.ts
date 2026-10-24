@@ -1,10 +1,13 @@
 import { Span } from "@opentelemetry/sdk-trace-base";
 import { Config } from "../Config";
-import { FolderDataRefreshCacheFoldersCounts } from "../folders/FolderData";
+import { FolderDataCacheCountsMarkDirty } from "../folders/FolderData";
 import { File } from "../model/File";
 import { OTelTracer } from "../OTelContext";
+import { UtilsMd5 } from "../Utils";
+import { SqlEscapeLike } from "../utils-std-ts/SqlLike";
 import {
   SqlDbUtilsExecSQL,
+  SqlDbUtilsGetDatabase,
   SqlDbUtilsQuerySQL,
 } from "@devopsplaybook.io/common-utils";
 
@@ -67,6 +70,21 @@ export async function FileDataListForAccount(
   return files;
 }
 
+// Ids only: the cache cleanup needs a membership set, not File objects.
+export async function FileDataListIdsForAccount(
+  context: Span,
+  accountId: string,
+): Promise<string[]> {
+  const span = OTelTracer().startSpan("FileDataListIdsForAccount", context);
+  const rawData = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT id FROM files WHERE accountId = ?",
+    [accountId],
+  );
+  span.end();
+  return rawData.map((row: any) => row.id as string);
+}
+
 export async function FileDataListByFolder(
   context: Span,
   accountId: string,
@@ -95,11 +113,27 @@ export async function FileDataListByFolder(
 
 export async function FileDataAdd(context: Span, file: File): Promise<void> {
   const span = OTelTracer().startSpan("FileDataAdd", context);
-  await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE id = ?", [file.id]);
+  // Upsert: a re-add of an existing id (same path) refreshes the sync fields
+  // but must never reset curation state (favorite, trash, keywords).
   await SqlDbUtilsExecSQL(
     span,
     "INSERT INTO files (id, idCloud, accountId, filename, folderId, hash, dateUpdated, dateSync, dateMedia, info, metadata) " +
-      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ",
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+      "ON CONFLICT(id) DO UPDATE SET " +
+      "  idCloud = excluded.idCloud, " +
+      "  accountId = excluded.accountId, " +
+      "  filename = excluded.filename, " +
+      "  folderId = excluded.folderId, " +
+      "  hash = excluded.hash, " +
+      "  dateUpdated = excluded.dateUpdated, " +
+      "  dateSync = excluded.dateSync, " +
+      "  dateMedia = excluded.dateMedia, " +
+      "  info = excluded.info, " +
+      "  metadata = excluded.metadata, " +
+      "  syncGone = 0, " +
+      "  syncFailCount = 0, " +
+      "  lastSyncError = NULL, " +
+      "  lastSyncAttempt = NULL ",
     [
       file.id,
       file.idCloud,
@@ -114,7 +148,7 @@ export async function FileDataAdd(context: Span, file: File): Promise<void> {
       JSON.stringify(file.metadata),
     ],
   );
-  FolderDataRefreshCacheFoldersCounts(span);
+  FolderDataCacheCountsMarkDirty(file.accountId);
   span.end();
 }
 
@@ -140,7 +174,7 @@ export async function FileDataUpdate(context: Span, file: File): Promise<void> {
       file.id,
     ],
   );
-  FolderDataRefreshCacheFoldersCounts(span);
+  FolderDataCacheCountsMarkDirty(file.accountId);
   span.end();
 }
 
@@ -149,12 +183,12 @@ export async function FileDataUpdateKeywords(
   file: File,
 ): Promise<void> {
   const span = OTelTracer().startSpan("FileDataUpdateKeywords", context);
+  // Keywords do not change any folder count: no cache work on this path.
   await SqlDbUtilsExecSQL(
     span,
     "UPDATE files SET keywords = ?, info = ? WHERE id = ? ",
     [file.keywords, JSON.stringify(file.info), file.id],
   );
-  FolderDataRefreshCacheFoldersCounts(span);
   span.end();
 }
 
@@ -189,6 +223,7 @@ export async function FileDataUpdateFavorite(
 export async function FileDataTrash(
   context: Span,
   fileId: string,
+  accountId: string,
 ): Promise<number> {
   const span = OTelTracer().startSpan("FileDataTrash", context);
   const rowsAffected = SqlDbUtilsExecSQL(
@@ -196,7 +231,9 @@ export async function FileDataTrash(
     "UPDATE files SET trashed = 1, dateTrashed = ? WHERE id = ? AND COALESCE(trashed, 0) = 0 ",
     [new Date().toISOString(), fileId],
   );
-  FolderDataRefreshCacheFoldersCounts(span);
+  if (rowsAffected > 0) {
+    FolderDataCacheCountsMarkDirty(accountId);
+  }
   span.end();
   return rowsAffected;
 }
@@ -205,6 +242,7 @@ export async function FileDataTrash(
 export async function FileDataRestore(
   context: Span,
   fileId: string,
+  accountId: string,
 ): Promise<number> {
   const span = OTelTracer().startSpan("FileDataRestore", context);
   const rowsAffected = SqlDbUtilsExecSQL(
@@ -212,15 +250,21 @@ export async function FileDataRestore(
     "UPDATE files SET trashed = 0, dateTrashed = NULL WHERE id = ? AND COALESCE(trashed, 0) = 1 ",
     [fileId],
   );
-  FolderDataRefreshCacheFoldersCounts(span);
+  if (rowsAffected > 0) {
+    FolderDataCacheCountsMarkDirty(accountId);
+  }
   span.end();
   return rowsAffected;
 }
 
-export async function FileDataDelete(context: Span, id: string): Promise<void> {
+export async function FileDataDelete(
+  context: Span,
+  id: string,
+  accountId: string,
+): Promise<void> {
   const span = OTelTracer().startSpan("FileDataDelete", context);
   await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE id = ?", [id]);
-  FolderDataRefreshCacheFoldersCounts(span);
+  FolderDataCacheCountsMarkDirty(accountId);
   span.end();
 }
 
@@ -313,6 +357,53 @@ export async function FileDataGetCount(context: Span): Promise<number> {
   return count;
 }
 
+// Re-keys a file after a rename/move: only id, folderId and filename change,
+// so curation (favorite, trash, keywords) and sync state survive. Returns the
+// new id (unchanged when the derived id is the same).
+export async function FileDataReKey(
+  context: Span,
+  fileId: string,
+  newFolderId: string,
+  newFilename: string,
+): Promise<string> {
+  const span = OTelTracer().startSpan("FileDataReKey", context);
+  try {
+    const rawData = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT accountId, folderId FROM files WHERE id = ?",
+      [fileId],
+    );
+    if (rawData.length === 0) {
+      return fileId;
+    }
+    const accountId = rawData[0].accountId as string;
+    const oldFolderId = rawData[0].folderId as string;
+    const newFileId = UtilsMd5(
+      encodeURI(`${accountId}/${newFolderId}/${newFilename}`),
+    );
+    if (newFileId === fileId) {
+      return fileId;
+    }
+    const apply = SqlDbUtilsGetDatabase().transaction(() => {
+      // A stale row already at the destination would violate the id UNIQUE
+      // constraint: the cloud listing is authoritative for the moved item.
+      SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE id = ?", [newFileId]);
+      SqlDbUtilsExecSQL(
+        span,
+        "UPDATE files SET id = ?, folderId = ?, filename = ? WHERE id = ?",
+        [newFileId, newFolderId, newFilename, fileId],
+      );
+    });
+    apply();
+    if (oldFolderId !== newFolderId) {
+      FolderDataCacheCountsMarkDirty(accountId);
+    }
+    return newFileId;
+  } finally {
+    span.end();
+  }
+}
+
 export async function FileDataListByFolderPaginated(
   context: Span,
   accountId: string,
@@ -363,7 +454,10 @@ export async function FileDataListByFolderRecursivePaginated(
   );
   const order = sortOrder === "asc" ? "ASC" : "DESC";
   const offset = page * pageSize;
-  const folderpathSubPattern = folderpath === "/" ? `/%` : `${folderpath}/%`;
+  // Escape the path prefix, then append the wildcard: names containing % or _
+  // must match literally and must not widen the subtree selection.
+  const subtreePrefix = folderpath === "/" ? "/" : `${folderpath}/`;
+  const folderpathSubPattern = `${SqlEscapeLike(subtreePrefix)}%`;
   const favoriteCondition = favoriteOnly
     ? " AND COALESCE(favorite, 0) = 1 "
     : "";
@@ -372,7 +466,7 @@ export async function FileDataListByFolderRecursivePaginated(
   // extra column.
   const rawData = await SqlDbUtilsQuerySQL(
     span,
-    `SELECT *, COUNT(*) OVER () AS total FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0${favoriteCondition} AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?)) ORDER BY dateMedia ${order}, id ${order} LIMIT ? OFFSET ?`,
+    `SELECT *, COUNT(*) OVER () AS total FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0${favoriteCondition} AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ? ESCAPE '\\')) ORDER BY dateMedia ${order}, id ${order} LIMIT ? OFFSET ?`,
     [accountId, accountId, folderpath, folderpathSubPattern, pageSize, offset],
   );
   let total = 0;
@@ -387,7 +481,7 @@ export async function FileDataListByFolderRecursivePaginated(
     // unknown: fall back to the explicit count only in that rare path.
     const countRaw = await SqlDbUtilsQuerySQL(
       span,
-      `SELECT COUNT(*) as count FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0${favoriteCondition} AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ?))`,
+      `SELECT COUNT(*) as count FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0${favoriteCondition} AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ? ESCAPE '\\'))`,
       [accountId, accountId, folderpath, folderpathSubPattern],
     );
     total = countRaw.length > 0 ? countRaw[0].count : 0;
@@ -410,7 +504,7 @@ export async function FileDataDeleteNoFolder(
        )`,
     [accountId, accountId],
   );
-  FolderDataRefreshCacheFoldersCounts(span);
+  FolderDataCacheCountsMarkDirty(accountId);
   span.end();
 }
 

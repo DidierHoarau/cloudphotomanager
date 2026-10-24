@@ -33,6 +33,7 @@ function conflictFailure(
   accountId: string,
   sourceFileId: string,
   targetFileId: string | null,
+  dateCreated?: string,
 ): SyncFailure {
   return {
     id,
@@ -42,7 +43,9 @@ function conflictFailure(
     priority: 2,
     data: {},
     fileIds: [sourceFileId],
-    dateCreated: new Date().toISOString(),
+    // Pinning the timestamp keeps SyncFailuresList()'s newest-first sort
+    // deterministic when several failures are created in the same test.
+    dateCreated: dateCreated ?? new Date().toISOString(),
     conflict: {
       sourceFileId,
       targetFileId,
@@ -65,7 +68,11 @@ function conflictFailure(
   };
 }
 
-function errorFailure(id: string, accountId: string): SyncFailure {
+function errorFailure(
+  id: string,
+  accountId: string,
+  dateCreated?: string,
+): SyncFailure {
   return {
     id,
     accountId,
@@ -75,7 +82,7 @@ function errorFailure(id: string, accountId: string): SyncFailure {
     data: { fileId: `err-file-${id}` },
     fileIds: [`err-file-${id}`],
     errorMessage: "boom",
-    dateCreated: new Date().toISOString(),
+    dateCreated: dateCreated ?? new Date().toISOString(),
   };
 }
 
@@ -139,10 +146,25 @@ describe("SyncFailureRoutes resolve-all", () => {
   });
 
   it("deleteSource-all deletes the source of every conflict and leaves errors untouched", async () => {
+    // Distinct, recent timestamps: SyncFailuresList() sorts newest-first and
+    // prune() drops entries older than 24h, so pinned old dates would vanish.
+    const stampBase = Date.now() - 60_000;
     for (const failure of [
-      conflictFailure("ds-conflict-1", accountId, "ds-src-1", "ds-tgt-1"),
-      conflictFailure("ds-conflict-2", accountId, "ds-src-2", null),
-      errorFailure("ds-error", accountId),
+      conflictFailure(
+        "ds-conflict-1",
+        accountId,
+        "ds-src-1",
+        "ds-tgt-1",
+        new Date(stampBase + 2).toISOString(),
+      ),
+      conflictFailure(
+        "ds-conflict-2",
+        accountId,
+        "ds-src-2",
+        null,
+        new Date(stampBase + 1).toISOString(),
+      ),
+      errorFailure("ds-error", accountId, new Date(stampBase).toISOString()),
     ]) {
       ctx.syncFailures.SyncFailuresAdd(failure);
     }

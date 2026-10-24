@@ -19,6 +19,7 @@ import {
   ShareDataGetForFolder,
   ShareDataListForFolder,
 } from "./ShareData";
+import { PaginationParse } from "../utils-std-ts/Pagination";
 
 const logger = OTelLogger().createModuleLogger("ShareRoutes");
 
@@ -251,6 +252,12 @@ export class ShareRoutesPublic {
       "/:token/folders/:folderId/files-recursive",
       async (req, res) => {
         const span = OTelRequestSpan(req);
+        const pagination = PaginationParse(req.query);
+        if (!pagination) {
+          return res
+            .status(400)
+            .send({ error: "Invalid parameter: page or pageSize" });
+        }
         const resolved = await shareFor(span, req.params.token);
         if (!resolved) {
           return res.status(404).send({ error: "Share Not Found" });
@@ -267,8 +274,8 @@ export class ShareRoutesPublic {
         const includeSubFolders = req.query.includeSubFolders === "true";
         const sortOrder: "asc" | "desc" =
           req.query.sortOrder === "asc" ? "asc" : "desc";
-        const page = parseInt(req.query.page || "0", 10);
-        const pageSize = parseInt(req.query.pageSize || "60", 10);
+        const page = pagination.page;
+        const pageSize = pagination.pageSize;
         let result: { files: File[]; total: number };
         if (includeSubFolders) {
           result = await FileDataListByFolderRecursivePaginated(
