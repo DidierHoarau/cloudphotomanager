@@ -581,20 +581,25 @@ export default {
     },
     async fetchFilesSilent() {
       if (!this.currentAccountId || !this.currentFolderId) return;
-      const totalToFetch = Math.max(
-        this.pageSize,
-        (this.currentPage + 1) * this.pageSize,
-      );
       try {
-        const { files: newFiles, total } = await this._requestFilesPage({
-          accountId: this.currentAccountId,
-          folderId: this.currentFolderId,
-          page: 0,
-          pageSize: totalToFetch,
-        });
+        // The server caps pageSize at 200: fetch the visible pages one by one
+        // instead of asking for a growing unlimited page size.
+        const newFiles = [];
+        let total = 0;
+        for (let page = 0; page <= this.currentPage; page++) {
+          const result = await this._requestFilesPage({
+            accountId: this.currentAccountId,
+            folderId: this.currentFolderId,
+            page,
+            pageSize: this.pageSize,
+          });
+          newFiles.push(...result.files);
+          total = result.total;
+          if (result.files.length < this.pageSize) break;
+        }
         this.outtakesCount = this._markOuttakes(newFiles);
         this.files = newFiles;
-        this.hasMore = total > totalToFetch;
+        this.hasMore = total > newFiles.length;
         this.scheduleDuplicateCountLoad(newFiles);
       } catch (err) {
         handleError(err);

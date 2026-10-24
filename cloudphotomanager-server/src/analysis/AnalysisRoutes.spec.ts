@@ -275,7 +275,7 @@ describe("AnalysisRoutes permissions", () => {
   });
 
   it("ignores trashed files in duplicate groups and counts", async () => {
-    await ctx.fileData.FileDataTrash(ctx.span, fp2.id);
+    await ctx.fileData.FileDataTrash(ctx.span, fp2.id, accountA.id);
 
     const afterTrash = await ctx.fastify.inject({
       method: "GET",
@@ -301,7 +301,7 @@ describe("AnalysisRoutes permissions", () => {
     });
     expect(counts.json().counts).toEqual({ [fp3.id]: 2 });
 
-    await ctx.fileData.FileDataRestore(ctx.span, fp2.id);
+    await ctx.fileData.FileDataRestore(ctx.span, fp2.id, accountA.id);
 
     const afterRestore = await ctx.fastify.inject({
       method: "GET",

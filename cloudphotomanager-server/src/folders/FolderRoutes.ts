@@ -14,11 +14,13 @@ import {
 } from "../users/UserPermissionCheck";
 import {
   FolderDataDelete,
-  FolderDataDeletePathRecursive,
   FolderDataGet,
+  FolderDataGetByPath,
   FolderDataGetParent,
   FolderDataListCountsForAccount,
   FolderDataListForAccount,
+  FolderDataRenameSubtree,
+  FolderDataSubtreeExists,
 } from "./FolderData";
 import {
   FileDataListByFolderPaginated,
@@ -27,6 +29,9 @@ import {
 import { File } from "../model/File";
 import { MediaUrlsAttachForUser } from "../media/MediaUrls";
 import { OTelLogger } from "../OTelContext";
+import { PaginationParse } from "../utils-std-ts/Pagination";
+import { PromisePool } from "../utils-std-ts/PromisePool";
+import { SyncFileCacheMoveFileCacheDir } from "../sync/SyncFileCache";
 
 const logger = OTelLogger().createModuleLogger("FolderRoutes");
 
@@ -103,6 +108,12 @@ export class FolderRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
+      const pagination = PaginationParse(req.query);
+      if (!pagination) {
+        return res
+          .status(400)
+          .send({ error: "Invalid parameter: page or pageSize" });
+      }
       const folder = await FolderDataGet(span, req.params.folderId);
       if (!folder) {
         return res
@@ -132,8 +143,8 @@ export class FolderRoutes {
       const favoriteOnly = req.query.favoriteOnly === "true";
       const sortOrder: "asc" | "desc" =
         req.query.sortOrder === "asc" ? "asc" : "desc";
-      const page = parseInt(req.query.page || "0", 10);
-      const pageSize = parseInt(req.query.pageSize || "60", 10);
+      const page = pagination.page;
+      const pageSize = pagination.pageSize;
       let result: { files: File[]; total: number };
       if (includeSubFolders) {
         result = await FileDataListByFolderRecursivePaginated(
@@ -377,14 +388,62 @@ export class FolderRoutes {
       if (!folderParent) {
         return res.status(404).send({ error: "Parent folder not found" });
       }
+      const newFolderpath =
+        folderParent.folderpath === "/"
+          ? `/${newName}`
+          : `${folderParent.folderpath}/${newName}`;
+      // Refuse to overwrite an existing destination subtree before touching
+      // the cloud: the DB re-key must never collide with existing rows.
       const account = await AccountFactoryGetAccountImplementation(
         req.params.accountId,
       );
+      if (
+        (await FolderDataGetByPath(
+          span,
+          account.getAccountDefinition().id,
+          newFolderpath,
+        )) ||
+        (await FolderDataSubtreeExists(
+          span,
+          account.getAccountDefinition().id,
+          newFolderpath,
+        ))
+      ) {
+        return res
+          .status(409)
+          .send({ error: "A folder already exists at the destination" });
+      }
       await account.renameFolder(span, folder, newName);
-      await FolderDataDeletePathRecursive(
+      const renamedCloud = await account.getFolderByPath(span, newFolderpath);
+      const { folderId, fileIdMoves } = await FolderDataRenameSubtree(
         span,
         account.getAccountDefinition().id,
         folder.folderpath,
+        newFolderpath,
+        renamedCloud?.idCloud ?? null,
+      );
+      // Cache directories are keyed by file id: move them best-effort after
+      // the DB commit so previews are not regenerated.
+      const cachePool = new PromisePool(8);
+      const cacheMoves = fileIdMoves.map((move) =>
+        cachePool.add(async () => {
+          await SyncFileCacheMoveFileCacheDir(
+            span,
+            account.getAccountDefinition().id,
+            move.from,
+            move.to,
+          );
+        }),
+      );
+      await Promise.all(cacheMoves).catch((err) => {
+        logger.warn(`Cache move after folder rename failed: ${err?.message}`, span);
+      });
+      SyncQueueQueueItem(
+        req.params.accountId,
+        folderId,
+        { folderId },
+        "SyncInventorySyncFolder",
+        SyncQueueItemPriority.INTERACTIVE,
       );
       SyncQueueQueueItem(
         req.params.accountId,

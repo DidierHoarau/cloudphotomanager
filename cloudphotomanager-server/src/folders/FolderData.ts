@@ -9,10 +9,13 @@ import {
 } from "@devopsplaybook.io/common-utils";
 import debounce from "lodash/debounce";
 import { OTelTracer } from "../OTelContext";
+import { UtilsMd5 } from "../Utils";
+import { SqlFolderSubtreePattern } from "../utils-std-ts/SqlLike";
 
-let cacheAccountsFolders: any[] = [];
-let cacheAccountsFoldersCounts: any[] = [];
+let cacheAccountsFolders: any = {};
+let cacheAccountsFoldersCounts: any = {};
 let onCacheRefreshed: (() => void) | null = null;
+const dirtyCountAccounts = new Set<string>();
 
 export function FolderDataRegisterOnCacheRefreshed(fn: () => void): void {
   onCacheRefreshed = fn;
@@ -21,24 +24,53 @@ export function FolderDataRegisterOnCacheRefreshed(fn: () => void): void {
 //
 export async function FolderDataInit(context: Span) {
   const span = OTelTracer().startSpan("FolderData_init", context);
-  FolderDataCacheCounts();
+  await FolderDataRefreshCacheFolders(span);
   span.end();
 }
 
+// Never destroys a row for the same (accountId, folderpath): legacy rows with a
+// non-md5 id are updated in place and the stored folder is returned so callers
+// queue the id that actually exists.
 export async function FolderDataAdd(
   context: Span,
   folder: Folder,
-): Promise<void> {
+): Promise<Folder> {
   const span = OTelTracer().startSpan("FolderData_add", context);
   try {
-    // DELETE + INSERT must be atomic: a failure must not leave the folder
-    // row missing.
+    const existingRaw = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT * FROM folders WHERE accountId = ? AND folderpath = ?",
+      [folder.accountId, folder.folderpath],
+    );
+    if (existingRaw.length > 0) {
+      const dateUpdated = folder.dateUpdated.toISOString();
+      const dateSync = folder.dateSync.toISOString();
+      const info = JSON.stringify(folder.info);
+      const apply = SqlDbUtilsGetDatabase().transaction(() => {
+        SqlDbUtilsExecSQL(
+          span,
+          "UPDATE folders SET idCloud = ?, dateUpdated = ?, dateSync = ?, info = ? " +
+            " WHERE accountId = ? AND folderpath = ? ",
+          [
+            folder.idCloud,
+            dateUpdated,
+            dateSync,
+            info,
+            folder.accountId,
+            folder.folderpath,
+          ],
+        );
+      });
+      apply();
+      return fromRaw({
+        ...existingRaw[0],
+        idCloud: folder.idCloud,
+        dateUpdated,
+        dateSync,
+        info,
+      });
+    }
     const apply = SqlDbUtilsGetDatabase().transaction(() => {
-      SqlDbUtilsExecSQL(
-        span,
-        "DELETE FROM folders WHERE id = ? AND accountId = ?",
-        [folder.id, folder.accountId],
-      );
       SqlDbUtilsExecSQL(
         span,
         "INSERT INTO folders (id, idCloud, accountId, folderpath, dateUpdated, dateSync, info) " +
@@ -55,8 +87,9 @@ export async function FolderDataAdd(
       );
     });
     apply();
+    return folder;
   } finally {
-    FolderDataCacheCounts();
+    FolderDataCacheFoldersDebounced();
     span.end();
   }
 }
@@ -76,6 +109,47 @@ export async function FolderDataGet(
       return null;
     }
     return fromRaw(folderRaw[0]);
+  } finally {
+    span.end();
+  }
+}
+
+export async function FolderDataGetByPath(
+  context: Span,
+  accountId: string,
+  folderpath: string,
+): Promise<Folder | null> {
+  const span = OTelTracer().startSpan("FolderDataGetByPath", context);
+  try {
+    const folderRaw = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT * FROM folders WHERE accountId = ? AND folderpath = ?",
+      [accountId, folderpath],
+    );
+    if (folderRaw.length === 0) {
+      return null;
+    }
+    return fromRaw(folderRaw[0]);
+  } finally {
+    span.end();
+  }
+}
+
+// True when the folder itself or one of its descendants exists: used to guard
+// a rename/move against overwriting an existing destination subtree.
+export async function FolderDataSubtreeExists(
+  context: Span,
+  accountId: string,
+  folderpath: string,
+): Promise<boolean> {
+  const span = OTelTracer().startSpan("FolderDataSubtreeExists", context);
+  try {
+    const rawData = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT 1 FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ? ESCAPE '\\') LIMIT 1",
+      [accountId, folderpath, SqlFolderSubtreePattern(folderpath)],
+    );
+    return rawData.length > 0;
   } finally {
     span.end();
   }
@@ -126,7 +200,7 @@ export async function FolderDataUpdate(context: Span, folder: Folder) {
       folder.accountId,
     ],
   );
-  FolderDataCacheCounts();
+  FolderDataCacheFoldersDebounced();
   span.end();
 }
 
@@ -151,25 +225,28 @@ export async function FolderDataGetByCloudId(
   }
 }
 
+// Direct children only: an indexed range query over the
+// (accountId, folderpath) index instead of loading every folder of the account.
+// '/' (0x2F) < '0' (0x30), so the upper bound excludes siblings that share the
+// parent prefix without a separator ("/ab" vs parent "/a").
 export async function FolderDataListSubFolders(
   context: Span,
   parentFolder: Folder,
 ): Promise<Folder[]> {
   const span = OTelTracer().startSpan("FolderDataListSubFolders", context);
-  const accountfolders = await FolderDataListForAccount(
+  const prefix =
+    parentFolder.folderpath === "/" ? "/" : `${parentFolder.folderpath}/`;
+  const upper = `${parentFolder.folderpath}0`;
+  const rawData = await SqlDbUtilsQuerySQL(
     span,
-    parentFolder.accountId,
+    "SELECT * FROM folders WHERE accountId = ? AND folderpath > ? AND folderpath < ? ORDER BY folderpath",
+    [parentFolder.accountId, prefix, upper],
   );
   const folders = [];
-
-  accountfolders.forEach((candidateFolder) => {
-    if (
-      path.relative(
-        `${candidateFolder.folderpath}/`,
-        parentFolder.folderpath,
-      ) === ".."
-    ) {
-      folders.push(fromRaw(candidateFolder));
+  rawData.forEach((folderRaw) => {
+    const rest = folderRaw.folderpath.slice(prefix.length);
+    if (rest.length > 0 && !rest.includes("/")) {
+      folders.push(fromRaw(folderRaw));
     }
   });
   span.end();
@@ -238,7 +315,7 @@ export async function FolderDataDelete(
     "DELETE FROM folders WHERE accountId = ? AND id = ?",
     [accountId, id],
   );
-  FolderDataCacheCounts();
+  FolderDataCacheFoldersDebounced();
   span.end();
 }
 
@@ -329,8 +406,7 @@ export async function FolderDataDeletePathRecursive(
     // Match the exact path or its "<path>/" subtree only. LIKE wildcards in
     // the path are escaped so "/2023" does not match "/2023-backup" and
     // literal "%"/"_" characters in folder names stay literal.
-    const subtreePrefix = folderpath === "/" ? "/" : `${folderpath}/`;
-    const subtreePattern = `${escapeLikePattern(subtreePrefix)}%`;
+    const subtreePattern = SqlFolderSubtreePattern(folderpath);
     const apply = SqlDbUtilsGetDatabase().transaction(() => {
       SqlDbUtilsExecSQL(
         span,
@@ -347,7 +423,149 @@ export async function FolderDataDeletePathRecursive(
     });
     apply();
   } finally {
-    FolderDataCacheCounts();
+    FolderDataCacheFoldersDebounced();
+    FolderDataCacheCountsMarkDirty(accountId);
+    span.end();
+  }
+}
+
+// Re-keys the folder subtree and its files in place so a rename keeps the
+// row ids meaningful while preserving curation (favorites, trash, keywords),
+// share links and permission grants. Returns the new root folder id and the
+// file id moves (for moving the media cache directories).
+export async function FolderDataRenameSubtree(
+  context: Span,
+  accountId: string,
+  oldFolderpath: string,
+  newFolderpath: string,
+  newRootIdCloud: string | null,
+): Promise<{ folderId: string; fileIdMoves: { from: string; to: string }[] }> {
+  const span = OTelTracer().startSpan("FolderDataRenameSubtree", context);
+  try {
+    const subtreePattern = SqlFolderSubtreePattern(oldFolderpath);
+    const folderRows = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT id, folderpath, idCloud FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ? ESCAPE '\\') ORDER BY length(folderpath)",
+      [accountId, oldFolderpath, subtreePattern],
+    );
+    if (folderRows.length === 0) {
+      return { folderId: null, fileIdMoves: [] };
+    }
+    const folderIdMap = new Map<
+      string,
+      { newId: string; newPath: string; newIdCloud: string }
+    >();
+    for (const row of folderRows) {
+      const newPath = newFolderpath + row.folderpath.slice(oldFolderpath.length);
+      const newId = UtilsMd5(encodeURI(`${accountId}/${newPath}`));
+      let newIdCloud = row.idCloud;
+      if (row.folderpath === oldFolderpath && newRootIdCloud) {
+        newIdCloud = newRootIdCloud;
+      } else if (oldFolderpath !== "/") {
+        // Path-based ids (local drive, S3 prefixes) end with the row's own
+        // relative path; opaque ids (OneDrive) do not and stay unchanged.
+        newIdCloud = rebaseCloudPath(row.idCloud, row.folderpath, newPath);
+      }
+      folderIdMap.set(row.id, { newId, newPath, newIdCloud });
+    }
+
+    const folderIds = folderRows.map((row) => row.id);
+    const placeholders = folderIds.map(() => "?").join(", ");
+    const fileRows = await SqlDbUtilsQuerySQL(
+      span,
+      `SELECT id, filename, folderId FROM files WHERE folderId IN (${placeholders})`,
+      folderIds,
+    );
+    const fileIdMoves: { from: string; to: string }[] = [];
+    const fileIdMap = new Map<string, string>();
+    for (const row of fileRows) {
+      const folder = folderIdMap.get(row.folderId);
+      if (!folder) {
+        continue;
+      }
+      const newFileId = UtilsMd5(
+        encodeURI(`${accountId}/${folder.newId}/${row.filename}`),
+      );
+      if (newFileId !== row.id) {
+        fileIdMap.set(row.id, newFileId);
+        fileIdMoves.push({ from: row.id, to: newFileId });
+      }
+    }
+
+    const apply = SqlDbUtilsGetDatabase().transaction(() => {
+      SqlDbUtilsExecSQL(
+        span,
+        "CREATE TEMP TABLE IF NOT EXISTS _folder_id_map (oldId TEXT PRIMARY KEY, newId TEXT NOT NULL)",
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        "CREATE TEMP TABLE IF NOT EXISTS _file_id_map (oldId TEXT PRIMARY KEY, newId TEXT NOT NULL)",
+      );
+      SqlDbUtilsExecSQL(span, "DELETE FROM _folder_id_map");
+      SqlDbUtilsExecSQL(span, "DELETE FROM _file_id_map");
+      for (const [oldId, folder] of folderIdMap) {
+        SqlDbUtilsExecSQL(
+          span,
+          "INSERT INTO _folder_id_map (oldId, newId) VALUES (?, ?)",
+          [oldId, folder.newId],
+        );
+      }
+      for (const [oldId, newId] of fileIdMap) {
+        SqlDbUtilsExecSQL(
+          span,
+          "INSERT INTO _file_id_map (oldId, newId) VALUES (?, ?)",
+          [oldId, newId],
+        );
+      }
+      SqlDbUtilsExecSQL(
+        span,
+        "UPDATE files SET folderId = (SELECT newId FROM _folder_id_map WHERE oldId = files.folderId) WHERE folderId IN (SELECT oldId FROM _folder_id_map)",
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        "UPDATE shares SET folderId = (SELECT newId FROM _folder_id_map WHERE oldId = shares.folderId) WHERE folderId IN (SELECT oldId FROM _folder_id_map)",
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        "UPDATE users_permissions " +
+          "SET info = json_set(info, '$.folders', (" +
+          "  SELECT json_group_array(" +
+          "    json_set(je.value, '$.folderId'," +
+          "      CASE" +
+          "        WHEN EXISTS (SELECT 1 FROM _folder_id_map m WHERE m.oldId = json_extract(je.value, '$.folderId'))" +
+          "        THEN (SELECT m.newId FROM _folder_id_map m WHERE m.oldId = json_extract(je.value, '$.folderId'))" +
+          "        ELSE json_extract(je.value, '$.folderId')" +
+          "      END" +
+          "    )" +
+          "  )" +
+          "  FROM json_each(json_extract(users_permissions.info, '$.folders')) AS je" +
+          ")) " +
+          "WHERE EXISTS (" +
+          "  SELECT 1 FROM json_each(json_extract(users_permissions.info, '$.folders')) AS je" +
+          "  WHERE json_extract(je.value, '$.folderId') IN (SELECT oldId FROM _folder_id_map)" +
+          ")",
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        "UPDATE files SET id = (SELECT newId FROM _file_id_map WHERE oldId = files.id) WHERE id IN (SELECT oldId FROM _file_id_map)",
+      );
+      for (const [oldId, folder] of folderIdMap) {
+        SqlDbUtilsExecSQL(
+          span,
+          "UPDATE folders SET id = ?, folderpath = ?, idCloud = ? WHERE id = ?",
+          [folder.newId, folder.newPath, folder.newIdCloud, oldId],
+        );
+      }
+      SqlDbUtilsExecSQL(span, "DROP TABLE IF EXISTS _folder_id_map");
+      SqlDbUtilsExecSQL(span, "DROP TABLE IF EXISTS _file_id_map");
+    });
+    apply();
+
+    const root = folderIdMap.get(folderRows[0].id);
+    return { folderId: root.newId, fileIdMoves };
+  } finally {
+    FolderDataCacheFoldersDebounced();
+    FolderDataCacheCountsMarkDirty(accountId);
     span.end();
   }
 }
@@ -385,30 +603,21 @@ export async function FolderDataRefreshCacheFoldersCounts(
   span.end();
 }
 
-export async function FolderDataDeleteFoldersWithDuplicates(context: Span) {
-  const span = OTelTracer().startSpan(
-    "FolderDataDeleteFoldersWithDuplicates",
-    context,
-  );
-  SqlDbUtilsExecSQL(
-    span,
-    `
-      DELETE FROM folders
-      WHERE rowid IN (
-        SELECT f1.rowid
-        FROM folders f1
-        JOIN (
-          SELECT accountid, folderPath
-          FROM folders
-          GROUP BY accountid, folderPath
-          HAVING COUNT(*) > 1
-        ) dup
-        ON f1.accountid = dup.accountid AND f1.folderPath = dup.folderPath
-      )
-      `,
-  );
-  FolderDataCacheCounts();
-  span.end();
+// Hot-path folder mutations mark their account dirty instead of running a
+// full per-account GROUP BY scan per file. The debounced refresh aggregates
+// each dirty account at most once per 500ms (max 5s under constant writes).
+export function FolderDataCacheCountsMarkDirty(accountId: string): void {
+  if (!accountId) {
+    return;
+  }
+  dirtyCountAccounts.add(accountId);
+  FolderDataCacheCountsDebounced();
+}
+
+// Test hook: flushes the pending debounced refreshes and waits for them.
+export async function FolderDataCacheCountsFlush(): Promise<void> {
+  await Promise.resolve(FolderDataCacheFoldersDebounced.flush());
+  await Promise.resolve(FolderDataCacheCountsDebounced.flush());
 }
 
 export async function FolderDataGetCount(context: Span): Promise<number> {
@@ -427,25 +636,58 @@ export async function FolderDataGetCount(context: Span): Promise<number> {
 
 // Private Functions
 
-// Escape LIKE wildcards so a folder path is matched literally
-// (patterns are used with ESCAPE '\').
-function escapeLikePattern(value: string): string {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/%/g, "\\%")
-    .replace(/_/g, "\\_");
+// Path-based provider ids (local drive absolute paths, S3 prefixes) end with
+// the folder's relative path and can be rebased onto the new path. Opaque ids
+// (OneDrive Graph item ids) do not, and must be kept unchanged.
+function rebaseCloudPath(
+  idCloud: string,
+  rowFolderpath: string,
+  rowNewFolderpath: string,
+): string {
+  if (
+    typeof idCloud === "string" &&
+    idCloud.endsWith(rowFolderpath)
+  ) {
+    return (
+      idCloud.slice(0, idCloud.length - rowFolderpath.length) +
+      rowNewFolderpath
+    );
+  }
+  return idCloud;
 }
 
-const FolderDataCacheCountsDebounced = debounce(async () => {
-  const span = OTelTracer().startSpan("FolderDataCacheCounts");
-  await FolderDataRefreshCacheFolders(span);
-  span.end();
-  onCacheRefreshed?.();
-}, 500);
+const FolderDataCacheFoldersDebounced = debounce(
+  async () => {
+    const span = OTelTracer().startSpan("FolderDataCacheFolders");
+    try {
+      await FolderDataRefreshCacheFolders(span);
+    } finally {
+      span.end();
+    }
+    onCacheRefreshed?.();
+  },
+  500,
+  { maxWait: 5000 },
+);
 
-function FolderDataCacheCounts() {
-  FolderDataCacheCountsDebounced();
-}
+const FolderDataCacheCountsDebounced = debounce(
+  async () => {
+    const span = OTelTracer().startSpan("FolderDataCacheCounts");
+    try {
+      const accounts = Array.from(dirtyCountAccounts);
+      dirtyCountAccounts.clear();
+      for (const accountId of accounts) {
+        cacheAccountsFoldersCounts[accountId] =
+          await FolderDataListCountsForAccount(span, accountId);
+      }
+    } finally {
+      span.end();
+    }
+    onCacheRefreshed?.();
+  },
+  500,
+  { maxWait: 5000 },
+);
 
 function fromRaw(folderRaw: any): Folder {
   const folder = new Folder(folderRaw.accountId, folderRaw.folderpath);

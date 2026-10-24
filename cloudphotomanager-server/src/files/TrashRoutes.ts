@@ -14,6 +14,7 @@ import {
   UserPermissionContextFolderIdsGet,
   UserPermissionContextGet,
 } from "../users/UserPermissionCheck";
+import { PaginationParse } from "../utils-std-ts/Pagination";
 
 export class TrashRoutes {
   //
@@ -42,6 +43,12 @@ export class TrashRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
+      const pagination = PaginationParse(req.query);
+      if (!pagination) {
+        return res
+          .status(400)
+          .send({ error: "Invalid parameter: page or pageSize" });
+      }
       const permissionContext = await UserPermissionContextGet(
         span,
         userSession.userId,
@@ -51,8 +58,8 @@ export class TrashRoutes {
         permissionContext,
         req.params.accountId,
       );
-      const page = parseInt(req.query.page || "0", 10);
-      const pageSize = parseInt(req.query.pageSize || "60", 10);
+      const page = pagination.page;
+      const pageSize = pagination.pageSize;
       const result = await FileDataListTrashPaginated(
         span,
         req.params.accountId,
@@ -98,7 +105,11 @@ export class TrashRoutes {
         if (file.accountId !== req.params.accountId) {
           return res.status(403).send({ error: "Access Denied" });
         }
-        const rowsAffected = await FileDataRestore(span, fileId);
+        const rowsAffected = await FileDataRestore(
+          span,
+          fileId,
+          req.params.accountId,
+        );
         if (rowsAffected > 0) {
           restoredCount += rowsAffected;
           restoredFileIds.push(fileId);
