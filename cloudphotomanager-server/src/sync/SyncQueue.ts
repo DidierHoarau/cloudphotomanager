@@ -30,6 +30,7 @@ import { FileDataGet, FileDataUpdateKeywords, FileDataRecordSyncFailure, FileDat
 import { AccountDataGet } from "../accounts/AccountData";
 import {
   SqlDbUtilsExecSQL,
+  SqlDbUtilsGetDatabase,
   SqlDbUtilsQuerySQL,
 } from "@devopsplaybook.io/common-utils";
 import {
@@ -58,6 +59,13 @@ const ITEM_PROCESS_TIMEOUTS: Record<number, number> = {
   [SyncQueueItemPriority.BATCH]: 4 * 3600 * 1000,
 };
 const DEFAULT_ITEM_PROCESS_TIMEOUT = 30 * 60 * 1000;
+// Overridable through SyncQueueInit for tests; production uses the constants.
+let itemProcessTimeouts: Record<number, number> = { ...ITEM_PROCESS_TIMEOUTS };
+let defaultItemProcessTimeout = DEFAULT_ITEM_PROCESS_TIMEOUT;
+// How long the queue waits for an aborted handler to settle (killed child
+// process, cancelled request) before recording the failure and freeing the
+// slot anyway.
+const ITEM_ABORT_SETTLE_GRACE = 5 * 1000;
 const STUCK_ACTIVE_SWEEP_INTERVAL = 5 * 60 * 1000;
 // Extra grace on top of the longest per-item timeout before the sweeper
 // considers an ACTIVE row orphaned.
@@ -91,6 +99,7 @@ type QueueFunction = (
   account: Account,
   data: any,
   priority: SyncQueueItemPriority,
+  signal?: AbortSignal,
 ) => Promise<void>;
 
 const functionRegistry = new Map<string, QueueFunction>();
@@ -110,15 +119,31 @@ const queuedFileIdRefCount = new Map<string, number>();
 let broadcastTimer: NodeJS.Timeout | null = null;
 let broadcastPending = false;
 
-export async function SyncQueueInit(context: Span): Promise<void> {
+export interface SyncQueueInitOptions {
+  itemProcessTimeouts?: Record<number, number>;
+}
+
+export async function SyncQueueInit(
+  context: Span,
+  options: SyncQueueInitOptions = {},
+): Promise<void> {
   const span = OTelTracer().startSpan("SyncQueueInit", context);
+
+  if (options.itemProcessTimeouts) {
+    itemProcessTimeouts = { ...options.itemProcessTimeouts };
+    const values = Object.values(itemProcessTimeouts);
+    if (values.length > 0) {
+      defaultItemProcessTimeout = Math.max(...values);
+    }
+  }
 
   // Register all sync functions. Handlers receive slim payloads (IDs) and
   // reload the full File/Folder from the DB at dispatch time so queue rows
-  // stay small.
+  // stay small. The AbortSignal lets a timed-out item cancel its work
+  // (including child processes).
   SyncQueueRegisterFunction(
     "SyncInventorySyncFolder",
-    async (account, data, priority) => {
+    async (account, data, priority, _signal) => {
       const loadSpan = OTelTracer().startSpan("SyncQueueLoadFolder");
       const folder = await FolderDataGet(loadSpan, data.folderId);
       loadSpan.end();
@@ -131,49 +156,67 @@ export async function SyncQueueInit(context: Span): Promise<void> {
       await SyncInventorySyncFolder(account, folder, priority);
     },
   );
-  SyncQueueRegisterFunction("syncVideoFromFull", async (account, data) => {
-    const loadSpan = OTelTracer().startSpan("SyncQueueLoadFile");
-    const file = await FileDataGet(loadSpan, data.fileId);
-    loadSpan.end();
-    if (!file) {
-      logger.info(`File ${data.fileId} not found, skipping syncVideoFromFull`);
-      return;
-    }
-    await syncVideoFromFull(account, file);
-  });
-  SyncQueueRegisterFunction("syncPhotoFromFull", async (account, data) => {
-    const loadSpan = OTelTracer().startSpan("SyncQueueLoadFile");
-    const file = await FileDataGet(loadSpan, data.fileId);
-    loadSpan.end();
-    if (!file) {
-      logger.info(`File ${data.fileId} not found, skipping syncPhotoFromFull`);
-      return;
-    }
-    await syncPhotoFromFull(account, file);
-  });
-  SyncQueueRegisterFunction("syncPhotoKeyWords", async (account, data) => {
-    const loadSpan = OTelTracer().startSpan("SyncQueueLoadFile");
-    const file = await FileDataGet(loadSpan, data.fileId);
-    loadSpan.end();
-    if (!file) {
-      logger.info(`File ${data.fileId} not found, skipping syncPhotoKeyWords`);
-      return;
-    }
-    await syncPhotoKeyWords(account, file);
-  });
-  SyncQueueRegisterFunction("syncThumbnail", async (account, data) => {
-    const loadSpan = OTelTracer().startSpan("SyncQueueLoadFile");
-    const file = await FileDataGet(loadSpan, data.fileId);
-    loadSpan.end();
-    if (!file) {
-      logger.info(`File ${data.fileId} not found, skipping syncThumbnail`);
-      return;
-    }
-    await syncThumbnail(account, file);
-  });
+  SyncQueueRegisterFunction(
+    "syncVideoFromFull",
+    async (account, data, priority, signal) => {
+      const loadSpan = OTelTracer().startSpan("SyncQueueLoadFile");
+      const file = await FileDataGet(loadSpan, data.fileId);
+      loadSpan.end();
+      if (!file) {
+        logger.info(
+          `File ${data.fileId} not found, skipping syncVideoFromFull`,
+        );
+        return;
+      }
+      await syncVideoFromFull(account, file, signal);
+    },
+  );
+  SyncQueueRegisterFunction(
+    "syncPhotoFromFull",
+    async (account, data, priority, signal) => {
+      const loadSpan = OTelTracer().startSpan("SyncQueueLoadFile");
+      const file = await FileDataGet(loadSpan, data.fileId);
+      loadSpan.end();
+      if (!file) {
+        logger.info(
+          `File ${data.fileId} not found, skipping syncPhotoFromFull`,
+        );
+        return;
+      }
+      await syncPhotoFromFull(account, file, signal);
+    },
+  );
+  SyncQueueRegisterFunction(
+    "syncPhotoKeyWords",
+    async (account, data, priority, signal) => {
+      const loadSpan = OTelTracer().startSpan("SyncQueueLoadFile");
+      const file = await FileDataGet(loadSpan, data.fileId);
+      loadSpan.end();
+      if (!file) {
+        logger.info(
+          `File ${data.fileId} not found, skipping syncPhotoKeyWords`,
+        );
+        return;
+      }
+      await syncPhotoKeyWords(account, file, signal);
+    },
+  );
+  SyncQueueRegisterFunction(
+    "syncThumbnail",
+    async (account, data, priority, signal) => {
+      const loadSpan = OTelTracer().startSpan("SyncQueueLoadFile");
+      const file = await FileDataGet(loadSpan, data.fileId);
+      loadSpan.end();
+      if (!file) {
+        logger.info(`File ${data.fileId} not found, skipping syncThumbnail`);
+        return;
+      }
+      await syncThumbnail(account, file, signal);
+    },
+  );
   SyncQueueRegisterFunction(
     "syncThumbnailFromVideoPreview",
-    async (account, data) => {
+    async (account, data, priority, signal) => {
       const loadSpan = OTelTracer().startSpan("SyncQueueLoadFile");
       const file = await FileDataGet(loadSpan, data.fileId);
       loadSpan.end();
@@ -183,7 +226,7 @@ export async function SyncQueueInit(context: Span): Promise<void> {
         );
         return;
       }
-      await syncThumbnailFromVideoPreview(account, file);
+      await syncThumbnailFromVideoPreview(account, file, signal);
     },
   );
   // Individual file operations already use slim payloads
@@ -230,10 +273,11 @@ export async function SyncQueueInit(context: Span): Promise<void> {
   }
 
   // Crash recovery: any rows stuck in ACTIVE at startup must be retried.
-  SqlDbUtilsExecSQL(span, "UPDATE sync_queue SET status = ? WHERE status = ?", [
-    SyncQueueItemStatus.WAITING,
-    SyncQueueItemStatus.ACTIVE,
-  ]);
+  SqlDbUtilsExecSQL(
+    span,
+    "UPDATE sync_queue SET status = ?, dateStarted = NULL WHERE status = ?",
+    [SyncQueueItemStatus.WAITING, SyncQueueItemStatus.ACTIVE],
+  );
 
   // Rebuild the in-memory fileId ref-count from persisted rows.
   queuedFileIdRefCount.clear();
@@ -452,10 +496,13 @@ function dispatchNextBatch(): number {
       continue;
     }
     const item = rowToItem(rows[0]);
-    SqlDbUtilsExecSQL(span, "UPDATE sync_queue SET status = ? WHERE id = ?", [
-      SyncQueueItemStatus.ACTIVE,
-      item.id,
-    ]);
+    const dateStarted = new Date().toISOString();
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE sync_queue SET status = ?, dateStarted = ? WHERE id = ?",
+      [SyncQueueItemStatus.ACTIVE, dateStarted, item.id],
+    );
+    item.dateStarted = dateStarted;
     span.end();
 
     dispatchItem(pool, item);
@@ -474,33 +521,47 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
   if (!fn) {
     logger.error(`Function ${item.functionName} not registered in queue`);
     const span = OTelTracer().startSpan("SyncQueueDropUnknown");
-    SqlDbUtilsExecSQL(span, "DELETE FROM sync_queue WHERE id = ?", [item.id]);
-    for (const fid of item.fileIds || []) decrementFileIdRef(fid);
+    deleteQueueItem(item);
     span.end();
+    scheduleBroadcastQueueUpdate();
     return;
   }
 
   const itemProcess = async () => {
     const timeoutMs =
-      ITEM_PROCESS_TIMEOUTS[item.priority] ?? DEFAULT_ITEM_PROCESS_TIMEOUT;
+      itemProcessTimeouts[item.priority] ?? defaultItemProcessTimeout;
+    const controller = new AbortController();
     let timeoutHandle: NodeJS.Timeout | null = null;
+    let timedOut = false;
     try {
       const work = (async () => {
         const account = await AccountFactoryGetAccountImplementation(
           item.accountId,
         );
-        await fn(account, item.data, item.priority);
+        await fn(account, item.data, item.priority, controller.signal);
       })();
       const timeout = new Promise<never>((_, reject) => {
         timeoutHandle = setTimeout(() => {
-          reject(
-            new Error(
-              `Sync queue item ${item.id} (${item.functionName}) timed out after ${timeoutMs}ms`,
-            ),
+          timedOut = true;
+          const err = new Error(
+            `Sync queue item ${item.id} (${item.functionName}) timed out after ${timeoutMs}ms`,
           );
+          // Cancel the handler's work: aborted requests and SystemCommand
+          // child processes are killed by the signal handlers.
+          controller.abort(err);
+          reject(err);
         }, timeoutMs);
       });
-      await Promise.race([work, timeout]);
+      try {
+        await Promise.race([work, timeout]);
+      } catch (err) {
+        if (timedOut) {
+          // Give the aborted handler a bounded chance to settle (kill the
+          // child process, release handles) before the slot is freed.
+          await waitForSettlement(work, ITEM_ABORT_SETTLE_GRACE);
+        }
+        throw err;
+      }
       if (FILE_CACHE_OPS.has(item.functionName)) {
         const successSpan = OTelTracer().startSpan("SyncQueueFileSyncSuccess");
         try {
@@ -592,15 +653,20 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
       }
     } finally {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      // Cleanup: cancel anything still listening (idempotent after a timeout).
+      controller.abort();
       const span = OTelTracer().startSpan("SyncQueueItemComplete");
-      SqlDbUtilsExecSQL(span, "DELETE FROM sync_queue WHERE id = ?", [item.id]);
-      span.end();
-      for (const fid of item.fileIds || []) decrementFileIdRef(fid);
-      broadcastOperationComplete(
-        item.functionName,
-        item.fileIds || [],
-        item.priority,
-      );
+      try {
+        if (deleteQueueItem(item)) {
+          broadcastOperationComplete(
+            item.functionName,
+            item.fileIds || [],
+            item.priority,
+          );
+        }
+      } finally {
+        span.end();
+      }
       scheduleBroadcastQueueUpdate();
       // Ensure the processor keeps draining even after idle periods.
       processQueue();
@@ -608,6 +674,39 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
   };
 
   pool.add(itemProcess);
+}
+
+// Deletes the item only if it is still the same ACTIVE run (same start
+// time). This makes the completion and sweeper paths idempotent: whichever
+// wins removes the row and decrements the file ref-counts exactly once.
+function deleteQueueItem(item: SyncQueueItem): boolean {
+  const result = SqlDbUtilsGetDatabase()
+    .prepare(
+      "DELETE FROM sync_queue WHERE id = ? AND status = ? AND dateStarted IS ?",
+    )
+    .run(item.id, SyncQueueItemStatus.ACTIVE, item.dateStarted ?? null);
+  if (result.changes <= 0) {
+    return false;
+  }
+  for (const fid of item.fileIds || []) {
+    decrementFileIdRef(fid);
+  }
+  return true;
+}
+
+function waitForSettlement(
+  work: Promise<void>,
+  graceMs: number,
+): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const handle = setTimeout(resolve, graceMs);
+    handle.unref?.();
+    const done = () => {
+      clearTimeout(handle);
+      resolve();
+    };
+    work.then(done, done);
+  });
 }
 
 function buildErrorMessage(err: unknown): string {
@@ -756,45 +855,67 @@ function startStuckActiveSweeper(): void {
   if (stuckActiveSweeperStarted) return;
   stuckActiveSweeperStarted = true;
   const sweeperTimer = setInterval(() => {
-    const span = OTelTracer().startSpan("SyncQueueSweepStuckActive");
-    try {
-      const maxTimeoutMs = Math.max(
-        ...Object.values(ITEM_PROCESS_TIMEOUTS),
-        DEFAULT_ITEM_PROCESS_TIMEOUT,
-      );
-      const cutoff = new Date(
-        Date.now() - (maxTimeoutMs + STUCK_ACTIVE_BUFFER),
-      ).toISOString();
-      const stuck = SqlDbUtilsQuerySQL(
-        span,
-        "SELECT id, fileIds FROM sync_queue WHERE status = ? AND dateCreated < ?",
-        [SyncQueueItemStatus.ACTIVE, cutoff],
-      );
-      if (stuck.length === 0) {
-        return;
-      }
-      logger.info(
-        `Sweeping ${stuck.length} stuck ACTIVE sync_queue rows older than ${cutoff}`,
-      );
-      for (const row of stuck) {
-        SqlDbUtilsExecSQL(span, "DELETE FROM sync_queue WHERE id = ?", [
-          row.id,
-        ]);
-        for (const fid of safeParseStringArray(row.fileIds)) {
-          decrementFileIdRef(fid);
-        }
-      }
-      scheduleBroadcastQueueUpdate();
-      processQueue();
-    } catch (err) {
-      logger.error("Error in stuck-active sweeper", err);
-    } finally {
-      span.end();
-    }
+    SyncQueueSweepStuckActive();
   }, STUCK_ACTIVE_SWEEP_INTERVAL);
   // The sweeper must not keep the process alive on its own (the HTTP server
   // and scheduler do); this also allows test workers to exit cleanly.
   sweeperTimer.unref();
+}
+
+// Exported for tests and for a manual sweep. An ACTIVE row is orphaned only
+// when it started (dateStarted, or dateCreated for legacy rows) longer ago
+// than the longest per-item timeout plus a grace buffer: a batch item that
+// waited hours in the queue before starting must not be swept mid-flight.
+export function SyncQueueSweepStuckActive(): number {
+  const span = OTelTracer().startSpan("SyncQueueSweepStuckActive");
+  let swept = 0;
+  try {
+    const maxTimeoutMs = Math.max(
+      ...Object.values(itemProcessTimeouts),
+      defaultItemProcessTimeout,
+    );
+    const cutoff = new Date(
+      Date.now() - (maxTimeoutMs + STUCK_ACTIVE_BUFFER),
+    ).toISOString();
+    const stuck = SqlDbUtilsQuerySQL(
+      span,
+      "SELECT id, fileIds, COALESCE(dateStarted, dateCreated) AS effectiveStart " +
+        "FROM sync_queue WHERE status = ? " +
+        "AND COALESCE(dateStarted, dateCreated) < ?",
+      [SyncQueueItemStatus.ACTIVE, cutoff],
+    );
+    if (stuck.length === 0) {
+      return 0;
+    }
+    logger.info(
+      `Sweeping ${stuck.length} stuck ACTIVE sync_queue rows started before ${cutoff}`,
+    );
+    const statement = SqlDbUtilsGetDatabase().prepare(
+      "DELETE FROM sync_queue WHERE id = ? AND status = ? " +
+        "AND COALESCE(dateStarted, dateCreated) = ?",
+    );
+    for (const row of stuck) {
+      const result = statement.run(
+        row.id,
+        SyncQueueItemStatus.ACTIVE,
+        row.effectiveStart,
+      );
+      if (result.changes > 0) {
+        swept++;
+        for (const fid of safeParseStringArray(row.fileIds)) {
+          decrementFileIdRef(fid);
+        }
+      }
+    }
+    scheduleBroadcastQueueUpdate();
+    processQueue();
+    return swept;
+  } catch (err) {
+    logger.error("Error in stuck-active sweeper", err);
+    return swept;
+  } finally {
+    span.end();
+  }
 }
 
 function scheduleBroadcastQueueUpdate(): void {
@@ -854,7 +975,7 @@ export function SyncQueueBroadcastOperationComplete(
   broadcastOperationComplete(operationName, fileIds, priority);
 }
 
-function SyncQueueRegisterFunction(
+export function SyncQueueRegisterFunction(
   functionName: string,
   fn: QueueFunction,
 ): void {
@@ -874,6 +995,7 @@ function rowToItem(row: any): SyncQueueItem {
     functionName: row.functionName,
     priority: row.priority,
     status: row.status,
+    dateStarted: row.dateStarted ?? undefined,
     data: data as any,
     fileIds: safeParseStringArray(row.fileIds),
   };
