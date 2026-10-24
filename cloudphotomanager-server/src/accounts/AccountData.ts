@@ -6,8 +6,12 @@ import {
   SqlDbUtilsGetDatabase,
   SqlDbUtilsQuerySQL,
 } from "@devopsplaybook.io/common-utils";
-import { OTelTracer } from "../OTelContext";
+import { OTelLogger, OTelTracer } from "../OTelContext";
 import { AccountFactoryInvalidate } from "./AccountFactory";
+import * as fs from "fs-extra";
+import * as path from "path";
+
+const logger = OTelLogger().createModuleLogger("AccountData");
 
 export async function AccountDataGet(
   context: Span,
@@ -87,13 +91,21 @@ export async function AccountDataUpdate(
 export async function AccountDataDelete(
   context: Span,
   accountId: string,
+  dataDir?: string,
 ): Promise<void> {
   const span = OTelTracer().startSpan("AccountDataDelete", context);
   try {
-    // Files and account row are removed atomically: a failure must not leave
-    // orphaned files behind.
+    // Shares, files, folders and the account row are removed atomically: a
+    // failure must not leave orphans behind (shares pointing to deleted
+    // folders, files without an account, ...).
     const apply = SqlDbUtilsGetDatabase().transaction(() => {
+      SqlDbUtilsExecSQL(span, "DELETE FROM shares WHERE accountId = ?", [
+        accountId,
+      ]);
       SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [
+        accountId,
+      ]);
+      SqlDbUtilsExecSQL(span, "DELETE FROM folders WHERE accountId = ?", [
         accountId,
       ]);
       SqlDbUtilsExecSQL(span, "DELETE FROM accounts WHERE id = ?", [
@@ -101,29 +113,23 @@ export async function AccountDataDelete(
       ]);
     });
     apply();
+    if (dataDir) {
+      // Best effort: a cache cleanup failure must not fail the deletion.
+      try {
+        await fs.rm(path.join(dataDir, "cache", accountId), {
+          recursive: true,
+          force: true,
+        });
+      } catch (err) {
+        logger.error(
+          `Error removing cache directory for account ${accountId}`,
+          err,
+          span,
+        );
+      }
+    }
   } finally {
     AccountFactoryInvalidate(accountId);
-    FolderDataRefreshCacheFolders(span);
-    span.end();
-  }
-}
-
-export async function AccountDataDeleteAllFilesAndFolders(
-  context: Span,
-  accountId: string,
-): Promise<void> {
-  const span = OTelTracer().startSpan("AccountDataDeleteAllFiles", context);
-  try {
-    const apply = SqlDbUtilsGetDatabase().transaction(() => {
-      SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [
-        accountId,
-      ]);
-      SqlDbUtilsExecSQL(span, "DELETE FROM folders WHERE accountId = ?", [
-        accountId,
-      ]);
-    });
-    apply();
-  } finally {
     FolderDataRefreshCacheFolders(span);
     span.end();
   }

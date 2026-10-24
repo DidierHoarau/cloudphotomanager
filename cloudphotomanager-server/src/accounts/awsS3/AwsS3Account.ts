@@ -11,7 +11,12 @@ import {
   AwsS3AccountFileOperationsDeleteFile,
   AwsS3AccountFileOperationsDownloadFile,
   AwsS3AccountFileOperationsMoveFile,
+  AwsS3AccountFileOperationsRenameFile,
 } from "./AwsS3AccountFileOperations";
+import {
+  AwsS3AccountFolderOperationsDeleteFolder,
+  AwsS3AccountFolderOperationsRenameFolder,
+} from "./AwsS3AccountFolderOperations";
 import {
   AwsS3AccountInventoryGetFolder,
   AwsS3AccountInventoryGetFolderByPath,
@@ -136,7 +141,7 @@ export class AwsS3Account implements Account {
   }
 
   async renameFile(context: Span, file: File, filename: string): Promise<void> {
-    await AwsS3AccountFileOperationsMoveFile(
+    await AwsS3AccountFileOperationsRenameFile(
       context,
       this,
       await this.getS3Client(),
@@ -185,15 +190,26 @@ export class AwsS3Account implements Account {
     throw new Error("Method not implemented.");
   }
 
-  deleteFolder(_context: Span, _folder: Folder): Promise<void> {
-    throw new Error("Method not implemented.");
+  async deleteFolder(context: Span, folder: Folder): Promise<void> {
+    await AwsS3AccountFolderOperationsDeleteFolder(
+      context,
+      this,
+      await this.getS3Client(),
+      folder,
+    );
   }
 
-  renameFolder(
-    _context: Span,
-    _folder: Folder,
-    _newName: string,
+  async renameFolder(
+    context: Span,
+    folder: Folder,
+    newName: string,
   ): Promise<void> {
-    throw new Error("Method not implemented.");
+    await AwsS3AccountFolderOperationsRenameFolder(
+      context,
+      this,
+      await this.getS3Client(),
+      folder,
+      newName,
+    );
   }
 }

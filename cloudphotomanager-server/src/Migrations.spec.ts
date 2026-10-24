@@ -109,9 +109,13 @@ describe("SQL migrations", () => {
       path.join(realSqlDir, "init-0010.sql"),
       path.join(sqlDir, "init-0010.sql"),
     );
+    await fs.copy(
+      path.join(realSqlDir, "init-0011.sql"),
+      path.join(sqlDir, "init-0011.sql"),
+    );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(10);
+    expect(dbVersion()).toBe(11);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
     const trashColumns = SqlDbUtilsQuerySQL(
       undefined,
@@ -123,6 +127,11 @@ describe("SQL migrations", () => {
       "SELECT name FROM pragma_table_info('users') WHERE name = 'tokenVersion'",
     ).map((row) => row.name);
     expect(userColumns).toEqual(["tokenVersion"]);
+    const queueColumns = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM pragma_table_info('sync_queue') WHERE name = 'dateStarted'",
+    ).map((row) => row.name);
+    expect(queueColumns).toEqual(["dateStarted"]);
 
     // A third boot re-applies nothing (idempotent re-run).
     const appliedLogBefore = SqlDbUtilsQuerySQL(
@@ -131,7 +140,7 @@ describe("SQL migrations", () => {
     );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(10);
+    expect(dbVersion()).toBe(11);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
     const appliedLogAfter = SqlDbUtilsQuerySQL(
       undefined,
@@ -148,7 +157,7 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(10);
+    expect(dbVersion()).toBe(11);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
   });
 });

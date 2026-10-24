@@ -21,6 +21,7 @@ jest.mock("../sync/SyncQueue", () => ({
 }));
 
 import { SyncQueueQueueItem } from "../sync/SyncQueue";
+import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 
 const queueItemMock = SyncQueueQueueItem as unknown as jest.Mock;
 
@@ -317,13 +318,37 @@ describe("FolderRoutes permissions", () => {
   });
 
   it("keeps local state untouched when the cloud folder delete fails (D3)", async () => {
+    const awsAccount = await AccountFactoryGetAccountImplementation(
+      accountAws.id,
+    );
+    const deleteSpy = jest
+      .spyOn(awsAccount, "deleteFolder")
+      .mockRejectedValue(new Error("S3 unavailable"));
+    try {
+      const res = await ctx.fastify.inject({
+        method: "DELETE",
+        url: `/api/accounts/${accountAws.id}/folders/${folderAws.id}/operations/delete`,
+        headers: routeSpecAuthHeaders(tokenAdmin),
+      });
+      expect(res.statusCode).toBe(503);
+      expect(
+        await ctx.folderData.FolderDataGet(ctx.span, folderAws.id),
+      ).toBeTruthy();
+      expect(queueItemMock).not.toHaveBeenCalled();
+    } finally {
+      deleteSpy.mockRestore();
+    }
+  });
+
+  it("rejects deleting a folder through another account id", async () => {
+    queueItemMock.mockClear();
     const res = await ctx.fastify.inject({
       method: "DELETE",
-      url: `/api/accounts/${accountAws.id}/folders/${folderAws.id}/operations/delete`,
+      url: `/api/accounts/${accountB.id}/folders/${folderP.id}/operations/delete`,
       headers: routeSpecAuthHeaders(tokenAdmin),
     });
-    expect(res.statusCode).toBe(503);
-    expect(await ctx.folderData.FolderDataGet(ctx.span, folderAws.id)).toBeTruthy();
+    expect(res.statusCode).toBe(404);
+    expect(await ctx.folderData.FolderDataGet(ctx.span, folderP.id)).toBeTruthy();
     expect(queueItemMock).not.toHaveBeenCalled();
   });
 
@@ -370,6 +395,10 @@ describe("FolderRoutes permissions", () => {
     });
     expect(res.statusCode).toBe(202);
     expect(fs.existsSync(folderDeletable.idCloud)).toBe(false);
+    // The folder row is deleted by id, not by its path.
+    expect(
+      await ctx.folderData.FolderDataGet(ctx.span, folderDeletable.id),
+    ).toBeNull();
     // The item is keyed by the deleted folder but re-syncs its parent
     // (SyncQueue dispatches on data.folderId).
     expect(queueItemMock).toHaveBeenCalledWith(

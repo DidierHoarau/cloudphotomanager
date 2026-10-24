@@ -39,13 +39,44 @@ let config: Config;
 // it without touching this module's exports mid-cycle.
 import { SYNC_FAIL_MAX_AUTO_RETRY } from "./SyncRetryCap";
 
+// The sync cache owns ${TMP_DIR}/cache only: TMP_DIR itself (default /tmp) is
+// shared with the rest of the system and must never be wiped. Returns null
+// for a misconfigured TMP_DIR (empty, relative or a filesystem root) so the
+// caller can refuse the cleanup instead of deleting unrelated data.
+export function SyncFileCacheResolveTempCacheDir(tmpDir: string): string | null {
+  if (typeof tmpDir !== "string" || tmpDir.trim().length === 0) {
+    return null;
+  }
+  if (!path.isAbsolute(tmpDir)) {
+    return null;
+  }
+  const resolvedTmpDir = path.resolve(tmpDir);
+  if (resolvedTmpDir === path.parse(resolvedTmpDir).root) {
+    return null;
+  }
+  const cacheDir = path.join(resolvedTmpDir, "cache");
+  if (cacheDir === resolvedTmpDir) {
+    return null;
+  }
+  return cacheDir;
+}
+
 export async function SyncFileCacheInit(context: Span, configIn: Config) {
   const span = OTelTracer().startSpan("SyncFileCacheInit", context);
   config = configIn;
 
   // Function registration moved to SyncQueueInit
 
-  await fs.rm(config.TMP_DIR, { recursive: true, force: true });
+  const cacheDir = SyncFileCacheResolveTempCacheDir(config.TMP_DIR);
+  if (!cacheDir) {
+    logger.error(
+      `Refusing to clean TMP_DIR "${config.TMP_DIR}": expected an absolute, non-root directory`,
+      undefined,
+      span,
+    );
+  } else {
+    await fs.rm(cacheDir, { recursive: true, force: true });
+  }
   span.end();
 }
 
@@ -272,6 +303,7 @@ async function generateThumbnailWhenCloudThumbnailUnavailable(
   cacheDir: string,
   tmpDir: string,
   tmpFileName: string,
+  signal?: AbortSignal,
 ): Promise<void> {
   if (File.getMediaType(file.filename) === FileMediaType.video) {
     logger.info(
@@ -291,6 +323,7 @@ async function generateThumbnailWhenCloudThumbnailUnavailable(
     await SystemCommand.executeFile(
       `${config.TOOLS_DIR}/tools-image-convert-raw.sh`,
       [fullPath, `${fullPath}_raw.jpg`],
+      { signal },
     );
     sourcePath = `${fullPath}_raw.jpg`;
   }
@@ -304,20 +337,25 @@ async function generateThumbnailWhenCloudThumbnailUnavailable(
 async function getVideoWidthWithFfprobe(
   context: Span,
   filePath: string,
+  signal?: AbortSignal,
 ): Promise<number | null> {
   const span = OTelTracer().startSpan("getVideoWidthWithFfprobe", context);
   try {
-    const ffprobeOutput = await SystemCommand.executeFile("ffprobe", [
-      "-v",
-      "error",
-      "-select_streams",
-      "v:0",
-      "-show_entries",
-      "stream=width",
-      "-of",
-      "csv=p=0",
-      filePath,
-    ]);
+    const ffprobeOutput = await SystemCommand.executeFile(
+      "ffprobe",
+      [
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width",
+        "-of",
+        "csv=p=0",
+        filePath,
+      ],
+      { signal },
+    );
     const width = parseInt(ffprobeOutput.trim(), 10);
     span.end();
     if (!isNaN(width)) {
@@ -331,7 +369,11 @@ async function getVideoWidthWithFfprobe(
   }
 }
 
-export async function syncVideoFromFull(account: Account, file: File) {
+export async function syncVideoFromFull(
+  account: Account,
+  file: File,
+  signal?: AbortSignal,
+) {
   const span = OTelTracer().startSpan("syncVideoFromFull");
   let tmpDir: string = null;
   try {
@@ -360,6 +402,7 @@ export async function syncVideoFromFull(account: Account, file: File) {
         const width = await getVideoWidthWithFfprobe(
           span,
           `${tmpDir}/${tmpFileName}`,
+          signal,
         );
         if (width !== null) {
           if (width > config.VIDEO_PREVIEW_WIDTH) {
@@ -376,6 +419,7 @@ export async function syncVideoFromFull(account: Account, file: File) {
               `${tmpDir}/${tmpFileName}.mp4`,
               `${targetWidth}`,
             ],
+            { signal },
           ),
           span,
         );
@@ -406,7 +450,11 @@ export async function syncVideoFromFull(account: Account, file: File) {
   }
 }
 
-export async function syncPhotoFromFull(account: Account, file: File) {
+export async function syncPhotoFromFull(
+  account: Account,
+  file: File,
+  signal?: AbortSignal,
+) {
   const span = OTelTracer().startSpan("syncPhotoFromFull");
   let tmpDir: string = null;
   try {
@@ -435,6 +483,7 @@ export async function syncPhotoFromFull(account: Account, file: File) {
             await SystemCommand.executeFile(
               `${config.TOOLS_DIR}/tools-image-convert-raw.sh`,
               [`${tmpDir}/${tmpFileName}`, `${tmpDir}/${tmpFileName}_raw.jpg`],
+              { signal },
             ),
             span,
           );
@@ -512,7 +561,11 @@ export async function syncPhotoFromFull(account: Account, file: File) {
   }
 }
 
-export async function syncPhotoKeyWords(account: Account, file: File) {
+export async function syncPhotoKeyWords(
+  account: Account,
+  file: File,
+  signal?: AbortSignal,
+) {
   const span = OTelTracer().startSpan("syncPhotoKeyWords");
   let tmpDir: string = null;
   try {
@@ -532,7 +585,7 @@ export async function syncPhotoKeyWords(account: Account, file: File) {
 
     if (config.IMAGE_CLASSIFICATION_ENABLED) {
       if (!hasImagePreview) {
-        await syncPhotoFromFull(account, file);
+        await syncPhotoFromFull(account, file, signal);
       }
       await fs.ensureDir(tmpDir);
       const tmpFileName = `tmp.${file.filename.split(".").pop()}`;
@@ -604,7 +657,11 @@ export async function syncPhotoKeyWords(account: Account, file: File) {
   }
 }
 
-export async function syncThumbnail(account: Account, file: File) {
+export async function syncThumbnail(
+  account: Account,
+  file: File,
+  signal?: AbortSignal,
+) {
   const span = OTelTracer().startSpan("syncThumbnail");
   let tmpDir: string = null;
   try {
@@ -650,6 +707,7 @@ export async function syncThumbnail(account: Account, file: File) {
           await SystemCommand.executeFile(
             `${config.TOOLS_DIR}/tools-image-convert-raw.sh`,
             [`${tmpDir}/${tmpFileName}`, `${tmpDir}/${tmpFileName}_raw.jpg`],
+            { signal },
           );
           await sharp(`${tmpDir}/${tmpFileName}_raw.jpg`)
             .rotate()
@@ -679,6 +737,7 @@ export async function syncThumbnail(account: Account, file: File) {
             await SystemCommand.executeFile(
               `${config.TOOLS_DIR}/tools-image-convert-raw.sh`,
               [`${tmpDir}/${tmpFileName}`, `${tmpDir}/${tmpFileName}_raw.jpg`],
+              { signal },
             );
             await sharp(`${tmpDir}/${tmpFileName}_raw.jpg`)
               .rotate()
@@ -712,6 +771,7 @@ export async function syncThumbnail(account: Account, file: File) {
                 cacheDir,
                 tmpDir,
                 tmpFileName,
+                signal,
               );
               return;
             }
@@ -738,6 +798,7 @@ export async function syncThumbnail(account: Account, file: File) {
 export async function syncThumbnailFromVideoPreview(
   account: Account,
   file: File,
+  signal?: AbortSignal,
 ) {
   const span = OTelTracer().startSpan("syncThumbnailFromVideoPreview");
   let tmpDir: string = null;
@@ -762,6 +823,7 @@ export async function syncThumbnailFromVideoPreview(
     await SystemCommand.executeFile(
       `${config.TOOLS_DIR}/tools-video-generate-thumbnail.sh`,
       [`${cacheDir}/preview.mp4`, `${tmpDir}/thumbnail.jpg`],
+      { signal },
     )
       .then(async (output: string) => {
         logger.info(output, span);

@@ -5,18 +5,30 @@ import * as os from "os";
 import * as path from "path";
 import { PassThrough } from "stream";
 import { File } from "../../model/File";
+import { Folder } from "../../model/Folder";
 import {
   ItemNotFoundError,
+  OneDriveFileOperationsDeleteFolder,
   OneDriveFileOperationsDownloadFile,
   OneDriveFileOperationsDownloadThumbnail,
+  OneDriveFileOperationsMoveFile,
+  OneDriveFileOperationsRenameFile,
+  OneDriveFileOperationsRenameFolder,
   ThumbnailNotAvailableError,
 } from "./OneDriveFileOperations";
+import { OneDriveInventoryGetFolderByPath } from "./OneDriveInventory";
+
+jest.mock("./OneDriveInventory", () => ({
+  OneDriveInventoryGetFolderByPath: jest.fn(),
+}));
 
 jest.mock("axios", () => {
   const actual = jest.requireActual("axios");
-  const axiosMock = Object.assign(jest.fn(), {
-    isAxiosError: actual.isAxiosError,
-  });
+  const axiosMock: any = jest.fn();
+  axiosMock.isAxiosError = actual.isAxiosError;
+  axiosMock.get = jest.fn();
+  axiosMock.patch = jest.fn();
+  axiosMock.delete = jest.fn();
   return { __esModule: true, default: axiosMock };
 });
 
@@ -414,6 +426,97 @@ describe("OneDriveFileOperations", () => {
       expect(error.name).toBe("ItemNotFoundError");
       expect(error.message).toContain("item-123");
       expect(mockedAxios).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("move, rename and folder operations", () => {
+    const getFolderByPathMock =
+      OneDriveInventoryGetFolderByPath as unknown as jest.Mock;
+    const patchMock = (axios as any).patch as jest.Mock;
+    const deleteMock = (axios as any).delete as jest.Mock;
+
+    it("moves a file by patching its parent and name", async () => {
+      const destination = new Folder("account-1", "/b");
+      destination.idCloud = "folder-b";
+      getFolderByPathMock.mockResolvedValue(destination);
+      patchMock.mockResolvedValueOnce({ data: {} });
+
+      await OneDriveFileOperationsMoveFile(
+        mockSpan,
+        oneDriveAccount as never,
+        file,
+        "/b",
+      );
+
+      expect(getFolderByPathMock).toHaveBeenCalled();
+      expect(patchMock).toHaveBeenCalledTimes(1);
+      const [url, body, config] = patchMock.mock.calls[0];
+      expect(url).toBe(
+        "https://graph.microsoft.com/v1.0/me/drive/items/item-123",
+      );
+      expect(body).toEqual({
+        parentReference: { id: "folder-b" },
+        name: "photo.jpg",
+      });
+      expect(config.headers.Authorization).toBe("Bearer test-token");
+    });
+
+    it("renames a file in place", async () => {
+      patchMock.mockResolvedValueOnce({ data: {} });
+
+      await OneDriveFileOperationsRenameFile(
+        mockSpan,
+        oneDriveAccount as never,
+        file,
+        "renamed.jpg",
+      );
+
+      expect(patchMock).toHaveBeenCalledTimes(1);
+      const [url, body] = patchMock.mock.calls[0];
+      expect(url).toBe(
+        "https://graph.microsoft.com/v1.0/me/drive/items/item-123",
+      );
+      expect(body).toEqual({ name: "renamed.jpg" });
+    });
+
+    it("deletes a folder", async () => {
+      const folder = new Folder("account-1", "/b");
+      folder.idCloud = "folder-b";
+      deleteMock.mockResolvedValueOnce({ data: {} });
+
+      await OneDriveFileOperationsDeleteFolder(
+        mockSpan,
+        oneDriveAccount as never,
+        folder,
+      );
+
+      expect(deleteMock).toHaveBeenCalledTimes(1);
+      expect(deleteMock.mock.calls[0][0]).toBe(
+        "https://graph.microsoft.com/v1.0/me/drive/items/folder-b",
+      );
+      expect(deleteMock.mock.calls[0][1]).toMatchObject({
+        headers: { Authorization: "Bearer test-token" },
+      });
+    });
+
+    it("renames a folder", async () => {
+      const folder = new Folder("account-1", "/b");
+      folder.idCloud = "folder-b";
+      patchMock.mockResolvedValueOnce({ data: {} });
+
+      await OneDriveFileOperationsRenameFolder(
+        mockSpan,
+        oneDriveAccount as never,
+        folder,
+        "renamed",
+      );
+
+      expect(patchMock).toHaveBeenCalledTimes(1);
+      const [url, body] = patchMock.mock.calls[0];
+      expect(url).toBe(
+        "https://graph.microsoft.com/v1.0/me/drive/items/folder-b",
+      );
+      expect(body).toEqual({ name: "renamed" });
     });
   });
 });
