@@ -13,6 +13,15 @@ const PUBLIC_PATHS = [
 
 export default defineNuxtRouteMiddleware(async (to) => {
   if (PUBLIC_PATHS.includes(to.path)) return;
+  const authenticationStore = AuthenticationStore();
+  if (!(authenticationStore.userInfo as any)?.userId) {
+    // First navigation: resolve the session so the client caches are scoped
+    // to the current user before any store hydrates from IndexedDB.
+    if (!(await authenticationStore.ensureAuthenticated())) {
+      return navigateTo("/users/login");
+    }
+    return;
+  }
   if (!(await AuthService.isAuthenticated())) {
     return navigateTo("/users/login");
   }

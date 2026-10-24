@@ -17,7 +17,16 @@ export const FoldersStore = defineStore("FoldersStore", {
     _cacheGeneration: 0,
   }),
 
-  getters: {},
+  getters: {
+    /** O(1) folderId → folderpath index, rebuilt only when the tree changes. */
+    folderPathById(state): Map<string, string> {
+      const map = new Map<string, string>();
+      for (const folder of state.folders) {
+        map.set(folder.id, folder.folderpath);
+      }
+      return map;
+    },
+  },
 
   actions: {
     /** Hydrate folders from IndexedDB for instant display on revisit. */

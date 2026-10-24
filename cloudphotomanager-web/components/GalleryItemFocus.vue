@@ -704,12 +704,11 @@ export default {
           },
         });
       } else {
-        useRouter().replace({
-          query: {
-            ...currentQuery,
-            fileId: this.file.id,
-          },
-        });
+        // In-viewer navigation: keep the URL accurate without creating a
+        // history entry per photo or triggering the gallery route watchers.
+        const url = new URL(window.location.href);
+        url.searchParams.set("fileId", this.file.id);
+        window.history.replaceState(window.history.state, "", url);
       }
       setTimeout(() => {
         this.videoDelayedLoadingDone = true;

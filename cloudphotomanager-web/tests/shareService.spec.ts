@@ -32,6 +32,35 @@ describe("ShareService", () => {
     }
   });
 
+  it("parses the token out of a share path", () => {
+    expect(
+      ShareService.parseShareToken("/share?t=abc&x=1", "https://example.com"),
+    ).toBe("abc");
+  });
+
+  it("round-trips an encoded token through buildShareUrl", () => {
+    vi.stubGlobal("window", {
+      location: { origin: "https://photos.example.com" },
+    });
+    try {
+      const url = ShareService.buildShareUrl("tok/en+1");
+      expect(
+        ShareService.parseShareToken(url, "https://photos.example.com"),
+      ).toBe("tok/en+1");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("returns an empty token for missing or invalid input", () => {
+    expect(
+      ShareService.parseShareToken("/share?other=1", "https://example.com"),
+    ).toBe("");
+    expect(
+      ShareService.parseShareToken("not a url ::%", "https://example.com"),
+    ).toBe("");
+  });
+
   it("create posts to the folder share endpoint and returns the payload", async () => {
     const payload = {
       shareId: "s1",

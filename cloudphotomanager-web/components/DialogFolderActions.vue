@@ -224,7 +224,7 @@ export default {
         );
         this._createdShareId = created.shareId;
         this.createdShareUrl = ShareService.buildShareUrl(
-          created.sharePath.split("t=")[1] || "",
+          ShareService.parseShareToken(created.sharePath),
         );
         await this.loadShares();
       } catch (err) {
