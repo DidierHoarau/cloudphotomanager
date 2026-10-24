@@ -22,6 +22,8 @@ export class Config extends ConfigBase {
   //   "Xenova/efficientnet-b0"           (~20MB, better accuracy)
   //   "Xenova/deit-tiny-distilled-patch16-224" (~22MB)
   //   "Xenova/vit-base-patch16-224"      (~340MB, highest accuracy)
+  // A model change takes effect the next time the pipeline is created (after
+  // its idle release or a restart), not on live config reload.
   public IMAGE_CLASSIFICATION_MODEL = "Xenova/mobilenet_v2_1.0_224";
   public CRON_METRIC_REFRESH = "*/15 * * * *"; // every 15 minutes
   public CRON_SCAN_DEEP = "0 0 * * *"; // every day at midnight

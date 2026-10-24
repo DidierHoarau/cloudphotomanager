@@ -60,3 +60,5 @@ cd cloudphotomanager-server && npm test
 ```
 
 All three commands must pass before the task is considered complete.
+
+After any dependency change, run `npm audit --omit=dev` in `cloudphotomanager-server`, `cloudphotomanager-web` and the root, and confirm no new advisories appear (accepted risks are recorded in the README "Dependency security notes" section).
