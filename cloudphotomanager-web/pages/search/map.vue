@@ -360,7 +360,9 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  /* Above Leaflet's controls (800) even if the map's stacking context is
+   * lost (e.g. a browser ignoring `isolation`). */
+  z-index: 1000;
 }
 .dialog-article {
   width: min(90vw, 90em);
@@ -375,7 +377,7 @@ export default {
   right: 0;
   width: 100vw;
   height: 100vh;
-  z-index: 20;
+  z-index: 1100;
 }
 </style>
 
