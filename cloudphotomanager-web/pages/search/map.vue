@@ -327,6 +327,10 @@ export default {
 }
 .search-map-container {
   position: relative;
+  /* Contain Leaflet's internal z-indexes (panes 400-700, controls 800) in
+   * their own stacking context. Without it they escape the map and paint
+   * above the cell/gallery dialogs (z-index 10-150). */
+  isolation: isolate;
   width: 100%;
   height: calc(100vh - 14em);
   min-height: 24em;
@@ -356,7 +360,9 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  /* Above Leaflet's controls (800) even if the map's stacking context is
+   * lost (e.g. a browser ignoring `isolation`). */
+  z-index: 1000;
 }
 .dialog-article {
   width: min(90vw, 90em);
@@ -371,7 +377,7 @@ export default {
   right: 0;
   width: 100vw;
   height: 100vh;
-  z-index: 20;
+  z-index: 1100;
 }
 </style>
 
