@@ -43,17 +43,6 @@ export default defineNuxtConfig({
   pinia: {
     autoImports: ["defineStore", "acceptHMRUpdate"],
   },
-  // The service worker must never be cached by browsers or the CDN: a stale
-  // sw.js keeps serving the previous app shell (and its old bundles), so PWA
-  // clients never receive new releases until the cache entry expires.
-  routeRules: {
-    "/sw.js": {
-      headers: {
-        "cache-control": "no-cache, no-store, must-revalidate",
-        "CDN-Cache-Control": "no-store",
-      },
-    },
-  },
   vite: {
     build: {
       rollupOptions: {
