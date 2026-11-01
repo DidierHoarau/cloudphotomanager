@@ -2,7 +2,7 @@
 
 import { Account } from "../../model/Account";
 import { AccountDefinition } from "../../model/AccountDefinition";
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { File } from "../../model/File";
 import axios from "axios";
 import { Folder } from "../../model/Folder";

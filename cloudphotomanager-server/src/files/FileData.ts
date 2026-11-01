@@ -1,4 +1,4 @@
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { Config } from "../Config";
 import { FolderDataCacheCountsMarkDirty } from "../folders/FolderData";
 import { File } from "../model/File";

@@ -1,7 +1,7 @@
 import * as fs from "fs-extra";
 import * as os from "os";
 import * as path from "path";
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { StandardLogger, StandardTracer } from "@devopsplaybook.io/otel-utils";
 import {
   SqlDbUtilsInit,

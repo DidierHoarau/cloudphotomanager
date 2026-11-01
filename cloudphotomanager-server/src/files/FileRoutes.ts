@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { AuthGetUserSession } from "../users/Auth";
 import { FileDataGet, FileDataGetFileCacheDir } from "./FileData";
 import * as fs from "fs-extra";

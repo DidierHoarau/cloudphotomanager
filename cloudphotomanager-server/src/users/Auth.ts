@@ -1,4 +1,4 @@
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import * as jwt from "jsonwebtoken";
 import * as path from "path";
 import { v4 as uuidv4 } from "uuid";

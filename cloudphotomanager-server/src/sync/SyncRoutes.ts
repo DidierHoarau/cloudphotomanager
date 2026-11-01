@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { WebSocket } from "@fastify/websocket";
 import { AuthGetUserSession, AuthValidateWsRequest } from "../users/Auth";
 import { SyncEventHistoryGetRecent } from "./SyncEventHistory";

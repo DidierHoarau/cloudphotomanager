@@ -1,6 +1,6 @@
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { AuthGetUserSession } from "../users/Auth";
 import { MediaUrlsAttachForUser } from "../media/MediaUrls";
 import {

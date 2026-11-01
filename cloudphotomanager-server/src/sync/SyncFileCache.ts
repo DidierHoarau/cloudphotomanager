@@ -1,4 +1,4 @@
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import * as exifr from "exifr";
 import * as fs from "fs-extra";
 import * as path from "path";

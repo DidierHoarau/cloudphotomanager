@@ -1,4 +1,4 @@
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import * as _ from "lodash";
 import { SqlDbUtilsQuerySQL } from "@devopsplaybook.io/common-utils";
 import { File } from "../model/File";

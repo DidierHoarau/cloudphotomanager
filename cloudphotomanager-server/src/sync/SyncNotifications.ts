@@ -1,5 +1,5 @@
 import axios from "axios";
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { Config } from "../Config";
 

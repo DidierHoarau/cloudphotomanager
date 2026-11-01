@@ -1,6 +1,6 @@
 // https://learn.microsoft.com/en-us/onedrive/developer/?view=odsp-graph-online
 
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import axios, { AxiosError, AxiosResponse } from "axios";
 import * as fs from "fs-extra";
 import { File } from "../../model/File";

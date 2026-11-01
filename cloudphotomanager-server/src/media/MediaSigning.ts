@@ -1,4 +1,4 @@
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import * as crypto from "crypto";
 import { Config } from "../Config";
 import { OTelTracer } from "../OTelContext";

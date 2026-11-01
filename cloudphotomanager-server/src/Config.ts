@@ -12,6 +12,11 @@ export class Config extends ConfigBase {
   public TMP_DIR = process.env.TMP_DIR || "/tmp";
   public SOURCE_FETCH_FREQUENCY = 30 * 60 * 1000;
   public SOURCE_FETCH_FREQUENCY_DYNAMIC_MAX_FACTOR = 6;
+  // Login token lifetime in seconds. common-utils 2.x lowered its own default
+  // from 93 days to 1 hour and this application has no session-refresh
+  // endpoint, so the documented lifetime is pinned here (still overridable
+  // through the environment or the configuration file).
+  public JWT_VALIDITY_DURATION = 3 * 31 * 24 * 3600;
   public AUTO_SYNC = process.env.AUTO_SYNC !== "N";
   public DATABASE_ASYNC_WRITE = false;
   public VIDEO_PREVIEW_WIDTH = 900;

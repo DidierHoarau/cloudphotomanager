@@ -1,4 +1,4 @@
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { FolderDataGet, FolderDataListForAccount } from "../folders/FolderData";
 import { Folder } from "../model/Folder";
 import { OTelTracer } from "../OTelContext";

@@ -1,5 +1,5 @@
 import { File } from "./File";
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { AccountDefinition } from "./AccountDefinition";
 import { Folder } from "./Folder";
 import { AccountCapabilities } from "./AccountCapabilities";

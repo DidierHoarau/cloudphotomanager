@@ -1,6 +1,6 @@
 import * as AWS from "aws-sdk";
 import { S3 } from "aws-sdk";
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { StandardTracer } from "@devopsplaybook.io/otel-utils";
 import { OTelSetTracer, OTelTracer } from "../../OTelContext";
 import { AccountDefinition } from "../../model/AccountDefinition";
