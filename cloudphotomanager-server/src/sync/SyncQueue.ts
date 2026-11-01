@@ -6,7 +6,7 @@ import { SyncQueueItemStatus } from "../model/SyncQueueItemStatus";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { PromisePool } from "../utils-std-ts/PromisePool";
 import { OTelLogger, OTelTracer } from "../OTelContext";
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import {
   FolderDataAdd,

@@ -1,4 +1,4 @@
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import * as path from "path";
 import { AccountDataList } from "../accounts/AccountData";
 import { Folder } from "../model/Folder";

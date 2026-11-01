@@ -5,7 +5,7 @@ import {
   SqlDbUtilsInit,
   SqlDbUtilsSetOTel,
 } from "@devopsplaybook.io/common-utils";
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import cookie from "@fastify/cookie";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { FastifyInstance } from "fastify";

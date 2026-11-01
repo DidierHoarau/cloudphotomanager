@@ -1,4 +1,4 @@
-import archiver from "archiver";
+import { Archiver, ZipArchive } from "archiver";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import * as fs from "fs-extra";
@@ -24,7 +24,7 @@ const MAX_BULK_DOWNLOAD_FILES = 500;
 // written, so the caller can download the next file and keep at most one
 // original on disk at a time (entries are processed in append order).
 function archiveFileAndAwaitEntry(
-  archive: archiver.Archiver,
+  archive: Archiver,
   filepath: string,
   entryName: string,
 ): Promise<void> {
@@ -128,7 +128,7 @@ export class RoutesFileOperationsDownload {
       res.header("Content-Type", "application/zip");
       res.header("Content-Disposition", `attachment; filename="${zipName}"`);
 
-      const archive = archiver("zip");
+      const archive = new ZipArchive();
       archive.on("error", (err) => {
         logger.error("Error Building Zip Archive", err, span);
         res.raw.destroy(err);

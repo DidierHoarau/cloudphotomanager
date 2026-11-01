@@ -1,4 +1,4 @@
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { FolderDataGet } from "../folders/FolderData";
 import { UserPermissionInfo } from "../model/UserPermissionInfo";
 import { UserPermissionFolder } from "../model/UserPermissionFolder";

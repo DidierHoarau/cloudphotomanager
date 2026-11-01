@@ -1,4 +1,4 @@
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import { UserPermission } from "../model/UserPermission";
 import { OTelTracer } from "../OTelContext";
 import {

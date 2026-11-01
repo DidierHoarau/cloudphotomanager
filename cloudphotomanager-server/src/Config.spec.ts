@@ -10,6 +10,10 @@ describe("Config", () => {
     expect(config.VERSION).not.toBe("1");
   });
 
+  it("keeps the documented login token lifetime over the common-utils 2.x default", () => {
+    expect(new Config().JWT_VALIDITY_DURATION).toBe(3 * 31 * 24 * 3600);
+  });
+
   it("reads and coerces the image classification settings from the environment", async () => {
     const prevModel = process.env.IMAGE_CLASSIFICATION_MODEL;
     const prevEnabled = process.env.IMAGE_CLASSIFICATION_ENABLED;

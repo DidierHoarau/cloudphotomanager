@@ -1,4 +1,4 @@
-import { Span } from "@opentelemetry/sdk-trace-base";
+import { Span } from "@opentelemetry/sdk-trace";
 import * as AWS from "aws-sdk";
 import { S3 } from "aws-sdk";
 import { Account } from "../../model/Account";
