@@ -2,25 +2,15 @@
   <div class="page">
     <h1>New Account</h1>
     <label>Name</label>
-    <input
-      id="name"
-      v-model="account.name"
-      v-on:change="validateParameters()"
-      type="text"
-    />
+    <input id="name" v-model="account.name" type="text" />
     <label>Root Folder</label>
-    <input
-      id="rootpath"
-      v-model="account.rootpath"
-      v-on:change="validateParameters()"
-      type="text"
-    />
+    <input id="rootpath" v-model="account.rootpath" type="text" />
     <label>Type</label>
     <select id="accountType" v-model="account.info.type" required>
-      <option value="select" selected>Select Type...</option>
-      <option value="awsS3" selected>AWS S3</option>
-      <option value="oneDrive" selected>One Drive</option>
-      <option value="localDrive" selected>Local Drive</option>
+      <option value="" disabled>Select Type...</option>
+      <option value="awsS3">AWS S3</option>
+      <option value="oneDrive">One Drive</option>
+      <option value="localDrive">Local Drive</option>
     </select>
     <AccountAwsS3Edit
       v-if="account.info.type == 'awsS3'"
@@ -58,23 +48,34 @@ export default {
   data() {
     return {
       loading: false,
-      accountValidParameters: false,
-      account: { rootpath: "/", info: {} },
+      infoPrivateValidated: false,
+      account: { rootpath: "/", info: { type: "" } },
     };
+  },
+  computed: {
+    accountValidParameters() {
+      return (
+        !!this.account.name?.trim() &&
+        !!this.account.info?.type &&
+        this.infoPrivateValidated
+      );
+    },
+  },
+  watch: {
+    "account.info.type"() {
+      this.account.infoPrivate = undefined;
+      this.infoPrivateValidated = false;
+    },
   },
   async created() {},
   methods: {
     async infoPrivateValid(infoPrivate) {
-      this.accountValidParameters = true;
       this.account.infoPrivate = infoPrivate;
+      this.infoPrivateValidated = true;
     },
     async infoPrivateInvalid() {
-      this.accountValidParameters = false;
-    },
-    validateParameters() {
-      if (!this.account.name) {
-        this.accountValidParameters = false;
-      }
+      this.account.infoPrivate = undefined;
+      this.infoPrivateValidated = false;
     },
     async saveNew() {
       this.loading = true;

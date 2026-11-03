@@ -2,26 +2,23 @@
   <div class="page">
     <h1>Account</h1>
     <label>Name</label>
-    <input
-      id="name"
-      v-model="account.name"
-      v-on:change="validateParameters()"
-      type="text"
-    />
+    <input id="name" v-model="account.name" type="text" />
     <label>Root Folder</label>
-    <input
-      id="rootpath"
-      v-model="account.rootpath"
-      v-on:change="validateParameters()"
-      type="text"
-    />
+    <input id="rootpath" v-model="account.rootpath" type="text" />
     <label>Type</label>
     <select id="accountType" v-model="account.info.type" required disabled>
-      <option value="select" selected>Select Type...</option>
-      <option value="awsS3" selected>AWS S3</option>
-      <option value="oneDrive" selected>One Drive</option>
-      <option value="localDrive" selected>Local Drive</option>
+      <option value="" disabled>Select Type...</option>
+      <option value="awsS3">AWS S3</option>
+      <option value="oneDrive">One Drive</option>
+      <option value="localDrive">Local Drive</option>
     </select>
+    <p
+      v-if="account.info.type === 'awsS3' || account.info.type === 'oneDrive'"
+      class="private-info-note"
+    >
+      Provider credentials are never returned by the server. Re-enter them
+      before updating.
+    </p>
     <AccountAwsS3Edit
       v-if="account.info.type == 'awsS3'"
       @onInfoPrivateValid="infoPrivateValid"
@@ -58,11 +55,25 @@ export default {
   data() {
     return {
       loading: false,
-      accountValidParameters: false,
+      infoPrivateValidated: false,
       account: { rootpath: "/", info: {} },
     };
   },
+  computed: {
+    accountValidParameters() {
+      return (
+        !!this.account.name?.trim() &&
+        !!this.account.info?.type &&
+        this.infoPrivateValidated
+      );
+    },
+  },
   async created() {
+    await AuthenticationStore().ensureAuthenticated();
+    if (!AuthenticationStore().isAdmin) {
+      useRouter().push({ path: "/settings/profile" });
+      return;
+    }
     await axios
       .get(
         `${(await Config.get()).SERVER_URL}/accounts/${
@@ -77,16 +88,12 @@ export default {
   },
   methods: {
     async infoPrivateValid(infoPrivate) {
-      this.accountValidParameters = true;
       this.account.infoPrivate = infoPrivate;
+      this.infoPrivateValidated = true;
     },
     async infoPrivateInvalid() {
-      this.accountValidParameters = false;
-    },
-    validateParameters() {
-      if (!this.account.name) {
-        this.accountValidParameters = false;
-      }
+      this.account.infoPrivate = undefined;
+      this.infoPrivateValidated = false;
     },
     async saveUpdate() {
       this.loading = true;
@@ -99,7 +106,7 @@ export default {
         .then(async (res) => {
           EventBus.emit(EventTypes.ALERT_MESSAGE, {
             type: "success",
-            text: "Account Added",
+            text: "Account Updated",
           });
           useRouter().push({ path: "/settings/accounts" });
         })
@@ -109,3 +116,10 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+.private-info-note {
+  color: var(--color-text-muted);
+  font-size: var(--font-sm);
+}
+</style>

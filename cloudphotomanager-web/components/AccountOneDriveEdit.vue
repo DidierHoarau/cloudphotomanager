@@ -34,10 +34,13 @@ export default {
       },
       ONEDRIVE_CLIENT_ID: "",
       ONEDRIVE_CALLBACK_SIGNIN: "",
+      pollActive: true,
+      lastEmittedCode: null,
+      invalidEmitted: false,
     };
   },
   async created() {
-    this.checkCodeReceived();
+    this.pollCodeReceived();
     await axios
       .get(`${(await Config.get()).SERVER_URL}/accounts/onedrive/info`, await AuthService.getAuthHeader())
       .then(async (res) => {
@@ -46,22 +49,55 @@ export default {
       })
       .catch(handleError);
   },
+  beforeUnmount() {
+    this.pollActive = false;
+  },
   methods: {
-    async checkCodeReceived() {
+    async pollCodeReceived() {
+      while (this.pollActive) {
+        this.checkCodeReceived();
+        if (!this.pollActive) {
+          break;
+        }
+        await Timeout.wait(1000);
+      }
+    },
+    checkCodeReceived() {
+      if (!this.pollActive) {
+        return;
+      }
+      let code = null;
       try {
-        const codeRecived = JSON.parse(localStorage.getItem("TMP_AUTH_ONEDRIVE_KEY", "{}"));
-        if (codeRecived && new Date().getTime() - new Date(codeRecived.date).getTime() < 60 * 30 * 1000) {
-          this.infoPrivate.authCode = codeRecived.code;
-          this.$emit("onInfoPrivateValid", this.infoPrivate);
-        } else {
-          this.$emit("onInfoPrivateInvalid", {});
+        const raw = localStorage.getItem("TMP_AUTH_ONEDRIVE_KEY");
+        if (raw) {
+          const received = JSON.parse(raw);
+          if (
+            received?.code &&
+            Date.now() - new Date(received.date).getTime() < 30 * 60 * 1000
+          ) {
+            code = received.code;
+          } else {
+            localStorage.removeItem("TMP_AUTH_ONEDRIVE_KEY");
+          }
         }
       } catch (err) {
         console.error(err);
+        localStorage.removeItem("TMP_AUTH_ONEDRIVE_KEY");
+      }
+      if (code) {
+        if (code !== this.lastEmittedCode) {
+          this.lastEmittedCode = code;
+          this.infoPrivate.authCode = code;
+          // Microsoft auth codes are single use: consume the stored one so a
+          // remount cannot re-emit a code that was already exchanged.
+          localStorage.removeItem("TMP_AUTH_ONEDRIVE_KEY");
+          this.$emit("onInfoPrivateValid", this.infoPrivate);
+          this.pollActive = false;
+        }
+      } else if (!this.invalidEmitted) {
+        this.invalidEmitted = true;
         this.$emit("onInfoPrivateInvalid", {});
       }
-      await Timeout.wait(1000);
-      this.checkCodeReceived();
     },
     validateParamters() {
       if (
