@@ -858,9 +858,7 @@ export default {
       };
     },
     isCurrentFileOuttake() {
-      if (!this.file || !this.file.filename) return false;
-      const ext = FileUtils.getExtention(this.file);
-      return this.file.filename.includes(`-outtake.${ext}`);
+      return FileUtils.isOuttake(this.file);
     },
     // A file stuck at the retry cap (or tombstoned as missing in the cloud)
     // will never produce a preview by itself: say so instead of claiming the

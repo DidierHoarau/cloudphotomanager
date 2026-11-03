@@ -5,6 +5,7 @@ import { Account } from "../model/Account";
 import { File } from "../model/File";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { FileDataGetFileTmpDir } from "./FileData";
+import { PathIsInsideRoot } from "./PathValidation";
 
 const logger = OTelLogger().createModuleLogger("FileDownload");
 
@@ -47,8 +48,13 @@ export async function FileDownloadStreamOriginal(
   try {
     tmpDir = await FileDataGetFileTmpDir(span, file.accountId, file.id);
     await fs.ensureDir(tmpDir);
-    await account.downloadFile(span, file, tmpDir, file.filename);
-    const filepath = path.join(tmpDir, file.filename);
+    // The provider filename is untrusted: download into a fixed name inside
+    // the temp dir and use the filename only for response headers.
+    const filepath = path.resolve(tmpDir, "original");
+    if (!PathIsInsideRoot(tmpDir, filepath)) {
+      throw new Error("Download path escapes the temp dir");
+    }
+    await account.downloadFile(span, file, tmpDir, "original");
     const stats = await fs.stat(filepath);
     res.header("Content-Type", contentTypeFor(file.filename));
     res.header(

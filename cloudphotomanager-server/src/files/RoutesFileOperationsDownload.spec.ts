@@ -18,6 +18,7 @@ jest.mock("../accounts/AccountFactory", () => ({
 }));
 
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
+import { File } from "../model/File";
 
 const getAccountMock =
   AccountFactoryGetAccountImplementation as unknown as jest.Mock;
@@ -100,6 +101,8 @@ describe("RoutesFileOperationsDownload", () => {
   let fileTwo: any;
   let fileSub: any;
   let fileOther: any;
+  let fileTraversal: any;
+  let fileBadFolder: any;
   let tokenAdmin: string;
   let tokenUserZ: string;
 
@@ -125,6 +128,27 @@ describe("RoutesFileOperationsDownload", () => {
       accountA.id,
       folderOther,
       "four.jpg",
+    );
+
+    // Seeded directly: the helper would write outside the folder for "..".
+    fileTraversal = new File(accountA.id, folderZ.id, "..");
+    fileTraversal.idCloud = "unused";
+    fileTraversal.hash = "hash-traversal";
+    fileTraversal.dateSync = new Date();
+    fileTraversal.dateUpdated = new Date();
+    fileTraversal.dateMedia = new Date();
+    await ctx.fileData.FileDataAdd(ctx.span, fileTraversal);
+
+    const folderBad = await routeSpecCreateFolder(
+      ctx,
+      accountA.id,
+      "/z/../outside",
+    );
+    fileBadFolder = await routeSpecCreateFile(
+      ctx,
+      accountA.id,
+      folderBad,
+      "five.jpg",
     );
 
     const admin = await routeSpecAddUser(ctx, {
@@ -211,6 +235,31 @@ describe("RoutesFileOperationsDownload", () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it("rejects a selection containing a traversal filename", async () => {
+    const res = await ctx.fastify.inject({
+      method: "POST",
+      url: downloadUrl(accountA.id),
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { fileIdList: [fileTraversal.id] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("Invalid filename in selection");
+    expect(res.rawPayload.subarray(0, 2).toString()).not.toBe("PK");
+    expect(getAccountMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a selection with an unnormalized folder path", async () => {
+    const res = await ctx.fastify.inject({
+      method: "POST",
+      url: downloadUrl(accountA.id),
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { fileIdList: [fileBadFolder.id] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("Invalid folder path in selection");
+    expect(res.rawPayload.subarray(0, 2).toString()).not.toBe("PK");
+  });
+
   it("streams a zip with the selection's folder structure", async () => {
     const res = await ctx.fastify.inject({
       method: "POST",
@@ -235,6 +284,40 @@ describe("RoutesFileOperationsDownload", () => {
     expect(entries.get("z/sub/three.jpg")).toBe("original-of-three.jpg");
   });
 
+  it("keeps at most one original on disk at a time", async () => {
+    const accountDir = path.join(ctx.tmpDir, "cache", accountA.id);
+    await waitForCleanup(() => countDirs(accountDir) === 0);
+
+    const observed: number[] = [];
+    const stub = stubAccount(accountA.id, true);
+    getAccountMock.mockResolvedValue({
+      ...stub,
+      downloadFile: jest.fn(
+        async (
+          _span: any,
+          file: any,
+          destinationFolderpath: string,
+          destinationFilename: string,
+        ) => {
+          observed.push(countDirs(accountDir));
+          await fs.writeFile(
+            path.join(destinationFolderpath, destinationFilename),
+            `original-of-${file.filename}`,
+          );
+        },
+      ),
+    });
+
+    const res = await ctx.fastify.inject({
+      method: "POST",
+      url: downloadUrl(accountA.id),
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { fileIdList: [fileOne.id, fileTwo.id, fileSub.id] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(observed).toEqual([1, 1, 1]);
+  });
+
   it("leaves no temp files behind", async () => {
     await ctx.fastify.inject({
       method: "POST",
@@ -248,6 +331,15 @@ describe("RoutesFileOperationsDownload", () => {
     expect(listFiles(path.join(ctx.tmpDir, "cache"))).toEqual([]);
   });
 });
+
+function countDirs(dir: string): number {
+  if (!fs.existsSync(dir)) {
+    return 0;
+  }
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory()).length;
+}
 
 function listFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) {

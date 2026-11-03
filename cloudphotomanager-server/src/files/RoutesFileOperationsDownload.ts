@@ -2,6 +2,7 @@ import { Archiver, ZipArchive } from "archiver";
 import { FastifyInstance, RequestGenericInterface } from "fastify";
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import * as fs from "fs-extra";
+import * as path from "path";
 import { Account } from "../model/Account";
 import { File } from "../model/File";
 import { OTelLogger } from "../OTelContext";
@@ -13,6 +14,12 @@ import {
   UserPermissionContextGet,
 } from "../users/UserPermissionCheck";
 import { FileDataGet, FileDataGetFileTmpDir } from "./FileData";
+import {
+  FileNameValidate,
+  FolderPathValidate,
+  PathIsInsideRoot,
+  ZipEntryNameValidate,
+} from "./PathValidation";
 
 const logger = OTelLogger().createModuleLogger("RoutesFileOperationsDownload");
 
@@ -85,7 +92,7 @@ export class RoutesFileOperationsDownload {
         span,
         userSession.userId,
       );
-      const foldersByFileId = new Map<string, any>();
+      const entryNamesByFileId = new Map<string, string>();
       const accounts = new Map<string, Account>();
       const fileIds = Array.from(new Set(req.body.fileIdList));
       const files: File[] = [];
@@ -105,6 +112,28 @@ export class RoutesFileOperationsDownload {
         ) {
           return res.status(403).send({ error: "Access Denied" });
         }
+        // Provider-side names are untrusted: reject the whole selection
+        // before streaming anything when a name could escape the temp dir or
+        // the archive root.
+        if (FileNameValidate(file.filename) !== null) {
+          return res
+            .status(400)
+            .send({ error: "Invalid filename in selection" });
+        }
+        if (FolderPathValidate(folder.folderpath) !== null) {
+          return res
+            .status(400)
+            .send({ error: "Invalid folder path in selection" });
+        }
+        const entryName =
+          folder.folderpath === "/"
+            ? file.filename
+            : `${folder.folderpath.replace(/^\/+/, "")}/${file.filename}`;
+        if (ZipEntryNameValidate(entryName) !== null) {
+          return res
+            .status(400)
+            .send({ error: "Invalid entry name in selection" });
+        }
         let account = accounts.get(file.accountId);
         if (!account) {
           account = await AccountFactoryGetAccountImplementation(
@@ -115,7 +144,7 @@ export class RoutesFileOperationsDownload {
         if (!account.getCapabilities().downloadFileOriginal) {
           return res.status(403).send({ error: "Access Denied" });
         }
-        foldersByFileId.set(file.id, folder);
+        entryNamesByFileId.set(file.id, entryName);
         files.push(file);
       }
 
@@ -144,16 +173,29 @@ export class RoutesFileOperationsDownload {
             file.id,
           );
           tmpDirs.push(tmpDir);
-          await fs.ensureDir(tmpDir);
-          const account = accounts.get(file.accountId);
-          await account.downloadFile(span, file, tmpDir, file.filename);
-          const folder = foldersByFileId.get(file.id);
-          const entryName = `${folder.folderpath.replace(/^\//, "")}/${file.filename}`;
-          await archiveFileAndAwaitEntry(
-            archive,
-            `${tmpDir}/${file.filename}`,
-            entryName,
-          );
+          try {
+            await fs.ensureDir(tmpDir);
+            // The download path is derived from the validated filename; the
+            // containment check is defense-in-depth if that validation ever
+            // regresses.
+            const localPath = path.resolve(tmpDir, file.filename);
+            if (!PathIsInsideRoot(tmpDir, localPath)) {
+              throw new Error("Download path escapes the temp dir");
+            }
+            const account = accounts.get(file.accountId);
+            await account.downloadFile(span, file, tmpDir, file.filename);
+            await archiveFileAndAwaitEntry(
+              archive,
+              localPath,
+              entryNamesByFileId.get(file.id),
+            );
+          } finally {
+            // The entry has been fully written when the helper resolves, so
+            // the original can be removed before downloading the next one.
+            await fs.remove(tmpDir).catch((err) => {
+              logger.error("Error Removing Zip Temp Dir", err, span);
+            });
+          }
         }
         await archive.finalize();
       } finally {
