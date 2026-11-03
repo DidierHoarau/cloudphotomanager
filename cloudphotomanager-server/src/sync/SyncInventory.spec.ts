@@ -80,10 +80,13 @@ describe("SyncInventory folder reconciliation", () => {
       .digest("hex");
   }
 
-  async function createAccount(name: string): Promise<AccountDefinition> {
+  async function createAccount(
+    name: string,
+    root = rootPath,
+  ): Promise<AccountDefinition> {
     const accountDefinition = new AccountDefinition();
     accountDefinition.name = name;
-    accountDefinition.rootpath = rootPath;
+    accountDefinition.rootpath = root;
     accountDefinition.info = { type: "localDrive" };
     accountDefinition.infoPrivate = {};
     await accountData.AccountDataAdd(span, accountDefinition);
@@ -93,9 +96,10 @@ describe("SyncInventory folder reconciliation", () => {
   async function createFolder(
     accountId: string,
     folderpath: string,
+    root = rootPath,
   ): Promise<Folder> {
     const folder = new Folder(accountId, folderpath);
-    folder.idCloud = path.join(rootPath, folderpath.replace(/^\//, ""));
+    folder.idCloud = path.join(root, folderpath.replace(/^\//, ""));
     folder.dateSync = new Date();
     folder.dateUpdated = new Date();
     await fs.ensureDir(folder.idCloud);
@@ -366,5 +370,88 @@ describe("SyncInventory folder reconciliation", () => {
     expect(added.hash).toBe(sha256File(filePath));
 
     await waitForQueueDrainForFile(expectedId);
+  }, 30000);
+
+  it("reconciles top-level folders from the account root", async () => {
+    // The suite's accounts share rootPath: use a dedicated root so the root
+    // listing only contains this test's folders.
+    const isolatedRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "cpm-root-sync-"),
+    );
+    const accountDefinition = await createAccount("acct-root", isolatedRoot);
+    const account =
+      await accountFactory.AccountFactoryGetAccountImplementation(
+        accountDefinition.id,
+      );
+    const rootFolder = await createFolder(
+      accountDefinition.id,
+      "/",
+      isolatedRoot,
+    );
+    const keepFolder = await createFolder(
+      accountDefinition.id,
+      "/keep",
+      isolatedRoot,
+    );
+    const goneFolder = await createFolder(
+      accountDefinition.id,
+      "/gone",
+      isolatedRoot,
+    );
+    const goneNestedFolder = await createFolder(
+      accountDefinition.id,
+      "/gone/nested",
+      isolatedRoot,
+    );
+    const goneFile = await createImageFile(
+      accountDefinition.id,
+      goneNestedFolder,
+      "deleted-subtree.jpg",
+    );
+
+    // The top-level folder (and its subtree) is removed in the cloud.
+    await fs.remove(goneFolder.idCloud);
+
+    // A re-queued existing folder would be re-synced by the worker, bumping
+    // its dateSync: pin a sentinel to detect that.
+    const sentinel = new Date("2020-01-01T00:00:00.000Z");
+    SqlDbUtilsExecSQL(span, "UPDATE folders SET dateSync = ? WHERE id = ?", [
+      sentinel.toISOString(),
+      keepFolder.id,
+    ]);
+
+    await syncInventory.SyncInventorySyncFolder(account, rootFolder);
+
+    // Existing top-level folders are known and must not be re-queued.
+    const queueRowsForAccount = () =>
+      SqlDbUtilsQuerySQL(
+        span,
+        "SELECT * FROM sync_queue WHERE accountId = ?",
+        [accountDefinition.id],
+      );
+    expect(
+      queueRowsForAccount().filter(
+        (row) => row.functionName === "SyncInventorySyncFolder",
+      ),
+    ).toHaveLength(0);
+    await waitUntil("root sync queue drained", () =>
+      queueRowsForAccount().every(
+        (row) => row.functionName !== "SyncInventorySyncFolder",
+      ),
+    );
+
+    // The surviving top-level folder is kept and was not re-synced (its
+    // dateSync sentinel is unchanged); the deleted folder and its whole
+    // subtree (nested folder and file) are removed.
+    const keptFolder = await folderData.FolderDataGet(span, keepFolder.id);
+    expect(keptFolder).not.toBeNull();
+    expect(new Date(keptFolder.dateSync).toISOString()).toBe(
+      sentinel.toISOString(),
+    );
+    expect(await folderData.FolderDataGet(span, goneFolder.id)).toBeNull();
+    expect(
+      await folderData.FolderDataGet(span, goneNestedFolder.id),
+    ).toBeNull();
+    expect(await fileData.FileDataGet(span, goneFile.id)).toBeNull();
   }, 30000);
 });

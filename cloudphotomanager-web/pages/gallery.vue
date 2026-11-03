@@ -797,10 +797,10 @@ export default {
         .catch(handleError);
     },
     clickedDeleteFolder() {
+      const parentFolder = FoldersStore().getParentFolder(this.folder);
+      if (!parentFolder) return;
       this.confirmMessage = `Delete the current Folder? (Can't be undone!)`;
-      this._pendingDeleteFolderParentId = FoldersStore().getParentFolder(
-        this.folder,
-      ).id;
+      this._pendingDeleteFolderParentId = parentFolder.id;
       this.activeOperation = "confirm-delete-folder";
     },
     async executeRefresh() {

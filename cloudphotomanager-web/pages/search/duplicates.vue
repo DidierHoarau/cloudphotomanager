@@ -271,9 +271,6 @@ export default {
     getFolderPath(id) {
       return this.folderMap.get(id) ?? "";
     },
-    async onFileSelected(file) {
-      // TODO
-    },
     async focusGalleryItem(file) {
       this.selectedFile = file;
     },
