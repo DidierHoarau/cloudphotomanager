@@ -49,7 +49,7 @@ export default {
   },
   async created() {
     await AuthenticationStore().ensureAuthenticated();
-    if (!(await AuthenticationStore()).isAdmin) {
+    if (!AuthenticationStore().isAdmin) {
       useRouter().push({ path: "/settings/profile" });
     }
   },

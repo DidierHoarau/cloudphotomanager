@@ -35,7 +35,7 @@
             {{ account.name }}
           </td>
           <td>
-            <NuxtLink :to="`/accounts/${account.id}`"
+            <NuxtLink :to="`/settings/accounts/${account.id}`"
               ><i class="bi bi-pencil-fill"></i
             ></NuxtLink>
           </td>

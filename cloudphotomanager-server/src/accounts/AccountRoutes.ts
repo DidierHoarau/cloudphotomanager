@@ -24,6 +24,17 @@ const CAPABILITIES_NONE: AccountCapabilities = {
   downloadVideoPreview: false,
 };
 
+type AccountDefinitionPublic = Omit<AccountDefinition, "infoPrivate">;
+
+// Provider secrets must never leave the server, so create and update
+// responses use the same shape as the GET routes.
+function AccountDefinitionToPublic(
+  accountDefinition: AccountDefinition,
+): AccountDefinitionPublic {
+  const { id, name, rootpath, info } = accountDefinition;
+  return { id, name, rootpath, info };
+}
+
 // The web needs to know what an account can do (e.g. whether original files
 // can be downloaded) without reading account internals. Unknown account
 // types degrade to no capabilities rather than failing the listing.
@@ -156,7 +167,9 @@ export class AccountRoutes {
           logger.error("Error Synchronizing Account", err, span);
         }
       );
-      return res.status(201).send(account);
+      return res
+        .status(201)
+        .send(AccountDefinitionToPublic(account.getAccountDefinition()));
     });
 
     interface PutAccount extends RequestGenericInterface {
@@ -200,7 +213,7 @@ export class AccountRoutes {
       SchedulerStartAccountSync(span, accountDefinition).catch((err) => {
         logger.error("Error Synchronizing Account", err, span);
       });
-      return res.status(201).send(accountDefinition);
+      return res.status(200).send(AccountDefinitionToPublic(accountDefinition));
     });
 
     interface DeleteAccount extends RequestGenericInterface {

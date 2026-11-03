@@ -116,4 +116,60 @@ describe("AccountRoutes", () => {
     });
     expect(del.statusCode).toBe(404);
   });
+
+  it("never returns provider secrets from create, update or read", async () => {
+    const secret = "sentinel-secret";
+    const payload = {
+      name: "leak-check",
+      rootpath: ctx.rootPath,
+      info: { type: "localDrive" },
+      infoPrivate: { accessKey: secret },
+    };
+
+    const created = await ctx.fastify.inject({
+      method: "POST",
+      url: "/api/accounts",
+      headers: routeSpecAuthHeaders(adminToken),
+      payload,
+    });
+    expect(created.statusCode).toBe(201);
+    const createdBody = created.json();
+    expect(createdBody.id).toBeTruthy();
+    expect(createdBody.name).toBe("leak-check");
+    expect(createdBody.info).toEqual({ type: "localDrive" });
+    expect(createdBody).not.toHaveProperty("infoPrivate");
+    expect(createdBody).not.toHaveProperty("accountDefinition");
+    expect(JSON.stringify(createdBody)).not.toContain(secret);
+
+    const updatePayload = { ...payload, name: "leak-check-renamed" };
+    const updated = await ctx.fastify.inject({
+      method: "PUT",
+      url: `/api/accounts/${createdBody.id}`,
+      headers: routeSpecAuthHeaders(adminToken),
+      payload: updatePayload,
+    });
+    expect(updated.statusCode).toBe(200);
+    const updatedBody = updated.json();
+    expect(updatedBody.name).toBe("leak-check-renamed");
+    expect(updatedBody).not.toHaveProperty("infoPrivate");
+    expect(JSON.stringify(updatedBody)).not.toContain(secret);
+
+    const denied = await ctx.fastify.inject({
+      method: "PUT",
+      url: `/api/accounts/${createdBody.id}`,
+      headers: routeSpecAuthHeaders(regularToken),
+      payload: updatePayload,
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const read = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${createdBody.id}`,
+      headers: routeSpecAuthHeaders(adminToken),
+    });
+    expect(read.statusCode).toBe(200);
+    const readBody = read.json();
+    expect(readBody).not.toHaveProperty("infoPrivate");
+    expect(JSON.stringify(readBody)).not.toContain(secret);
+  });
 });

@@ -123,9 +123,9 @@ export default {
   },
   async created() {
     await AccountsStore().fetch();
-    FoldersStore().fetch();
+    await FoldersStore().fetch();
     await AuthenticationStore().ensureAuthenticated();
-    if (!(await AuthenticationStore()).isAdmin) {
+    if (!AuthenticationStore().isAdmin) {
       useRouter().push({ path: "/settings/profile" });
     }
     this.fetch();
@@ -152,15 +152,15 @@ export default {
                     id: folder.folderId,
                   });
                   const accountKnown = find(AccountsStore().accounts, {
-                    id: folderKnown.accountId,
+                    id: folderKnown?.accountId,
                   });
                   folder.scope_tag = "RO";
                   if (folder.scope === "ro_recursive") {
                     folder.scope_tag = "RO Recursive";
                   }
-                  folder.accountName = accountKnown.name || "Unknown Folder";
+                  folder.accountName = accountKnown?.name || "Unknown Folder";
                   folder.folderpath =
-                    folderKnown.folderpath || "Unknown Folder";
+                    folderKnown?.folderpath || "Unknown Folder";
                 }
               })
               .catch(handleError);

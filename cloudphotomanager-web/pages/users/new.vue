@@ -64,7 +64,7 @@ export default {
   },
   async created() {
     this.isInitialized = await UserService.isInitialized();
-    if (this.isInitialized && !(await AuthenticationStore()).isAdmin) {
+    if (this.isInitialized && !AuthenticationStore().isAdmin) {
       useRouter().push({ path: "/settings/profile" });
     }
     AuthenticationStore().isAuthenticated = await AuthService.isAuthenticated();
