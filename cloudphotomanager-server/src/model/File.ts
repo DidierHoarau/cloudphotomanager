@@ -32,6 +32,10 @@ export class File {
   public info: any;
   public metadata: any;
 
+  // Derived from the filename for API consumers (clients need the server's
+  // classification, e.g. for RAW images); never persisted.
+  public mediaType: FileMediaType;
+
   // Short-lived signed media URLs attached by the API to listings. They are
   // not persisted: each listing mints fresh ones bound to the caller.
   public thumbnailUrl?: string;
@@ -43,6 +47,7 @@ export class File {
     this.accountId = accountId;
     this.folderId = folderId;
     this.filename = filename;
+    this.mediaType = File.getMediaType(filename);
     this.info = {};
     this.metadata = {};
     this.syncFailCount = 0;

@@ -254,6 +254,7 @@ export default {
     },
     getTypeLabel(type) {
       if (type === "image") return "Images";
+      if (type === "imageRaw") return "RAW images";
       if (type === "video") return "Videos";
       return "Other";
     },

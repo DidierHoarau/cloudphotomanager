@@ -45,6 +45,15 @@ describe("File", () => {
       expect(file.id).toHaveLength(32);
       expect(/^[a-f0-9]{32}$/.test(file.id)).toBe(true);
     });
+
+    it("should expose the derived media type to API consumers", () => {
+      expect(new File("acct1", "folder1", "photo.jpg").mediaType).toBe(
+        FileMediaType.image,
+      );
+      expect(new File("acct1", "folder1", "photo.heic").mediaType).toBe(
+        FileMediaType.imageRaw,
+      );
+    });
   });
 
   describe("getMediaType", () => {

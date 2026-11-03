@@ -172,6 +172,38 @@ describe("Sync scale regression (10k files)", () => {
     expect(queryMock.mock.calls).toHaveLength(1);
   });
 
+  it("FolderDataListSubFolders lists the root's direct children", async () => {
+    const rootAccountId = "account-root";
+    const rootFolder = new Folder(rootAccountId, "/");
+    rootFolder.idCloud = "/cloud/root";
+    rootFolder.dateSync = new Date();
+    rootFolder.dateUpdated = new Date();
+    await folderData.FolderDataAdd(span, rootFolder);
+    for (const folderpath of ["/photos", "/scale", "/photos/nested"]) {
+      const folder = new Folder(rootAccountId, folderpath);
+      folder.idCloud = `/cloud/root${folderpath}`;
+      folder.dateSync = new Date();
+      folder.dateUpdated = new Date();
+      await folderData.FolderDataAdd(span, folder);
+    }
+    await folderData.FolderDataCacheCountsFlush();
+
+    queryMock.mockClear();
+    const subFolders = await folderData.FolderDataListSubFolders(
+      span,
+      rootFolder,
+    );
+
+    // The root row itself is excluded (strict lower bound) and nested
+    // folders are filtered out: only direct children remain.
+    expect(subFolders.map((folder) => folder.folderpath).sort()).toEqual([
+      "/photos",
+      "/scale",
+    ]);
+    // Exactly one query: the indexed direct-children range scan.
+    expect(queryMock.mock.calls).toHaveLength(1);
+  });
+
   it("SyncFileCacheCleanUp removes only orphans with one query", async () => {
     const cacheRoot = path.join(dataDir, "cache", accountId);
     const knownCacheDir = path.join(

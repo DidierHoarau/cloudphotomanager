@@ -2,7 +2,7 @@
   <div id="media-container">
     <img
       class="media-content"
-      v-if="file && getType(file) == 'image'"
+      v-if="file && isImage(file)"
       :src="getImageSource(file)"
     />
     <video
@@ -35,6 +35,9 @@ export default {
   methods: {
     getType(file) {
       return FileUtils.getType(file);
+    },
+    isImage(file) {
+      return FileUtils.isImage(file);
     },
     getImageSource(file) {
       return MediaUrls.imagePreview(file);

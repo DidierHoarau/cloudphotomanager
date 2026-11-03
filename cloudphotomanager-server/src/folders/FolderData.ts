@@ -228,7 +228,9 @@ export async function FolderDataGetByCloudId(
 // Direct children only: an indexed range query over the
 // (accountId, folderpath) index instead of loading every folder of the account.
 // '/' (0x2F) < '0' (0x30), so the upper bound excludes siblings that share the
-// parent prefix without a separator ("/ab" vs parent "/a").
+// parent prefix without a separator ("/ab" vs parent "/a"). The same bound
+// applies to the root: `folderpath > '/' AND folderpath < '0'` covers every
+// path below `/` while direct children are kept by the filter below.
 export async function FolderDataListSubFolders(
   context: Span,
   parentFolder: Folder,
@@ -236,7 +238,8 @@ export async function FolderDataListSubFolders(
   const span = OTelTracer().startSpan("FolderDataListSubFolders", context);
   const prefix =
     parentFolder.folderpath === "/" ? "/" : `${parentFolder.folderpath}/`;
-  const upper = `${parentFolder.folderpath}0`;
+  const upper =
+    parentFolder.folderpath === "/" ? "0" : `${parentFolder.folderpath}0`;
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * FROM folders WHERE accountId = ? AND folderpath > ? AND folderpath < ? ORDER BY folderpath",

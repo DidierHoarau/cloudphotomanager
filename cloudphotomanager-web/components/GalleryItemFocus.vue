@@ -101,11 +101,7 @@
         <button class="action-btn" @click="clickedClose()" title="Close">
           <i class="bi bi-x-lg"></i>
         </button>
-        <template
-          v-if="
-            authenticationStore.isAdmin || (file && getType(file) == 'image')
-          "
-        >
+        <template v-if="authenticationStore.isAdmin || (file && isImage(file))">
           <div class="action-bar-divider"></div>
           <div class="action-menu" ref="actionMenu">
             <button
@@ -137,7 +133,7 @@
                 Move to Trash
               </button>
               <button
-                v-if="file && getType(file) == 'image'"
+                v-if="file && isImage(file)"
                 class="action-menu-item"
                 @click="onActionClicked('rotate')"
               >
@@ -189,7 +185,7 @@
       <div v-if="isCurrentFileProcessing" class="processing-banner">
         <i class="bi bi-hourglass-split"></i>&nbsp; Operation in progress...
       </div>
-      <template v-if="file && getType(file) == 'image'">
+      <template v-if="file && isImage(file)">
         <img
           class="media-content"
           v-if="!imageUnavailable"
@@ -235,14 +231,11 @@
     </div>
     <div id="media-preload">
       <img
-        v-if="position > 0 && getType(files[position - 1]) == 'image'"
+        v-if="position > 0 && isImage(files[position - 1])"
         :src="getImageSource(files[position - 1])"
       />
       <img
-        v-if="
-          position + 1 < files.length - 1 &&
-          getType(files[position + 1]) == 'image'
-        "
+        v-if="position + 1 < files.length && isImage(files[position + 1])"
         :src="getImageSource(files[position + 1])"
       />
     </div>
@@ -393,6 +386,9 @@ export default {
     if (!mediaContainer) return;
     // Dynamic import: hammerjs (~20 KB) is only needed when the viewer is open
     const Hammer = await import("hammerjs");
+    // The viewer may be closed while the dynamic import is in flight: do not
+    // attach a manager to a torn-down element.
+    if (this._isUnmounted) return;
     const gestureManager = new Hammer.Manager(mediaContainer, {
       touchAction: "none",
     });
@@ -413,6 +409,7 @@ export default {
     );
     gestureManager.get("swipe").requireFailure(gestureManager.get("pinch"));
     gestureManager.get("pan").requireFailure(gestureManager.get("pinch"));
+    this._gestureManager = gestureManager;
     let pinchStartScale = 1;
     let panStartTranslateX = 0;
     let panStartTranslateY = 0;
@@ -457,6 +454,11 @@ export default {
     });
   },
   unmounted() {
+    this._isUnmounted = true;
+    if (this._gestureManager) {
+      this._gestureManager.destroy();
+      this._gestureManager = null;
+    }
     window.removeEventListener("keydown", this._onKeyDown);
     window.removeEventListener("click", this._onGlobalClick);
     if (this._onOperationComplete) {
@@ -578,6 +580,9 @@ export default {
     },
     getType(file) {
       return FileUtils.getType(file);
+    },
+    isImage(file) {
+      return FileUtils.isImage(file);
     },
     removeFileAndAdvance(fileIds) {
       const removeSet = new Set(fileIds);
