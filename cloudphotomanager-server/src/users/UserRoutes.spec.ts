@@ -422,4 +422,43 @@ describe("UserRoutes", () => {
     expect(allowed.statusCode).toBe(200);
     expect(allowed.json().info.isAdmin).toBe(false);
   });
+
+  it("keys the login throttle on the trusted client IP and the user name", async () => {
+    const attempt = (name: string, forwardedFor = "203.0.113.10") =>
+      ctx.fastify.inject({
+        method: "POST",
+        url: "/api/users/session",
+        headers: { "x-forwarded-for": forwardedFor },
+        payload: { name, password: "pw-wrong" },
+      });
+
+    // LOGIN_MAX_ATTEMPTS (20) failures are allowed; the next one is throttled.
+    for (let i = 0; i < 20; i++) {
+      const res = await attempt("throttle-target");
+      expect(res.statusCode).toBe(403);
+    }
+    const throttled = await attempt("throttle-target");
+    expect(throttled.statusCode).toBe(429);
+
+    // A different client IP gets its own bucket.
+    const otherIp = await attempt("throttle-target", "203.0.113.11");
+    expect(otherIp.statusCode).toBe(403);
+
+    // The user name is part of the key and compared case-insensitively.
+    const sameIpOtherCase = await attempt("Throttle-Target");
+    expect(sameIpOtherCase.statusCode).toBe(429);
+    const sameIpOtherUser = await attempt("throttle-other");
+    expect(sameIpOtherUser.statusCode).toBe(403);
+
+    // X-Forwarded-For from an untrusted peer is ignored: this request must
+    // not share the exhausted 203.0.113.10 bucket.
+    const spoofed = await ctx.fastify.inject({
+      method: "POST",
+      url: "/api/users/session",
+      remoteAddress: "198.51.100.7",
+      headers: { "x-forwarded-for": "203.0.113.10" },
+      payload: { name: "throttle-target", password: "pw-wrong" },
+    });
+    expect(spoofed.statusCode).toBe(403);
+  });
 });

@@ -3,6 +3,7 @@ import { Span } from "@opentelemetry/sdk-trace";
 import { AuthGetUserSession } from "../users/Auth";
 import { FileDataGet, FileDataGetFileCacheDir } from "./FileData";
 import * as fs from "fs-extra";
+import { promises as fsp } from "fs";
 import { SyncFileCacheCheckAsync } from "../sync/SyncFileCache";
 import { OTelRequestSpan } from "@devopsplaybook.io/otel-utils-fastify";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
@@ -68,7 +69,13 @@ export class FileRoutes {
         req.params.fileId,
       );
       const filepath = `${cacheDir}/thumbnail.webp`;
-      if (!fs.existsSync(filepath)) {
+      let stats;
+      try {
+        stats = await fsp.stat(filepath);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+          throw err;
+        }
         SyncFileCacheCheckAsync(
           file.accountId,
           req.params.fileId,
@@ -79,13 +86,12 @@ export class FileRoutes {
         return res.status(404).send({ error: "File Not Found" });
       }
       const stream = fs.createReadStream(filepath);
-      const stats = await fs.statSync(filepath);
       res.header(
         "Content-Disposition",
-        `attachment; filename=${req.params.fileId}.webp`,
+        `inline; filename=${req.params.fileId}.webp`,
       );
       res.header("Content-Length", stats.size);
-      res.header("Content-Type", "application/octet-stream");
+      res.header("Content-Type", "image/webp");
       return res.send(stream);
     });
 
@@ -114,7 +120,13 @@ export class FileRoutes {
         req.params.fileId,
       );
       const filepath = `${cacheDir}/preview.webp`;
-      if (!fs.existsSync(filepath)) {
+      let stats;
+      try {
+        stats = await fsp.stat(filepath);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+          throw err;
+        }
         SyncFileCacheCheckAsync(
           file.accountId,
           req.params.fileId,
@@ -125,13 +137,12 @@ export class FileRoutes {
         return res.status(404).send({ error: "File Not Found" });
       }
       const stream = fs.createReadStream(filepath);
-      const stats = await fs.statSync(filepath);
       res.header(
         "Content-Disposition",
-        `attachment; filename=${file.accountId}.webp`,
+        `inline; filename=${file.accountId}.webp`,
       );
       res.header("Content-Length", stats.size);
-      res.header("Content-Type", "application/octet-stream");
+      res.header("Content-Type", "image/webp");
       return res.send(stream);
     });
 

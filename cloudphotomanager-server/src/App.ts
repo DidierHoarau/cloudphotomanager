@@ -83,7 +83,9 @@ Promise.resolve().then(async () => {
 
   // API
 
-  const fastify = Fastify({});
+  // Only the bundled nginx (same container, loopback) may set
+  // X-Forwarded-For; client-supplied values stay untrusted.
+  const fastify = Fastify({ trustProxy: "loopback" });
 
   fastify.register(fastifyWebsocket);
 
@@ -94,8 +96,6 @@ Promise.resolve().then(async () => {
       credentials: true,
     });
   }
-  fastify.register(require("@fastify/multipart"));
-
   fastify.register(cookie, {
     secret: config.JWT_KEY,
     parseOptions: {},

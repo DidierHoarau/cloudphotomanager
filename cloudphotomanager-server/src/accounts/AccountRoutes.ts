@@ -27,12 +27,42 @@ const CAPABILITIES_NONE: AccountCapabilities = {
 type AccountDefinitionPublic = Omit<AccountDefinition, "infoPrivate">;
 
 // Provider secrets must never leave the server, so create and update
-// responses use the same shape as the GET routes.
+// responses never include `infoPrivate`.
 function AccountDefinitionToPublic(
   accountDefinition: AccountDefinition,
 ): AccountDefinitionPublic {
   const { id, name, rootpath, info } = accountDefinition;
   return { id, name, rootpath, info };
+}
+
+// Read shape for authenticated users. Non-admins get only what the gallery
+// consumes (id, name, type, capabilities); the full definition (root path,
+// provider info) is reserved for admins. `infoPrivate` is never included.
+type AccountDefinitionRead = {
+  id: string;
+  name: string;
+  type: string;
+  capabilities: AccountCapabilities;
+  rootpath?: string;
+  info?: any;
+};
+
+function AccountDefinitionToRead(
+  accountDefinition: AccountDefinition,
+  capabilities: AccountCapabilities,
+  includeFullDefinition: boolean,
+): AccountDefinitionRead {
+  const dto: AccountDefinitionRead = {
+    id: accountDefinition.id,
+    name: accountDefinition.name,
+    type: accountDefinition.info?.type,
+    capabilities,
+  };
+  if (includeFullDefinition) {
+    dto.rootpath = accountDefinition.rootpath;
+    dto.info = accountDefinition.info;
+  }
+  return dto;
 }
 
 // The web needs to know what an account can do (e.g. whether original files
@@ -65,15 +95,19 @@ export class AccountRoutes {
       if (!userSession.isAuthenticated) {
         return res.status(403).send({ error: "Access Denied" });
       }
+      const includeFullDefinition = AuthIsAdmin(userSession);
       const accounts = await AccountDataList(span);
+      const accountsRead: AccountDefinitionRead[] = [];
       for (const account of accounts) {
-        delete account.infoPrivate;
-        (account as any).capabilities = await AccountCapabilitiesForDefinition(
+        const capabilities = await AccountCapabilitiesForDefinition(
           span,
           account,
         );
+        accountsRead.push(
+          AccountDefinitionToRead(account, capabilities, includeFullDefinition),
+        );
       }
-      return res.status(200).send({ accounts });
+      return res.status(200).send({ accounts: accountsRead });
     });
 
     interface GetAccount extends RequestGenericInterface {
@@ -93,12 +127,19 @@ export class AccountRoutes {
       } catch {
         return res.status(404).send({ error: "Account Not Found" });
       }
-      delete account.infoPrivate;
-      (account as any).capabilities = await AccountCapabilitiesForDefinition(
+      const capabilities = await AccountCapabilitiesForDefinition(
         span,
         account,
       );
-      return res.status(200).send(account);
+      return res
+        .status(200)
+        .send(
+          AccountDefinitionToRead(
+            account,
+            capabilities,
+            AuthIsAdmin(userSession),
+          ),
+        );
     });
 
     interface PostAccountValidation extends RequestGenericInterface {

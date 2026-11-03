@@ -172,4 +172,85 @@ describe("AccountRoutes", () => {
     expect(readBody).not.toHaveProperty("infoPrivate");
     expect(JSON.stringify(readBody)).not.toContain(secret);
   });
+
+  it("returns a minimal DTO to non-admins and the full definition to admins", async () => {
+    const secret = "sentinel-read-secret";
+    const created = await ctx.fastify.inject({
+      method: "POST",
+      url: "/api/accounts",
+      headers: routeSpecAuthHeaders(adminToken),
+      payload: {
+        name: "dto-account",
+        rootpath: ctx.rootPath,
+        info: { type: "localDrive" },
+        infoPrivate: { accessKey: secret },
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const accountId = created.json().id;
+
+    const adminList = await ctx.fastify.inject({
+      method: "GET",
+      url: "/api/accounts",
+      headers: routeSpecAuthHeaders(adminToken),
+    });
+    expect(adminList.statusCode).toBe(200);
+    const adminRow = adminList
+      .json()
+      .accounts.find((account: any) => account.id === accountId);
+    expect(adminRow).toBeTruthy();
+    expect(adminRow.type).toBe("localDrive");
+    expect(adminRow.info.type).toBe("localDrive");
+    expect(adminRow.rootpath).toBe(ctx.rootPath);
+    expect(adminRow.capabilities).toBeDefined();
+    expect(adminRow).not.toHaveProperty("infoPrivate");
+    expect(JSON.stringify(adminList.json())).not.toContain(secret);
+
+    const adminDetail = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountId}`,
+      headers: routeSpecAuthHeaders(adminToken),
+    });
+    expect(adminDetail.statusCode).toBe(200);
+    expect(adminDetail.json().info.type).toBe("localDrive");
+    expect(adminDetail.json()).not.toHaveProperty("infoPrivate");
+
+    const regularList = await ctx.fastify.inject({
+      method: "GET",
+      url: "/api/accounts",
+      headers: routeSpecAuthHeaders(regularToken),
+    });
+    expect(regularList.statusCode).toBe(200);
+    const regularRow = regularList
+      .json()
+      .accounts.find((account: any) => account.id === accountId);
+    expect(regularRow).toBeTruthy();
+    expect(Object.keys(regularRow).sort()).toEqual([
+      "capabilities",
+      "id",
+      "name",
+      "type",
+    ]);
+    expect(regularRow.type).toBe("localDrive");
+    expect(regularRow).not.toHaveProperty("rootpath");
+    expect(regularRow).not.toHaveProperty("info");
+    expect(regularRow).not.toHaveProperty("infoPrivate");
+    expect(JSON.stringify(regularList.json())).not.toContain(ctx.rootPath);
+    expect(JSON.stringify(regularList.json())).not.toContain(secret);
+
+    const regularDetail = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountId}`,
+      headers: routeSpecAuthHeaders(regularToken),
+    });
+    expect(regularDetail.statusCode).toBe(200);
+    expect(Object.keys(regularDetail.json()).sort()).toEqual([
+      "capabilities",
+      "id",
+      "name",
+      "type",
+    ]);
+    expect(JSON.stringify(regularDetail.json())).not.toContain(ctx.rootPath);
+    expect(JSON.stringify(regularDetail.json())).not.toContain(secret);
+  });
 });
