@@ -38,4 +38,13 @@ export class FileUtils {
   public static getWithoutExtention(file: any) {
     return file.filename.substring(0, file.filename.lastIndexOf("."));
   }
+
+  // Exact "-outtake.<ext>" suffix: a file named "x-outtake2.jpg" is not an
+  // outtake.
+  public static isOuttake(file: any) {
+    if (!file || !file.filename) {
+      return false;
+    }
+    return file.filename.includes(`-outtake.${this.getExtention(file)}`);
+  }
 }

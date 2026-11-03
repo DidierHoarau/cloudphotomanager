@@ -56,3 +56,15 @@ describe("FileUtils.isImage", () => {
     expect(FileUtils.isImage({ filename: "document.txt" })).toBe(false);
   });
 });
+
+describe("FileUtils.isOuttake", () => {
+  it("matches the exact -outtake.<ext> suffix", () => {
+    expect(FileUtils.isOuttake({ filename: "x-outtake.jpg" })).toBe(true);
+    expect(FileUtils.isOuttake({ filename: "x-outtake.raw" })).toBe(true);
+    expect(FileUtils.isOuttake({ filename: "x-outtake2.jpg" })).toBe(false);
+    expect(FileUtils.isOuttake({ filename: "outtake-x.jpg" })).toBe(false);
+    expect(FileUtils.isOuttake({ filename: "x.jpg" })).toBe(false);
+    expect(FileUtils.isOuttake({})).toBe(false);
+    expect(FileUtils.isOuttake(null)).toBe(false);
+  });
+});

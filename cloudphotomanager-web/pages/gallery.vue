@@ -166,6 +166,7 @@ import { AuthService } from "~~/services/AuthService";
 import { DuplicateCountService } from "~~/services/DuplicateCountService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import { FileUtils } from "~~/services/FileUtils";
+import { BulkDownloadService } from "~~/services/BulkDownloadService";
 import { localCache, TTL } from "~~/services/LocalCache";
 
 export default {
@@ -697,26 +698,11 @@ export default {
     async clickedDownload() {
       if (this.bulkDownloading) return;
       this.bulkDownloading = true;
-      const fileIdList = this.selectedFiles.map((f) => f.id);
       try {
-        const res = await axios.post(
-          `${Config.sync.SERVER_URL}/accounts/${
-            this.currentAccountId
-          }/files/batch/operations/fileDownload`,
-          { fileIdList },
-          { responseType: "blob" },
+        await BulkDownloadService.downloadZip(
+          this.currentAccountId,
+          this.selectedFiles,
         );
-        const url = URL.createObjectURL(res.data);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `photos-${new Date()
-          .toISOString()
-          .replace(/[:.]/g, "-")
-          .substring(0, 19)}.zip`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
         EventBus.emit(EventTypes.ALERT_MESSAGE, {
           text: "Download started",
         });

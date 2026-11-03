@@ -48,7 +48,7 @@
 <script>
 import { AuthService } from "~~/services/AuthService";
 import { FileUtils } from "~~/services/FileUtils";
-import { find } from "lodash";
+import { groupBy } from "lodash";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import axios from "axios";
 import Config from "~~/services/Config.ts";
@@ -58,110 +58,103 @@ export default {
     files: {},
     selectedFiles: Array,
   },
-  data() {
-    return {
-      daySelections: [],
-    };
-  },
-  async created() {
-    for (const file of this.files) {
-      const dateString = new Date(file.dateMedia).toLocaleDateString();
-      let daySelection = find(this.daySelections, { day: dateString });
-      if (!daySelection) {
-        daySelection = { day: dateString, files: [], selected: false };
-        this.daySelections.push(daySelection);
-      }
-      daySelection.files.push(file);
-    }
-  },
   methods: {
     async clickedClose() {
       this.$emit("onDone", {});
     },
     async doActionRebuildCache() {
       this.loading = true;
-      let accountId = "";
-      const fileIdList = [];
-      for (const file of this.files) {
-        accountId = file.accountId;
-        fileIdList.push(file.id);
+      try {
+        const groups = groupBy(this.files, "accountId");
+        let succeeded = false;
+        for (const accountId of Object.keys(groups)) {
+          const fileIdList = groups[accountId].map((file) => file.id);
+          try {
+            await axios.post(
+              `${(await Config.get()).SERVER_URL}/accounts/${accountId}/files/batch/operations/fileCacheDelete`,
+              { fileIdList },
+              await AuthService.getAuthHeader(),
+            );
+            succeeded = true;
+          } catch (err) {
+            handleError(err);
+          }
+        }
+        if (succeeded) {
+          this.$emit("onDone", { status: "invalidated" });
+        }
+      } finally {
+        this.loading = false;
       }
-      if (fileIdList.length > 0) {
-        await axios
-          .post(
-            `${(await Config.get()).SERVER_URL}/accounts/${accountId}/files/batch/operations/fileCacheDelete`,
-            { fileIdList },
-            await AuthService.getAuthHeader(),
-          )
-          .then((res) => {
-            this.$emit("onDone", { status: "invalidated" });
-          })
-          .catch(handleError);
-      }
-      this.loading = false;
     },
     async doActionSetOuttake() {
       this.loading = true;
-      let accountId = "";
-      const fileIdNames = [];
-      for (const file of this.files) {
-        if (file.filename.indexOf("-outtake") < 0) {
-          accountId = file.accountId;
-          fileIdNames.push({
+      try {
+        const candidates = this.files.filter(
+          (file) => !FileUtils.isOuttake(file),
+        );
+        const groups = groupBy(candidates, "accountId");
+        let succeeded = false;
+        for (const accountId of Object.keys(groups)) {
+          const fileIdNames = groups[accountId].map((file) => ({
             id: file.id,
             filename: `${FileUtils.getWithoutExtention(file)}-outtake.${FileUtils.getExtention(file)}`,
-          });
+          }));
+          SyncStore().markFilesAsPending(fileIdNames.map((f) => f.id));
+          SyncStore().markOperationInProgress();
+          try {
+            await axios.post(
+              `${(await Config.get()).SERVER_URL}/accounts/${accountId}/files/batch/operations/fileRename`,
+              { fileIdNames },
+              await AuthService.getAuthHeader(),
+            );
+            succeeded = true;
+          } catch (err) {
+            handleError(err);
+          }
         }
+        if (succeeded) {
+          this.$emit("onDone", { status: "invalidated" });
+        }
+      } finally {
+        this.loading = false;
       }
-      if (fileIdNames.length > 0) {
-        SyncStore().markFilesAsPending(fileIdNames.map((f) => f.id));
-        SyncStore().markOperationInProgress();
-        await axios
-          .post(
-            `${(await Config.get()).SERVER_URL}/accounts/${accountId}/files/batch/operations/fileRename`,
-            { fileIdNames },
-            await AuthService.getAuthHeader(),
-          )
-          .then((res) => {
-            this.$emit("onDone", { status: "invalidated" });
-          })
-          .catch(handleError);
-      }
-      this.loading = false;
     },
     async doActionUnSetOuttake() {
       this.loading = true;
-      let accountId = "";
-      const fileIdNames = [];
-      for (const file of this.files) {
-        if (
-          file.filename.indexOf(`-outtake.${FileUtils.getExtention(file)}`) > 0
-        ) {
-          accountId = file.accountId;
-          fileIdNames.push({
-            id: file.id,
-            filename: file.filename.replace(
-              `-outtake.${FileUtils.getExtention(file)}`,
-              `.${FileUtils.getExtention(file)}`,
-            ),
+      try {
+        const candidates = this.files.filter((file) =>
+          FileUtils.isOuttake(file),
+        );
+        const groups = groupBy(candidates, "accountId");
+        let succeeded = false;
+        for (const accountId of Object.keys(groups)) {
+          const fileIdNames = groups[accountId].map((file) => {
+            const ext = FileUtils.getExtention(file);
+            return {
+              id: file.id,
+              filename: file.filename.replace(`-outtake.${ext}`, `.${ext}`),
+            };
           });
+          SyncStore().markFilesAsPending(fileIdNames.map((f) => f.id));
+          SyncStore().markOperationInProgress();
+          try {
+            await axios.post(
+              `${(await Config.get()).SERVER_URL}/accounts/${accountId}/files/batch/operations/fileRename`,
+              { fileIdNames },
+              await AuthService.getAuthHeader(),
+            );
+            succeeded = true;
+          } catch (err) {
+            handleError(err);
+          }
         }
+        if (succeeded) {
+          this.$emit("onDone", { status: "invalidated" });
+        }
+      } finally {
+        this.loading = false;
       }
-      if (fileIdNames.length > 0) {
-        SyncStore().markFilesAsPending(fileIdNames.map((f) => f.id));
-        SyncStore().markOperationInProgress();
-        await axios
-          .post(
-            `${(await Config.get()).SERVER_URL}/accounts/${accountId}/files/batch/operations/fileRename`,
-            { fileIdNames },
-            await AuthService.getAuthHeader(),
-          )
-          .then((res) => {
-            this.$emit("onDone", { status: "invalidated" });
-          })
-          .catch(handleError);
-      }
-      this.loading = false;
     },
   },
 };

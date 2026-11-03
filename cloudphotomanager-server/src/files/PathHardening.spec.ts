@@ -14,6 +14,7 @@ import {
   FileNameValidate,
   FolderPathValidate,
   PathIsInsideRoot,
+  ZipEntryNameValidate,
 } from "../files/PathValidation";
 import { AccountDefinition } from "../model/AccountDefinition";
 import { File } from "../model/File";
@@ -70,6 +71,37 @@ describe("Path validation helpers", () => {
       `/${"a".repeat(4096)}`,
     ]) {
       expect(FolderPathValidate(invalid)).not.toBeNull();
+    }
+  });
+
+  it("accepts normalized relative zip entry names only", () => {
+    for (const valid of [
+      "one.jpg",
+      "z/one.jpg",
+      "z/sub/three.jpg",
+      "my photo 01.JPG",
+    ]) {
+      expect(ZipEntryNameValidate(valid)).toBeNull();
+    }
+
+    for (const invalid of [
+      undefined,
+      "",
+      "   ",
+      "/abs.jpg",
+      "../escape.jpg",
+      "z/../../escape.jpg",
+      "z//one.jpg",
+      "z/./one.jpg",
+      "z\\one.jpg",
+      "z/..",
+      "z/",
+      "z/bad\u0000.jpg",
+      `z/${"x".repeat(256)}`,
+      "z/trailing.",
+      "z/trailing ",
+    ]) {
+      expect(ZipEntryNameValidate(invalid)).not.toBeNull();
     }
   });
 

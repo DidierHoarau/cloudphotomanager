@@ -63,6 +63,37 @@ export function FolderPathValidate(folderpath: unknown): string | null {
   return null;
 }
 
+// Returns an error message, or null when the entry name is a safe,
+// already-normalized relative zip path: every segment must be a valid single
+// filename so the entry cannot escape the archive root.
+export function ZipEntryNameValidate(entryName: unknown): string | null {
+  if (typeof entryName !== "string" || entryName.trim().length === 0) {
+    return "Missing: entry name";
+  }
+  if (entryName.length > 65535) {
+    return "Entry name is too long";
+  }
+  if (entryName.startsWith("/")) {
+    return "Entry name cannot be absolute";
+  }
+  if (entryName.includes("\\")) {
+    return "Entry name cannot contain backslashes";
+  }
+  if (hasControlCharacters(entryName)) {
+    return "Entry name contains invalid characters";
+  }
+  if (path.posix.normalize(entryName) !== entryName) {
+    return "Entry name is not normalized";
+  }
+  for (const segment of entryName.split("/")) {
+    const segmentError = FileNameValidate(segment);
+    if (segmentError !== null) {
+      return segmentError;
+    }
+  }
+  return null;
+}
+
 // True when target resolves inside rootpath (or is rootpath itself).
 export function PathIsInsideRoot(rootpath: string, target: string): boolean {
   if (!rootpath || !target) {
