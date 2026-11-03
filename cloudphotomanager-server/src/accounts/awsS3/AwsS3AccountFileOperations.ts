@@ -1,6 +1,12 @@
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { Span } from "@opentelemetry/sdk-trace";
-import { S3 } from "aws-sdk";
 import { createWriteStream } from "fs";
+import { Readable } from "stream";
 import * as path from "path";
 import {
   FileNameValidate,
@@ -13,7 +19,7 @@ import { AwsS3Account } from "./AwsS3Account";
 export async function AwsS3AccountFileOperationsDownloadFile(
   context: Span,
   awsS3Account: AwsS3Account,
-  s3: S3,
+  s3: S3Client,
   file: File,
   destinationFolderpath: string,
   destinationFilename: string
@@ -26,7 +32,11 @@ export async function AwsS3AccountFileOperationsDownloadFile(
     Bucket: awsS3Account.getAccountDefinition().infoPrivate.bucket,
     Key: file.idCloud,
   };
-  const fileStream = s3.getObject(params).createReadStream();
+  const response = await s3.send(new GetObjectCommand(params));
+  if (!response.Body) {
+    throw new Error(`Empty S3 body for file ${file.idCloud}`);
+  }
+  const fileStream = response.Body as unknown as Readable;
   const writeStream = createWriteStream(
     path.join(destinationFolderpath, destinationFilename)
   );
@@ -42,7 +52,7 @@ export async function AwsS3AccountFileOperationsDownloadFile(
 export async function AwsS3AccountFileOperationsDeleteFile(
   context: Span,
   awsS3Account: AwsS3Account,
-  s3: S3,
+  s3: S3Client,
   file: File
 ): Promise<void> {
   const span = OTelTracer().startSpan(
@@ -53,7 +63,7 @@ export async function AwsS3AccountFileOperationsDeleteFile(
     Bucket: awsS3Account.getAccountDefinition().infoPrivate.bucket,
     Key: file.idCloud,
   };
-  await s3.deleteObject(params).promise();
+  await s3.send(new DeleteObjectCommand(params));
   span.end();
 }
 
@@ -63,7 +73,7 @@ export async function AwsS3AccountFileOperationsDeleteFile(
 export async function AwsS3AccountFileOperationsMoveFile(
   context: Span,
   awsS3Account: AwsS3Account,
-  s3: S3,
+  s3: S3Client,
   file: File,
   folderpathDestination: string
 ): Promise<void> {
@@ -106,7 +116,7 @@ export async function AwsS3AccountFileOperationsMoveFile(
 export async function AwsS3AccountFileOperationsRenameFile(
   context: Span,
   awsS3Account: AwsS3Account,
-  s3: S3,
+  s3: S3Client,
   file: File,
   filename: string
 ): Promise<void> {
@@ -144,25 +154,27 @@ export async function AwsS3AccountFileOperationsRenameFile(
 // Private Functions
 
 async function copyThenDelete(
-  s3: S3,
+  s3: S3Client,
   bucket: string,
   sourceKey: string,
   destinationKey: string
 ): Promise<void> {
-  await s3
-    .copyObject({
+  await s3.send(
+    new CopyObjectCommand({
       Bucket: bucket,
       CopySource: buildCopySource(bucket, sourceKey),
       Key: destinationKey,
     })
-    .promise();
+  );
   try {
-    await s3.deleteObject({ Bucket: bucket, Key: sourceKey }).promise();
+    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: sourceKey }));
   } catch (err) {
     // Never leave a duplicate behind when the source delete fails: a retry
     // would otherwise copy onto an existing destination forever.
     try {
-      await s3.deleteObject({ Bucket: bucket, Key: destinationKey }).promise();
+      await s3.send(
+        new DeleteObjectCommand({ Bucket: bucket, Key: destinationKey })
+      );
     } catch {
       // Best effort only; the original error is the actionable one.
     }

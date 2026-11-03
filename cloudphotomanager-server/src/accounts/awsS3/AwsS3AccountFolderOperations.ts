@@ -1,5 +1,10 @@
+import {
+  CopyObjectCommand,
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { Span } from "@opentelemetry/sdk-trace";
-import { S3 } from "aws-sdk";
 import * as path from "path";
 import {
   FileNameValidate,
@@ -17,7 +22,7 @@ const DELETE_BATCH_SIZE = 1000;
 export async function AwsS3AccountFolderOperationsDeleteFolder(
   context: Span,
   awsS3Account: AwsS3Account,
-  s3: S3,
+  s3: S3Client,
   folder: Folder
 ): Promise<void> {
   const span = OTelTracer().startSpan(
@@ -39,7 +44,7 @@ export async function AwsS3AccountFolderOperationsDeleteFolder(
 export async function AwsS3AccountFolderOperationsRenameFolder(
   context: Span,
   awsS3Account: AwsS3Account,
-  s3: S3,
+  s3: S3Client,
   folder: Folder,
   newName: string
 ): Promise<void> {
@@ -73,13 +78,13 @@ export async function AwsS3AccountFolderOperationsRenameFolder(
 
     const sourceKeys = await listFolderKeys(s3, bucket, sourceKey);
     for (const key of sourceKeys) {
-      await s3
-        .copyObject({
+      await s3.send(
+        new CopyObjectCommand({
           Bucket: bucket,
           CopySource: buildCopySource(bucket, key),
           Key: destinationKey + key.slice(sourceKey.length),
         })
-        .promise();
+      );
     }
     // Only delete the old prefix once every copy succeeded: a partial copy is
     // retried safely instead of losing the whole folder.
@@ -128,20 +133,20 @@ function resolveFolderKey(
 // Lists every key belonging to the folder prefix: the marker object itself
 // (key === prefix) and all nested keys (key starts with "<prefix>/").
 async function listFolderKeys(
-  s3: S3,
+  s3: S3Client,
   bucket: string,
   folderKey: string
 ): Promise<string[]> {
   const keys: string[] = [];
   let continuationToken: string | undefined;
   do {
-    const response = await s3
-      .listObjectsV2({
+    const response = await s3.send(
+      new ListObjectsV2Command({
         Bucket: bucket,
         Prefix: folderKey,
         ContinuationToken: continuationToken,
       })
-      .promise();
+    );
     for (const item of response.Contents || []) {
       if (
         item.Key === folderKey ||
@@ -158,21 +163,21 @@ async function listFolderKeys(
 }
 
 async function deleteKeys(
-  s3: S3,
+  s3: S3Client,
   bucket: string,
   keys: string[]
 ): Promise<void> {
   for (let offset = 0; offset < keys.length; offset += DELETE_BATCH_SIZE) {
     const batch = keys.slice(offset, offset + DELETE_BATCH_SIZE);
-    const response = await s3
-      .deleteObjects({
+    const response = await s3.send(
+      new DeleteObjectsCommand({
         Bucket: bucket,
         Delete: {
           Objects: batch.map((key) => ({ Key: key })),
           Quiet: true,
         },
       })
-      .promise();
+    );
     if (response?.Errors?.length > 0) {
       throw new Error(
         `Failed to delete ${response.Errors.length} S3 object(s) under ${keys[0]}`
