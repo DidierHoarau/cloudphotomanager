@@ -1,6 +1,16 @@
-import * as AWS from "aws-sdk";
-import { S3 } from "aws-sdk";
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { Span } from "@opentelemetry/sdk-trace";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import { Readable } from "stream";
 import { StandardTracer } from "@devopsplaybook.io/otel-utils";
 import { OTelSetTracer, OTelTracer } from "../../OTelContext";
 import { AccountDefinition } from "../../model/AccountDefinition";
@@ -10,7 +20,7 @@ import { AwsS3Account } from "./AwsS3Account";
 import { AwsS3AccountInventoryListFilesInFolder } from "./AwsS3AccountInventory";
 
 interface FakeS3 {
-  s3: S3;
+  s3: S3Client;
   objects: Set<string>;
   listCalls: any[];
   copyCalls: any[];
@@ -42,51 +52,46 @@ function makeFakeS3(initialKeys: string[]): FakeS3 {
   }
 
   const s3 = {
-    listObjectsV2: (params: any) => ({
-      promise: async () => {
-        listCalls.push(params);
-        const prefix = params.Prefix || "";
+    send: async (command: any) => {
+      if (command instanceof ListObjectsV2Command) {
+        listCalls.push(command.input);
+        const prefix = command.input.Prefix || "";
         const keys = [...objects].filter((key) => key.startsWith(prefix));
         return {
           Contents: keys.sort().map((key) => ({ Key: key })),
           IsTruncated: false,
         };
-      },
-    }),
-    copyObject: (params: any) => ({
-      promise: async () => {
-        copyCalls.push(params);
-        const [bucket, sourceKey] = decodeCopySource(params.CopySource);
+      }
+      if (command instanceof CopyObjectCommand) {
+        copyCalls.push(command.input);
+        const [bucket, sourceKey] = decodeCopySource(command.input.CopySource);
         if (bucket !== "test-bucket") {
           throw new Error(`Unexpected bucket in CopySource: ${bucket}`);
         }
         if (!objects.has(sourceKey)) {
           throw new Error(`NoSuchKey: ${sourceKey}`);
         }
-        objects.add(params.Key);
+        objects.add(command.input.Key);
         return {};
-      },
-    }),
-    deleteObject: (params: any) => ({
-      promise: async () => {
-        deleteObjectCalls.push(params);
-        objects.delete(params.Key);
+      }
+      if (command instanceof DeleteObjectCommand) {
+        deleteObjectCalls.push(command.input);
+        objects.delete(command.input.Key);
         return {};
-      },
-    }),
-    deleteObjects: (params: any) => ({
-      promise: async () => {
-        deleteObjectsCalls.push(params);
-        for (const object of params.Delete.Objects) {
+      }
+      if (command instanceof DeleteObjectsCommand) {
+        deleteObjectsCalls.push(command.input);
+        for (const object of command.input.Delete.Objects) {
           objects.delete(object.Key);
         }
         return {};
-      },
-    }),
+      }
+      throw new Error(`Unexpected command: ${command?.constructor?.name}`);
+    },
   };
 
   return {
-    s3: s3 as unknown as S3,
+    s3: s3 as unknown as S3Client,
     objects,
     listCalls,
     copyCalls,
@@ -112,10 +117,9 @@ describe("AwsS3Account", () => {
     jest.restoreAllMocks();
   });
 
-  // aws-sdk v2 attaches the service operations to the S3 instance, so the
-  // client seam (`getS3Client`) is stubbed to exercise validate().
-  function stubS3Client(account: AwsS3Account, listObjectsV2: () => any): void {
-    (account as any).getS3Client = async () => ({ listObjectsV2 });
+  // The client seam (`getS3Client`) is stubbed to exercise validate().
+  function stubS3Client(account: AwsS3Account, send: () => any): void {
+    (account as any).getS3Client = async () => ({ send });
   }
 
   function makeAccountDefinition(): AccountDefinition {
@@ -133,30 +137,80 @@ describe("AwsS3Account", () => {
     return accountDefinition;
   }
 
-  // Regression for the aws-sdk 1.18.0 break: the pinned v2 client must
-  // expose the operations the account implementation relies on.
-  it("exposes the S3 operations used by the account implementation", () => {
-    const s3 = new AWS.S3();
-    expect(typeof s3.listObjectsV2).toBe("function");
-    expect(typeof s3.deleteObject).toBe("function");
-    expect(typeof s3.copyObject).toBe("function");
-    expect(typeof s3.getObject).toBe("function");
+  // The account implementation relies on the v3 client `send` contract and
+  // the five commands used by its operations.
+  it("exposes the S3 client and commands used by the account implementation", () => {
+    const client = new S3Client({
+      region: "us-east-1",
+      credentials: { accessKeyId: "key", secretAccessKey: "secret" },
+    });
+    expect(typeof client.send).toBe("function");
+    expect(new ListObjectsV2Command({ Bucket: "test-bucket" })).toBeInstanceOf(
+      ListObjectsV2Command,
+    );
+    expect(
+      new DeleteObjectCommand({ Bucket: "test-bucket", Key: "key" }),
+    ).toBeInstanceOf(DeleteObjectCommand);
+    expect(
+      new DeleteObjectsCommand({ Bucket: "test-bucket", Delete: { Objects: [] } }),
+    ).toBeInstanceOf(DeleteObjectsCommand);
+    expect(
+      new CopyObjectCommand({
+        Bucket: "test-bucket",
+        CopySource: "/test-bucket/key",
+        Key: "key-copy",
+      }),
+    ).toBeInstanceOf(CopyObjectCommand);
+    expect(
+      new GetObjectCommand({ Bucket: "test-bucket", Key: "key" }),
+    ).toBeInstanceOf(GetObjectCommand);
   });
 
   it("validate() resolves true when listObjectsV2 succeeds", async () => {
     const account = new AwsS3Account(makeAccountDefinition());
-    stubS3Client(account, () => ({ promise: async () => ({}) }));
+    stubS3Client(account, () => ({}));
     expect(await account.validate(span)).toBe(true);
   });
 
   it("validate() resolves false when listObjectsV2 fails", async () => {
     const account = new AwsS3Account(makeAccountDefinition());
-    stubS3Client(account, () => ({
-      promise: async () => {
-        throw new Error("Access Denied");
-      },
-    }));
+    stubS3Client(account, () => {
+      throw new Error("Access Denied");
+    });
     expect(await account.validate(span)).toBe(false);
+  });
+
+  it("downloads a file body to the destination", async () => {
+    const accountDefinition = makeAccountDefinition();
+    const account = new AwsS3Account(accountDefinition);
+    let received: any;
+    (account as any).getS3Client = async () => ({
+      send: async (command: any) => {
+        received = command;
+        return {
+          Body: Readable.from(["file-content"], { objectMode: false }),
+        };
+      },
+    });
+    const file = new File(accountDefinition.id, "folder-a", "photo.jpg");
+    file.idCloud = "photos/a/photo.jpg";
+    const destination = fs.mkdtempSync(
+      path.join(os.tmpdir(), "aws-s3-download-"),
+    );
+    try {
+      await account.downloadFile(span, file, destination, "downloaded.jpg");
+
+      expect(received).toBeInstanceOf(GetObjectCommand);
+      expect(received.input).toEqual({
+        Bucket: "test-bucket",
+        Key: "photos/a/photo.jpg",
+      });
+      expect(
+        fs.readFileSync(path.join(destination, "downloaded.jpg"), "utf8"),
+      ).toBe("file-content");
+    } finally {
+      fs.rmSync(destination, { recursive: true, force: true });
+    }
   });
 
   it("lists files in a folder from the S3 listing", async () => {
@@ -166,17 +220,18 @@ describe("AwsS3Account", () => {
     folder.idCloud = "/photos/2023";
     const lastModified = new Date("2023-05-01T10:00:00.000Z");
     const fakeS3 = {
-      listObjectsV2: () => ({
-        promise: async () => ({
+      send: async (command: any) => {
+        expect(command).toBeInstanceOf(ListObjectsV2Command);
+        return {
           Contents: [
             { Key: "2023/photo-a.jpg", LastModified: lastModified },
             { Key: "2023/photo-b.jpg", LastModified: lastModified },
             { Key: "2023/" },
           ],
           IsTruncated: false,
-        }),
-      }),
-    } as unknown as S3;
+        };
+      },
+    } as unknown as S3Client;
 
     const files = await AwsS3AccountInventoryListFilesInFolder(
       span,
@@ -203,23 +258,22 @@ describe("AwsS3Account", () => {
     folder.idCloud = "/photos/2023";
     let calls = 0;
     const fakeS3 = {
-      listObjectsV2: () => ({
-        promise: async () => {
-          calls++;
-          if (calls === 1) {
-            return {
-              Contents: [{ Key: "2023/one.jpg", LastModified: new Date() }],
-              IsTruncated: true,
-              NextContinuationToken: "token-1",
-            };
-          }
+      send: async (command: any) => {
+        expect(command).toBeInstanceOf(ListObjectsV2Command);
+        calls++;
+        if (calls === 1) {
           return {
-            Contents: [{ Key: "2023/two.jpg", LastModified: new Date() }],
-            IsTruncated: false,
+            Contents: [{ Key: "2023/one.jpg", LastModified: new Date() }],
+            IsTruncated: true,
+            NextContinuationToken: "token-1",
           };
-        },
-      }),
-    } as unknown as S3;
+        }
+        return {
+          Contents: [{ Key: "2023/two.jpg", LastModified: new Date() }],
+          IsTruncated: false,
+        };
+      },
+    } as unknown as S3Client;
 
     const files = await AwsS3AccountInventoryListFilesInFolder(
       span,

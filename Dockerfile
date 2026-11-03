@@ -1,5 +1,5 @@
 # BUILD
-FROM ubuntu as builder
+FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c as builder
 
 WORKDIR /opt/src
 
@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y \
 COPY cloudphotomanager-server cloudphotomanager-server
 
 RUN cd cloudphotomanager-server && \
-    npm i && \
+    npm ci && \
     npm run build
 
 COPY cloudphotomanager-web cloudphotomanager-web
@@ -34,7 +34,7 @@ RUN cd cloudphotomanager-web && \
     npm run generate
 
 # RUN
-FROM ubuntu
+FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c
 
 RUN apt-get update && apt-get install -y \
         curl \

@@ -6,9 +6,9 @@ cd ${SERVICE_DIR}
 
 # Pinned Traefik release + checksum: the proxy downloads the binary on first
 # start, so the archive must be verified before extraction.
-TRAEFIK_VERSION="v2.9.6"
+TRAEFIK_VERSION="v3.7.17"
 TRAEFIK_ARCHIVE="traefik_${TRAEFIK_VERSION}_linux_amd64.tar.gz"
-TRAEFIK_SHA256="9aabb29a10ac051161fe286cdaa5c336073f08f2298fb994dc4f0a5328e21f2f"
+TRAEFIK_SHA256="a564abd5fc8ee97d838270f188bb94cb3172cc113f4b51aa5e7dd6117eedb393"
 TRAEFIK_URL="https://github.com/traefik/traefik/releases/download/${TRAEFIK_VERSION}/${TRAEFIK_ARCHIVE}"
 
 if [ ! -d bin ]; then

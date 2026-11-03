@@ -1,6 +1,5 @@
+import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import { Span } from "@opentelemetry/sdk-trace";
-import * as AWS from "aws-sdk";
-import { S3 } from "aws-sdk";
 import { Account } from "../../model/Account";
 import { AccountCapabilities } from "../../model/AccountCapabilities";
 import { AccountDefinition } from "../../model/AccountDefinition";
@@ -29,7 +28,7 @@ export class AwsS3Account implements Account {
   public static TYPE = "awsS3";
 
   private accountDefinition: AccountDefinition;
-  private s3Client: S3;
+  private s3Client: S3Client;
 
   constructor(accountDefinition: AccountDefinition) {
     this.accountDefinition = accountDefinition;
@@ -131,7 +130,7 @@ export class AwsS3Account implements Account {
       const params = {
         Bucket: this.accountDefinition.infoPrivate.bucket,
       };
-      await (await this.getS3Client()).listObjectsV2(params).promise();
+      await (await this.getS3Client()).send(new ListObjectsV2Command(params));
       valid = true;
     } catch (err) {
       span.recordException(err);
@@ -150,16 +149,22 @@ export class AwsS3Account implements Account {
     );
   }
 
-  private async getS3Client(): Promise<S3> {
+  private async getS3Client(): Promise<S3Client> {
     if (this.s3Client) {
       return this.s3Client;
     }
-    AWS.config.update({
-      accessKeyId: this.accountDefinition.infoPrivate.accessKey,
-      secretAccessKey: this.accountDefinition.infoPrivate.accessKeySecret,
+    this.s3Client = new S3Client({
       region: this.accountDefinition.infoPrivate.region,
+      credentials: {
+        accessKeyId: this.accountDefinition.infoPrivate.accessKey,
+        secretAccessKey: this.accountDefinition.infoPrivate.accessKeySecret,
+      },
+      // v2 sent no checksum headers; keep the request shape identical for
+      // S3-compatible providers.
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     });
-    return new AWS.S3();
+    return this.s3Client;
   }
 
   // Non Supported Features

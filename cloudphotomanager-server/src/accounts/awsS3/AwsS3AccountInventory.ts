@@ -1,5 +1,5 @@
 import { Span } from "@opentelemetry/sdk-trace";
-import { S3 } from "aws-sdk";
+import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import * as path from "path";
 import { Folder } from "../../model/Folder";
 import { AwsS3Account } from "./AwsS3Account";
@@ -10,7 +10,7 @@ const dateEmptyFolder = new Date("1900-01-01 00:00:00");
 export async function AwsS3AccountInventoryGetFolder(
   context: Span,
   awsS3Account: AwsS3Account,
-  s3: S3,
+  s3: S3Client,
   folder: Folder
 ): Promise<Folder> {
   return AwsS3AccountInventoryGetFolderByPath(context, awsS3Account, s3, folder.idCloud);
@@ -19,7 +19,7 @@ export async function AwsS3AccountInventoryGetFolder(
 export async function AwsS3AccountInventoryGetFolderByPath(
   context: Span,
   awsS3Account: AwsS3Account,
-  s3: S3,
+  s3: S3Client,
   folderpath: string
 ): Promise<Folder> {
   let isTruncated = true;
@@ -38,8 +38,8 @@ export async function AwsS3AccountInventoryGetFolderByPath(
       Delimiter: "/",
     };
 
-    const response = await s3.listObjectsV2(params).promise();
-    response.Contents.forEach((item) => {
+    const response = await s3.send(new ListObjectsV2Command(params));
+    (response.Contents || []).forEach((item) => {
       if (!folder.dateUpdated || folder.dateUpdated < new Date(item.LastModified))
         folder.dateUpdated = new Date(item.LastModified);
     });
@@ -52,7 +52,7 @@ export async function AwsS3AccountInventoryGetFolderByPath(
 export async function AwsS3AccountInventoryListFoldersInFolder(
   context: Span,
   awsS3Account: AwsS3Account,
-  s3: S3,
+  s3: S3Client,
   folder: Folder
 ): Promise<Folder[]> {
   const folders: Folder[] = [];
@@ -66,8 +66,8 @@ export async function AwsS3AccountInventoryListFoldersInFolder(
       Delimiter: "/",
     };
 
-    const response = await s3.listObjectsV2(params).promise();
-    for (const rawChildFolder of response.CommonPrefixes) {
+    const response = await s3.send(new ListObjectsV2Command(params));
+    for (const rawChildFolder of response.CommonPrefixes || []) {
       const subFolder = await AwsS3AccountInventoryGetFolderByPath(context, awsS3Account, s3, rawChildFolder.Prefix);
       folders.push(subFolder);
     }
@@ -80,7 +80,7 @@ export async function AwsS3AccountInventoryListFoldersInFolder(
 export async function AwsS3AccountInventoryListFilesInFolder(
   context: Span,
   awsS3Account: AwsS3Account,
-  s3: S3,
+  s3: S3Client,
   folder: Folder
 ): Promise<File[]> {
   const files: File[] = [];
@@ -94,8 +94,8 @@ export async function AwsS3AccountInventoryListFilesInFolder(
       Delimiter: "/",
     };
 
-    const response = await s3.listObjectsV2(params).promise();
-    response.Contents.forEach((item) => {
+    const response = await s3.send(new ListObjectsV2Command(params));
+    (response.Contents || []).forEach((item) => {
       if (item.Key !== folder.folderpath && !item.Key.endsWith("/")) {
         const file = new File(awsS3Account.getAccountDefinition().id, folder.id, path.basename(item.Key));
         file.dateSync = new Date();
