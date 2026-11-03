@@ -129,7 +129,7 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   const { SyncRoutes } = await import("../sync/SyncRoutes");
   const { SyncFailureRoutes } = await import("../sync/SyncFailureRoutes");
 
-  const fastify = Fastify({});
+  const fastify = Fastify({ trustProxy: "loopback" });
   await fastify.register(fastifyWebsocket);
   await fastify.register(cookie, {
     secret: config.JWT_KEY,

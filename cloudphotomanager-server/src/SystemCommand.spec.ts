@@ -66,6 +66,31 @@ describe("SystemCommand.executeFile", () => {
     });
   });
 
+  it("bounds retained stdout to a head and a tail", async () => {
+    const stdout = await SystemCommand.executeFile(process.execPath, [
+      "-e",
+      "process.stdout.write('H'.repeat(200000) + 'TAIL-END')",
+    ]);
+
+    expect(stdout.length).toBeLessThan(160 * 1024);
+    expect(stdout.startsWith("H")).toBe(true);
+    expect(stdout.endsWith("TAIL-END")).toBe(true);
+    expect(stdout).toMatch(/truncated \d+ characters/);
+  });
+
+  it("bounds retained stderr on failure", async () => {
+    const error = await SystemCommand.executeFile(process.execPath, [
+      "-e",
+      "process.stderr.write('E'.repeat(200000) + 'STDERR-TAIL', () => process.exit(1))",
+    ]).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.stderr.length).toBeLessThan(160 * 1024);
+    expect(error.stderr.startsWith("E")).toBe(true);
+    expect(error.stderr.endsWith("STDERR-TAIL")).toBe(true);
+    expect(error.stderr).toMatch(/truncated \d+ characters/);
+  });
+
   it("rejects when the binary does not exist", async () => {
     await expect(
       SystemCommand.executeFile("/nonexistent/cpm-binary", []),

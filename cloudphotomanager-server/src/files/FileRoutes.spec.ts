@@ -184,7 +184,15 @@ describe("FileRoutes permissions", () => {
     });
     expect(thumbnail.statusCode).toBe(200);
     expect(thumbnail.rawPayload.toString()).toBe("thumb-bytes");
+    expect(thumbnail.headers["content-type"]).toBe("image/webp");
+    expect(thumbnail.headers["content-disposition"]).toContain("inline");
+    expect(thumbnail.headers["content-disposition"]).not.toContain(
+      "attachment",
+    );
     expect(thumbnail.headers["content-disposition"]).toContain(fileP.id);
+    expect(thumbnail.headers["content-length"]).toBe(
+      String(Buffer.byteLength("thumb-bytes")),
+    );
 
     const preview = await ctx.fastify.inject({
       method: "GET",
@@ -193,6 +201,12 @@ describe("FileRoutes permissions", () => {
     });
     expect(preview.statusCode).toBe(200);
     expect(preview.rawPayload.toString()).toBe("preview-bytes");
+    expect(preview.headers["content-type"]).toBe("image/webp");
+    expect(preview.headers["content-disposition"]).toContain("inline");
+    expect(preview.headers["content-disposition"]).not.toContain("attachment");
+    expect(preview.headers["content-length"]).toBe(
+      String(Buffer.byteLength("preview-bytes")),
+    );
     expect(checkAsyncMock).not.toHaveBeenCalled();
   });
 

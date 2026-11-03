@@ -21,13 +21,10 @@
           v-bind:key="index"
         >
           <td>
-            <i v-if="account.info.type == 'oneDrive'" class="bi bi-windows"></i>
+            <i v-if="account.type == 'oneDrive'" class="bi bi-windows"></i>
+            <i v-else-if="account.type == 'awsS3'" class="bi bi-amazon"></i>
             <i
-              v-else-if="account.info.type == 'awsS3'"
-              class="bi bi-amazon"
-            ></i>
-            <i
-              v-else-if="account.info.type == 'localDrive'"
+              v-else-if="account.type == 'localDrive'"
               class="bi bi-device-hdd-fill"
             ></i>
           </td>

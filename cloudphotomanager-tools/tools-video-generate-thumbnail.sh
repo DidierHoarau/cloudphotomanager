@@ -4,7 +4,7 @@ FILE_IN=$1
 FILE_OUT=$2
 
 echo "Processing Thumbnail ${FILE_IN}: Started"
-nice -20 ffmpeg \
+nice -n 19 ffmpeg \
   -i "${FILE_IN}" \
   -vf "thumbnail" \
   -frames:v 1 \

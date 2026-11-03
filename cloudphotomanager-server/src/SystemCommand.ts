@@ -9,6 +9,42 @@ export interface SystemCommandOptions {
 // heif-convert) cannot keep a queue slot forever.
 const DEFAULT_TIMEOUT_MS = 4 * 3600 * 1000;
 
+// Retain a bounded head and tail of each output stream so a verbose or
+// malicious input cannot balloon process memory while diagnostics stay useful.
+const MAX_RETAINED_HEAD_CHARS = 64 * 1024;
+const MAX_RETAINED_TAIL_CHARS = 64 * 1024;
+
+class BoundedOutput {
+  private head = "";
+  private tail = "";
+  private dropped = 0;
+
+  append(chunk: string): void {
+    if (this.head.length < MAX_RETAINED_HEAD_CHARS) {
+      const room = MAX_RETAINED_HEAD_CHARS - this.head.length;
+      if (chunk.length <= room) {
+        this.head += chunk;
+        return;
+      }
+      this.head += chunk.slice(0, room);
+      chunk = chunk.slice(room);
+    }
+    this.tail += chunk;
+    if (this.tail.length > MAX_RETAINED_TAIL_CHARS) {
+      const overflow = this.tail.length - MAX_RETAINED_TAIL_CHARS;
+      this.tail = this.tail.slice(overflow);
+      this.dropped += overflow;
+    }
+  }
+
+  toString(): string {
+    if (this.dropped === 0) {
+      return this.head + this.tail;
+    }
+    return `${this.head}\n...[truncated ${this.dropped} characters]...\n${this.tail}`;
+  }
+}
+
 export class SystemCommand {
   //
   // Executes a binary with an argument array, without a shell: arguments
@@ -42,8 +78,8 @@ export class SystemCommand {
         return;
       }
 
-      let stdout = "";
-      let stderr = "";
+      const stdoutBuffer = new BoundedOutput();
+      const stderrBuffer = new BoundedOutput();
       let settled = false;
       let terminationError: Error | null = null;
       let timeoutHandle: NodeJS.Timeout | null = null;
@@ -63,11 +99,11 @@ export class SystemCommand {
         cleanup();
         if (error) {
           const err = error as Error & { stdout?: string; stderr?: string };
-          err.stdout = stdout;
-          err.stderr = stderr;
+          err.stdout = stdoutBuffer.toString();
+          err.stderr = stderrBuffer.toString();
           reject(err);
         } else {
-          resolve(stdout);
+          resolve(stdoutBuffer.toString());
         }
       };
 
@@ -102,10 +138,10 @@ export class SystemCommand {
       child.stdout?.setEncoding("utf8");
       child.stderr?.setEncoding("utf8");
       child.stdout?.on("data", (chunk: string) => {
-        stdout += chunk;
+        stdoutBuffer.append(chunk);
       });
       child.stderr?.on("data", (chunk: string) => {
-        stderr += chunk;
+        stderrBuffer.append(chunk);
       });
 
       child.on("error", (error) => {
