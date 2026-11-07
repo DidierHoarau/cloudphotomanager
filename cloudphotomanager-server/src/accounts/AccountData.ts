@@ -88,6 +88,26 @@ export async function AccountDataUpdate(
   span.end();
 }
 
+// Persist provider credentials rotated at runtime (e.g. OAuth refresh tokens)
+// without dropping the cached account implementation: the caller still holds
+// the same in-memory definition and keeps serving requests with it.
+export async function AccountDataUpdateTokens(
+  context: Span,
+  accountId: string,
+  infoPrivate: any,
+): Promise<void> {
+  const span = OTelTracer().startSpan("AccountDataUpdateTokens", context);
+  try {
+    await SqlDbUtilsExecSQL(
+      span,
+      "UPDATE accounts SET infoPrivate=? WHERE id=?",
+      [JSON.stringify(infoPrivate), accountId],
+    );
+  } finally {
+    span.end();
+  }
+}
+
 export async function AccountDataDelete(
   context: Span,
   accountId: string,

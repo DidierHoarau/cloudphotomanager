@@ -49,6 +49,25 @@ describe("SyncErrorDescribeHumanCause", () => {
     expect(described!.action).toContain("Settings → Accounts");
   });
 
+  it("describes an expired or revoked OAuth refresh token", () => {
+    const described = SyncErrorDescribeHumanCause(
+      "OneDrive authorization failed — reconnect the account in Settings → Accounts (invalid_grant: AADSTS70000: The refresh token is not valid)",
+      "SyncInventorySyncFolder",
+    );
+    expect(described).not.toBeNull();
+    expect(described!.cause).toContain("authorization expired or was revoked");
+    expect(described!.action).toContain("Reconnect the account");
+  });
+
+  it("recognizes a bare invalid_grant error", () => {
+    const described = SyncErrorDescribeHumanCause(
+      "invalid_grant",
+      "SyncInventorySyncFolder",
+    );
+    expect(described).not.toBeNull();
+    expect(described!.action).toContain("Settings → Accounts");
+  });
+
   it("describes files no longer present in the cloud", () => {
     const described = SyncErrorDescribeHumanCause(
       "ItemNotFound: item does not exist",
