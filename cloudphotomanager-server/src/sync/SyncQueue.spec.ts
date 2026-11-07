@@ -184,4 +184,51 @@ describe("SyncQueue reliability", () => {
     ]);
     expect(queueRows()).toEqual([]);
   });
+
+  it("records user-triggered folder refresh failures but not scheduled ones", async () => {
+    const syncFailures = await import("./SyncFailures");
+    await syncFailures.SyncFailuresInit(span);
+    syncQueue.SyncQueueRegisterFunction(
+      "SyncInventorySyncFolder",
+      async () => {
+        throw new Error("OneDrive authorization failed");
+      },
+    );
+
+    syncQueue.SyncQueueQueueItem(
+      accountId,
+      "folder-refresh-interactive",
+      { folderId: "folder-refresh" },
+      "SyncInventorySyncFolder",
+      SyncQueueItemPriority.INTERACTIVE,
+    );
+    await waitUntil("interactive folder failure recorded", () =>
+      syncFailures
+        .SyncFailuresList()
+        .some(
+          (failure) =>
+            failure.functionName === "SyncInventorySyncFolder" &&
+            failure.data?.folderId === "folder-refresh",
+        ),
+    );
+
+    syncQueue.SyncQueueQueueItem(
+      accountId,
+      "folder-refresh-scheduled",
+      { folderId: "folder-scheduled" },
+      "SyncInventorySyncFolder",
+      SyncQueueItemPriority.NORMAL,
+    );
+    await waitUntil("scheduled folder sync completed", () =>
+      queueRows().every(
+        (row) =>
+          row.id !== "folder-refresh-scheduled:SyncInventorySyncFolder",
+      ),
+    );
+    expect(
+      syncFailures
+        .SyncFailuresList()
+        .some((failure) => failure.data?.folderId === "folder-scheduled"),
+    ).toBe(false);
+  });
 });
