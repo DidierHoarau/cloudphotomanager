@@ -32,6 +32,15 @@ const CATALOG: CatalogEntry[] = [
     action: "Retry the operation",
   },
   {
+    // OAuth token endpoint failures: the stored refresh token expired or was
+    // revoked, so no amount of retrying succeeds until the account is
+    // reconnected.
+    pattern: /OneDrive authorization failed|invalid_grant|invalid_client|AADSTS/i,
+    cause: "The storage account authorization expired or was revoked",
+    action:
+      "Reconnect the account in Settings → Accounts, then retry the refresh",
+  },
+  {
     pattern: /401|403|Unauthorized|AccessDenied/i,
     cause: "Storage account authentication failed",
     action: "Re-authorize the account in Settings → Accounts",

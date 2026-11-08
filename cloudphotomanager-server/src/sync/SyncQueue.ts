@@ -87,6 +87,11 @@ const RECORDABLE_OPS = new Set<string>([
   "syncThumbnailFromVideoPreview",
 ]);
 
+// Folder syncs run constantly in the background (scheduler and deep scan), so
+// only a user-triggered (INTERACTIVE) folder refresh is worth surfacing as a
+// failed action — otherwise a broken provider would flood the failure list.
+const FOLDER_SYNC_OPS = new Set<string>(["SyncInventorySyncFolder"]);
+
 // Thumbnail/preview sync ops whose per-file failure count drives the
 // poison-file retry cap (see SyncFileCache SYNC_FAIL_MAX_AUTO_RETRY).
 const FILE_CACHE_OPS = new Set<string>([
@@ -583,7 +588,7 @@ function dispatchItem(pool: PromisePool, item: SyncQueueItem): void {
       const displayMessage = missingInCloud
         ? `${errorMessage} (marked as gone, will not be retried until the folder sync finds it again)`
         : errorMessage;
-      if (RECORDABLE_OPS.has(item.functionName)) {
+      if (shouldRecordFailure(item)) {
         try {
           if (err instanceof MoveConflictError) {
             SyncFailuresAdd({
@@ -725,6 +730,19 @@ function buildErrorMessage(err: unknown): string {
   return message;
 }
 
+// File operations are always recorded; folder syncs only when the user asked
+// for them, so the notification centre shows a failed manual refresh without
+// collecting every background cycle.
+function shouldRecordFailure(item: SyncQueueItem): boolean {
+  if (RECORDABLE_OPS.has(item.functionName)) {
+    return true;
+  }
+  return (
+    FOLDER_SYNC_OPS.has(item.functionName) &&
+    item.priority === SyncQueueItemPriority.INTERACTIVE
+  );
+}
+
 // Best-effort enrichment of error-kind failure records with the cloud path of
 // the first impacted file and the account display name, so failure cards in
 // the web UI show which file and account are at the origin of the issue.
@@ -753,6 +771,15 @@ async function resolveFailureContext(
         }
       } catch (err) {
         logger.error("Error resolving file path for sync failure", err);
+      }
+    } else if (item.data?.folderId) {
+      try {
+        const folder = await FolderDataGet(span, item.data.folderId);
+        if (folder) {
+          details.filePath = folder.folderpath || "/";
+        }
+      } catch (err) {
+        logger.error("Error resolving folder path for sync failure", err);
       }
     }
     try {
