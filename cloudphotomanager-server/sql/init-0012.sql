@@ -28,8 +28,11 @@ UPDATE shares
 SET folderId = (SELECT canonicalId FROM _folder_duplicates WHERE oldId = shares.folderId)
 WHERE folderId IN (SELECT oldId FROM _folder_duplicates);
 
+-- json() is required around the subquery: SQLite >= 3.54 passes a TEXT value of
+-- json_set() through as a SQL string, so without it the array is stored
+-- double-encoded as a JSON string.
 UPDATE users_permissions
-SET info = json_set(info, '$.folders', (
+SET info = json_set(info, '$.folders', json((
   SELECT json_group_array(
     json_set(je.value, '$.folderId',
       CASE
@@ -44,7 +47,7 @@ SET info = json_set(info, '$.folders', (
     )
   )
   FROM json_each(json_extract(users_permissions.info, '$.folders')) AS je
-))
+)))
 WHERE EXISTS (
   SELECT 1 FROM json_each(json_extract(users_permissions.info, '$.folders')) AS je
   WHERE json_extract(je.value, '$.folderId') IN (SELECT oldId FROM _folder_duplicates)

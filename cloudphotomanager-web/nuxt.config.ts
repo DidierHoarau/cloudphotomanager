@@ -64,7 +64,8 @@ export default defineNuxtConfig({
     registerType: "autoUpdate",
     // We manage our own manifest.json in /public
     manifest: false,
-    workbox: {
+    // @vite-pwa/nuxt 2 renamed the `workbox` option to `generateSW`
+    generateSW: {
       // Serve index.html for direct PWA navigation to /gallery, /settings, etc.
       navigateFallback: "/index.html",
       // Precache app shell bundles so repeat PWA launches are instant
@@ -86,8 +87,12 @@ export default defineNuxtConfig({
         },
         // Folder list API – Network First, fall back to cache
         {
-          urlPattern: ({ url }) =>
-            /\/api\/accounts\/[^/]+\/folders$/.test(url.pathname),
+          // Block body with a named parameter: @vite-pwa/nuxt 2 serializes this
+          // function into the generated service worker, and magicast 0.5 cannot
+          // parse an arrow expression body that starts with a regular expression.
+          urlPattern: (params) => {
+            return /\/api\/accounts\/[^/]+\/folders$/.test(params.url.pathname);
+          },
           handler: "NetworkFirst",
           options: {
             cacheName: SW_DATA_CACHE_NAMES.folders,
@@ -101,8 +106,11 @@ export default defineNuxtConfig({
         },
         // Folder counts API – Network First, fall back to cache
         {
-          urlPattern: ({ url }) =>
-            /\/api\/accounts\/[^/]+\/folders\/counts$/.test(url.pathname),
+          urlPattern: (params) => {
+            return /\/api\/accounts\/[^/]+\/folders\/counts$/.test(
+              params.url.pathname,
+            );
+          },
           handler: "NetworkFirst",
           options: {
             cacheName: SW_DATA_CACHE_NAMES.folderCounts,
@@ -117,8 +125,11 @@ export default defineNuxtConfig({
         // Thumbnails (webp) – Cache First with LRU; short lifetime because
         // media URLs are signed and revocation is enforced server-side.
         {
-          urlPattern: ({ url }) =>
-            /\/api\/media\/.*\/thumbnail\.webp$/.test(url.pathname),
+          urlPattern: (params) => {
+            return /\/api\/media\/.*\/thumbnail\.webp$/.test(
+              params.url.pathname,
+            );
+          },
           handler: "CacheFirst",
           options: {
             cacheName: SW_DATA_CACHE_NAMES.thumbnails,
@@ -131,8 +142,9 @@ export default defineNuxtConfig({
         },
         // Preview images (webp) – Cache First with tight LRU
         {
-          urlPattern: ({ url }) =>
-            /\/api\/media\/.*\/preview\.webp$/.test(url.pathname),
+          urlPattern: (params) => {
+            return /\/api\/media\/.*\/preview\.webp$/.test(params.url.pathname);
+          },
           handler: "CacheFirst",
           options: {
             cacheName: SW_DATA_CACHE_NAMES.previews,
