@@ -10,8 +10,11 @@ describe("Config", () => {
     expect(config.VERSION).not.toBe("1");
   });
 
-  it("keeps the documented login token lifetime over the common-utils 2.x default", () => {
-    expect(new Config().JWT_VALIDITY_DURATION).toBe(3 * 31 * 24 * 3600);
+  it("keeps the one-month login token lifetime after a config reload", async () => {
+    const config = new Config();
+    expect(config.JWT_VALIDITY_DURATION).toBe(30 * 24 * 3600);
+    await config.reload();
+    expect(config.JWT_VALIDITY_DURATION).toBe(30 * 24 * 3600);
   });
 
   it("reads and coerces the image classification settings from the environment", async () => {

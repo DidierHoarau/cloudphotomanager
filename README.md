@@ -26,7 +26,7 @@ CloudPhotoManager is a self-hosted free and open source photo managegement tool.
 
 # Sessions
 
-- Login issues a JWT stored in a signed httpOnly cookie that is valid for `JWT_VALIDITY_DURATION` seconds (default: `8035200`, i.e. about 93 days; overridable via environment variable or configuration file).
+- Login issues a JWT stored in a signed httpOnly cookie that is valid for `JWT_VALIDITY_DURATION` seconds (default: `2592000`, i.e. 30 days; overridable via environment variable or configuration file).
 - The cookie is persistent (`Max-Age` aligned with the JWT validity), so it survives closing and re-opening the browser without a new login.
 - Sessions are renewed automatically while the application is used: the server re-issues the token once it is older than half of its validity, and a tab left open also renews the cookie daily.
 - Sessions survive an application restart as long as the `/data` volume (which holds the database containing the JWT signing key) is persistent.
@@ -105,7 +105,7 @@ spec:
               value: "" # Optional webhook URL notified when a file reaches the sync retry cap
             # Session (optional; default shown)
             - name: JWT_VALIDITY_DURATION
-              value: "8035200" # Session validity in seconds (~93 days); renewed automatically while in use
+              value: "2592000" # Session validity in seconds (30 days); renewed automatically while in use
             - name: MEDIA_URL_TTL_SECONDS
               value: "3600" # Lifetime of signed media URLs
             - name: MEDIA_CACHE_SECONDS
