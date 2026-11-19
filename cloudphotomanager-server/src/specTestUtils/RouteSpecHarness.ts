@@ -70,6 +70,10 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
     TOOLS_DIR: path.join(baseDir, "tools"),
     VIDEO_PREVIEW_WIDTH: 900,
     IMAGE_CLASSIFICATION_ENABLED: false,
+    IMAGE_CLASSIFICATION_MODEL: "Xenova/mobilenet_v2_1.0_224",
+    IMAGE_CLASSIFICATION_MODEL_PATH: "",
+    IMAGE_CLASSIFICATION_HF_ENDPOINT: "",
+    IMAGE_CLASSIFICATION_CACHE_DIR: "",
     AUTO_SYNC: false,
     JWT_VALIDITY_DURATION: 3600,
     TRASH_RETENTION_DAYS: 30,
@@ -128,6 +132,11 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   const { AnalysisRoutes } = await import("../analysis/AnalysisRoutes");
   const { SyncRoutes } = await import("../sync/SyncRoutes");
   const { SyncFailureRoutes } = await import("../sync/SyncFailureRoutes");
+  const { SyncEnrichmentRoutes } = await import(
+    "../sync/SyncEnrichmentRoutes"
+  );
+  const enrichmentRuntime = await import("../sync/EnrichmentRuntime");
+  enrichmentRuntime.EnrichmentRuntimeInit(config as any);
 
   const fastify = Fastify({ trustProxy: "loopback" });
   await fastify.register(fastifyWebsocket);
@@ -191,6 +200,9 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   });
   await fastify.register(new SyncFailureRoutes().getRoutes, {
     prefix: "/api/sync/failures",
+  });
+  await fastify.register(new SyncEnrichmentRoutes().getRoutes, {
+    prefix: "/api/sync",
   });
   fastify.get("/api/status", async () => {
     return { started: true };

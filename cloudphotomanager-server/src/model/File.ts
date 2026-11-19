@@ -19,6 +19,14 @@ export class File {
   public lastSyncError: string;
   public lastSyncAttempt: Date;
 
+  // Best-effort keyword/label enrichment state, tracked independently from the
+  // media-critical sync fields: ok | failed | pending | disabled (null when
+  // never attempted, e.g. videos).
+  public enrichmentStatus: string;
+  public lastEnrichmentError: string;
+  public lastEnrichmentAttempt: Date;
+  public enrichmentFailCount: number;
+
   // Tombstone for files that the cloud account reports as missing (404 /
   // ItemNotFound): they are not retried until a folder sync finds them again.
   public syncGone: number;
@@ -53,6 +61,10 @@ export class File {
     this.syncFailCount = 0;
     this.lastSyncError = null;
     this.lastSyncAttempt = null;
+    this.enrichmentStatus = null;
+    this.lastEnrichmentError = null;
+    this.lastEnrichmentAttempt = null;
+    this.enrichmentFailCount = 0;
     this.syncGone = 0;
     this.favorite = 0;
     this.trashed = 0;

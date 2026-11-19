@@ -30,6 +30,7 @@ jest.mock("./SyncInventory", () => ({
 jest.mock("../analysis/AnalysisImages", () => ({
   AnalysisImagesGetLabels: jest.fn().mockResolvedValue([]),
   AnalysisImagesInit: jest.fn(),
+  AnalysisImagesIsModelError: jest.fn(() => false),
 }));
 
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";

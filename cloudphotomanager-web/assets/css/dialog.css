@@ -259,3 +259,43 @@
   border-top: 1px solid var(--color-border-light);
   background: var(--pico-card-background-color);
 }
+
+/* ── Best-effort label enrichment state ───────────────────── */
+.dialog-enrichment-status {
+  display: inline-block;
+  padding: 0 var(--space-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+}
+.dialog-enrichment-ok {
+  color: var(--color-success);
+}
+.dialog-enrichment-failed {
+  color: var(--color-danger);
+}
+.dialog-enrichment-pending {
+  color: var(--color-warning);
+}
+.dialog-enrichment-disabled {
+  color: var(--color-text-muted);
+}
+.dialog-enrichment-error {
+  display: block;
+  margin-top: var(--space-xs);
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+  word-break: break-word;
+}
+.dialog-enrichment-retry {
+  margin-inline-start: var(--space-xs);
+}
+.dialog-enrichment-retry:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.dialog-enrichment-retry-text {
+  margin-inline-start: var(--space-xs);
+  font-size: var(--font-sm);
+}

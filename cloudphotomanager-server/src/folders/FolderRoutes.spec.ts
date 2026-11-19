@@ -16,6 +16,7 @@ import { UtilsMd5 } from "../Utils";
 jest.mock("../analysis/AnalysisImages", () => ({
   AnalysisImagesGetLabels: jest.fn().mockResolvedValue([]),
   AnalysisImagesInit: jest.fn(),
+  AnalysisImagesIsModelError: jest.fn(() => false),
 }));
 
 jest.mock("../sync/SyncQueue", () => ({

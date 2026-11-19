@@ -41,15 +41,19 @@
       <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink
           to="/gallery"
+          aria-label="Gallery"
+          title="Gallery"
           :class="baseFolder === 'gallery' ? 'active' : 'inactive'"
-          ><i class="bi bi-images"></i
+          ><i class="bi bi-images" aria-hidden="true"></i
         ></NuxtLink>
       </li>
       <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink
           to="/search"
+          aria-label="Search"
+          title="Search"
           :class="baseFolder === 'search' ? 'active' : 'inactive'"
-          ><i class="bi bi-search"></i
+          ><i class="bi bi-search" aria-hidden="true"></i
         ></NuxtLink>
       </li>
       <li v-if="authenticationStore.isAuthenticated">
@@ -59,8 +63,10 @@
               ? '/settings/accounts'
               : '/settings/profile'
           "
+          aria-label="Settings"
+          title="Settings"
           :class="baseFolder === 'settings' ? 'active' : 'inactive'"
-          ><i class="bi bi-gear-fill"></i
+          ><i class="bi bi-gear-fill" aria-hidden="true"></i
         ></NuxtLink>
       </li>
     </ul>

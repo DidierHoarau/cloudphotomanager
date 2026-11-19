@@ -20,7 +20,10 @@ export class Config extends ConfigBase {
   public AUTO_SYNC = process.env.AUTO_SYNC !== "N";
   public DATABASE_ASYNC_WRITE = false;
   public VIDEO_PREVIEW_WIDTH = 900;
-  public IMAGE_CLASSIFICATION_ENABLED = true;
+  // Enrichment is best-effort: disabling it (IMAGE_CLASSIFICATION_ENABLED=N)
+  // keeps filename keywords and never blocks media synchronization.
+  public IMAGE_CLASSIFICATION_ENABLED =
+    process.env.IMAGE_CLASSIFICATION_ENABLED !== "N";
   // HuggingFace transformers.js image-classification model. Must be an ONNX
   // model compatible with pipeline("image-classification"). Examples:
   //   "Xenova/mobilenet_v2_1.0_224"      (~14MB, default, fastest)
@@ -30,6 +33,17 @@ export class Config extends ConfigBase {
   // A model change takes effect the next time the pipeline is created (after
   // its idle release or a restart), not on live config reload.
   public IMAGE_CLASSIFICATION_MODEL = "Xenova/mobilenet_v2_1.0_224";
+  // Local model directory (ONNX layout expected by transformers.js). When set,
+  // remote model downloads are disabled and the model is loaded from disk.
+  public IMAGE_CLASSIFICATION_MODEL_PATH =
+    process.env.IMAGE_CLASSIFICATION_MODEL_PATH || "";
+  // HuggingFace-compatible mirror endpoint used when no local model is set.
+  public IMAGE_CLASSIFICATION_HF_ENDPOINT =
+    process.env.IMAGE_CLASSIFICATION_HF_ENDPOINT || "";
+  // Where downloaded model files are cached. Defaults to DATA_DIR/models so
+  // the cache survives container restarts when DATA_DIR is a volume.
+  public IMAGE_CLASSIFICATION_CACHE_DIR =
+    process.env.IMAGE_CLASSIFICATION_CACHE_DIR || "";
   public CRON_METRIC_REFRESH = "*/15 * * * *"; // every 15 minutes
   public CRON_SCAN_DEEP = "0 0 * * *"; // every day at midnight
   // Days a file stays in the Trash before the daily purge permanently
@@ -72,6 +86,9 @@ export class Config extends ConfigBase {
     this.addConfigField({ field: "VIDEO_PREVIEW_WIDTH" });
     this.addConfigField({ field: "IMAGE_CLASSIFICATION_ENABLED" });
     this.addConfigField({ field: "IMAGE_CLASSIFICATION_MODEL" });
+    this.addConfigField({ field: "IMAGE_CLASSIFICATION_MODEL_PATH" });
+    this.addConfigField({ field: "IMAGE_CLASSIFICATION_HF_ENDPOINT" });
+    this.addConfigField({ field: "IMAGE_CLASSIFICATION_CACHE_DIR" });
     this.addConfigField({ field: "CRON_METRIC_REFRESH" });
     this.addConfigField({ field: "CRON_SCAN_DEEP" });
     this.addConfigField({ field: "TRASH_RETENTION_DAYS" });

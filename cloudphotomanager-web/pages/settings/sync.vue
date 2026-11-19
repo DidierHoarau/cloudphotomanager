@@ -19,6 +19,13 @@
           failuresCount
         }}</span>
       </button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'health' }"
+        @click="setTab('health')"
+      >
+        Health
+      </button>
     </div>
 
     <template v-if="activeTab === 'queue'">
@@ -93,10 +100,235 @@
       </div>
     </template>
 
-    <template v-else>
+    <template v-else-if="activeTab === 'failures'">
       <Loading v-if="failuresLoading" />
       <SyncFailuresList v-else :failures="failuresList" />
     </template>
+
+    <template v-else>
+      <div v-if="!isOnline" class="health-offline" role="status">
+        <i class="bi bi-wifi-off"></i>
+        Offline: the health data below may be stale and repair actions are
+        disabled until the connection returns.
+      </div>
+      <Loading v-if="healthLoading && !health" />
+      <div v-else-if="healthError" class="health-error" role="alert">
+        <p>{{ healthError }}</p>
+        <button type="button" class="secondary" @click="fetchHealth">
+          Reload
+        </button>
+      </div>
+      <template v-else-if="health">
+        <section class="health-card">
+          <h2>Label enrichment</h2>
+          <div class="health-state">
+            <kbd
+              class="badge"
+              :class="
+                health.enrichment.enabled ? 'health-ok' : 'health-muted'
+              "
+            >
+              {{ health.enrichment.enabled ? "Enabled" : "Disabled" }}
+            </kbd>
+            <kbd
+              v-if="health.enrichment.circuitOpen"
+              class="badge health-danger"
+            >
+              Model unavailable — retry in
+              {{ health.enrichment.retryAfterSeconds }}s
+            </kbd>
+            <kbd
+              v-else-if="health.enrichment.enabled"
+              class="badge health-ok"
+            >
+              Model available
+            </kbd>
+          </div>
+          <dl class="health-facts">
+            <dt>Model source</dt>
+            <dd>
+              <code>{{ health.enrichment.modelSource || "unknown" }}</code>
+            </dd>
+            <dt>Model cache</dt>
+            <dd>
+              <code>{{ health.enrichment.cacheDir || "not configured" }}</code>
+            </dd>
+            <dt v-if="health.enrichment.consecutiveModelFailures > 0">
+              Consecutive model failures
+            </dt>
+            <dd v-if="health.enrichment.consecutiveModelFailures > 0">
+              {{ health.enrichment.consecutiveModelFailures }}
+            </dd>
+          </dl>
+          <p v-if="health.enrichment.startupWarning" class="health-warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            {{ health.enrichment.startupWarning }}
+          </p>
+          <p v-if="health.enrichment.lastModelError" class="health-warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            Last model error<span
+              v-if="health.enrichment.lastModelErrorAt"
+              class="health-muted"
+            >
+              ({{ formatDate(health.enrichment.lastModelErrorAt) }})</span
+            >: {{ health.enrichment.lastModelError }}
+          </p>
+        </section>
+
+        <div class="queue-stats health-totals">
+          <div class="stat-card">
+            <div class="stat-label">Images</div>
+            <div class="stat-value">{{ health.totals.totalImages }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Missing keywords</div>
+            <div class="stat-value">{{ health.totals.missingKeywords }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Labels OK</div>
+            <div class="stat-value">{{ health.totals.ok }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Failed</div>
+            <div class="stat-value">{{ health.totals.failed }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pending</div>
+            <div class="stat-value">{{ health.totals.pending }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Disabled</div>
+            <div class="stat-value">{{ health.totals.disabled }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">At media retry cap</div>
+            <div class="stat-value">{{ health.totals.atRetryCap }}</div>
+          </div>
+        </div>
+
+        <section v-if="health.lastEnrichmentError" class="health-card">
+          <h2>Last enrichment error</h2>
+          <p class="health-error-text">
+            {{ health.lastEnrichmentError.error }}
+          </p>
+          <small>
+            {{ accountNameFor(health.lastEnrichmentError.accountId) }} ·
+            {{ formatDate(health.lastEnrichmentError.date) }}
+          </small>
+        </section>
+
+        <section class="health-card">
+          <h2>Files at the media retry cap</h2>
+          <p class="health-muted">
+            These files stopped retrying media previews. Enrichment retries
+            never add files to this list.
+          </p>
+          <table v-if="health.retryCap.length > 0">
+            <thead>
+              <tr>
+                <th scope="col">Cause</th>
+                <th scope="col">Files</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(cause, index) in health.retryCap" :key="index">
+                <td><code>{{ cause.cause }}</code></td>
+                <td>{{ cause.count }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else class="health-muted">No files at the retry cap.</p>
+        </section>
+
+        <section v-if="health.oldestWaitingItem" class="health-card">
+          <h2>Oldest waiting item</h2>
+          <dl class="health-facts">
+            <dt>Function</dt>
+            <dd>
+              <code>{{ health.oldestWaitingItem.functionName }}</code>
+            </dd>
+            <dt>Priority</dt>
+            <dd>
+              {{ getPriorityLabel(health.oldestWaitingItem.priority) }}
+            </dd>
+            <dt>Waiting since</dt>
+            <dd>{{ formatDate(health.oldestWaitingItem.dateCreated) }}</dd>
+          </dl>
+        </section>
+
+        <section class="health-card">
+          <div class="health-card-header">
+            <h2>Per-account enrichment</h2>
+            <button
+              type="button"
+              :disabled="!canRetryEnrichment"
+              :aria-label="retryAllAria"
+              :title="retryAllTitle"
+              @click="openRetryConfirm(null)"
+            >
+              <i
+                class="bi"
+                :class="
+                  retryingHealth ? 'bi-arrow-repeat' : 'bi-arrow-clockwise'
+                "
+              ></i>
+              Retry enrichment
+            </button>
+          </div>
+          <table v-if="health.accounts.length > 0">
+            <thead>
+              <tr>
+                <th scope="col">Account</th>
+                <th scope="col">Images</th>
+                <th scope="col">Missing keywords</th>
+                <th scope="col">OK</th>
+                <th scope="col">Failed</th>
+                <th scope="col">Pending</th>
+                <th scope="col">Disabled</th>
+                <th scope="col">At retry cap</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="account in health.accounts" :key="account.accountId">
+                <td>{{ account.name }}</td>
+                <td>{{ account.totalImages }}</td>
+                <td>{{ account.missingKeywords }}</td>
+                <td>{{ account.ok }}</td>
+                <td>{{ account.failed }}</td>
+                <td>{{ account.pending }}</td>
+                <td>{{ account.disabled }}</td>
+                <td>{{ account.atRetryCap }}</td>
+                <td>
+                  <button
+                    type="button"
+                    class="secondary outline health-retry-account"
+                    :disabled="!canRetryEnrichment"
+                    :aria-label="`Retry label enrichment for ${account.name}`"
+                    @click="openRetryConfirm(account)"
+                  >
+                    Retry
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else class="health-muted">No accounts found.</p>
+          <small class="health-generated">
+            Generated at {{ formatDate(health.generatedAt) }}
+          </small>
+        </section>
+      </template>
+    </template>
+
+    <div v-if="showRetryConfirm" class="confirm-overlay">
+      <DialogConfirm
+        title="Retry label enrichment"
+        :message="retryConfirmMessage"
+        @onConfirm="confirmRetry"
+        @onCancel="showRetryConfirm = false"
+      />
+    </div>
   </div>
 </template>
 
@@ -110,7 +342,7 @@ import axios from "axios";
 import { find } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
-import { handleError } from "~~/services/EventBus";
+import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import { getSettingsTabs } from "~~/utils/SettingsTabs";
 
 export default {
@@ -124,6 +356,13 @@ export default {
       httpCounts: { active: 0, waiting: 0 },
       httpTotalItems: 0,
       httpTruncated: false,
+      health: null,
+      healthLoading: false,
+      healthError: null,
+      isOnline: true,
+      showRetryConfirm: false,
+      retryTarget: null,
+      retryingHealth: false,
     };
   },
   computed: {
@@ -182,6 +421,37 @@ export default {
     failuresCount() {
       return SyncStore().failuresCount || 0;
     },
+    canRetryEnrichment() {
+      return (
+        this.isOnline &&
+        !!this.health &&
+        this.health.enrichment.enabled &&
+        !this.retryingHealth
+      );
+    },
+    retryAllAria() {
+      if (!this.isOnline) {
+        return "Retry label enrichment (offline)";
+      }
+      return this.retryingHealth
+        ? "Retrying label enrichment"
+        : "Retry label enrichment for the whole library";
+    },
+    retryAllTitle() {
+      if (!this.isOnline) {
+        return "Unavailable while offline";
+      }
+      if (!this.health || !this.health.enrichment.enabled) {
+        return "Image classification is disabled (IMAGE_CLASSIFICATION_ENABLED=N)";
+      }
+      return "Re-queue every image that is missing labels";
+    },
+    retryConfirmMessage() {
+      if (this.retryTarget) {
+        return `Re-queue label enrichment for images missing labels in the account "${this.retryTarget.name}"? Files already labeled are not touched.`;
+      }
+      return "Re-queue label enrichment for every image missing labels (failed, pending, or never attempted) across the whole library? Files already labeled are not touched.";
+    },
   },
   watch: {
     "$route.query.tab"(tab) {
@@ -190,16 +460,33 @@ export default {
           this.activeTab = "failures";
           SyncStore().fetchFailures();
         }
-      } else if (this.activeTab === "failures") {
+      } else if (tab === "health") {
+        if (this.activeTab !== "health") {
+          this.activeTab = "health";
+          this.fetchHealth();
+        }
+      } else if (this.activeTab === "failures" || this.activeTab === "health") {
         this.activeTab = "queue";
+      }
+    },
+    isOnline(online) {
+      if (online && this.activeTab === "health") {
+        this.fetchHealth();
       }
     },
   },
   async created() {
+    if (typeof navigator !== "undefined") {
+      this.isOnline = navigator.onLine;
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", this.onNetworkOnline);
+      window.addEventListener("offline", this.onNetworkOffline);
+    }
     await AccountsStore().fetch();
     const queryTab = this.$route.query && this.$route.query.tab;
-    if (queryTab === "failures") {
-      this.activeTab = "failures";
+    if (queryTab === "failures" || queryTab === "health") {
+      this.activeTab = queryTab;
     }
     this.loading = true;
     await this.fetchQueue();
@@ -207,6 +494,9 @@ export default {
     this.failuresLoading = true;
     await SyncStore().fetchFailures();
     this.failuresLoading = false;
+    if (this.activeTab === "health") {
+      await this.fetchHealth();
+    }
     this.intervalId = setInterval(async () => {
       if (!this.loading) {
         await this.fetchQueue();
@@ -214,26 +504,106 @@ export default {
       if (!SyncStore().wsConnected) {
         await SyncStore().fetchFailures();
       }
+      if (this.activeTab === "health") {
+        await this.fetchHealth();
+      }
     }, 5000);
   },
   beforeUnmount() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
     }
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", this.onNetworkOnline);
+      window.removeEventListener("offline", this.onNetworkOffline);
+    }
   },
   methods: {
+    onNetworkOnline() {
+      this.isOnline = true;
+    },
+    onNetworkOffline() {
+      this.isOnline = false;
+    },
     setTab(tab) {
       if (this.activeTab === tab) return;
       this.activeTab = tab;
       const query = { ...this.$route.query };
-      if (tab === "failures") {
-        query.tab = "failures";
+      if (tab === "failures" || tab === "health") {
+        query.tab = tab;
       } else {
         delete query.tab;
       }
       this.$router.replace({ query });
       if (tab === "failures") {
         SyncStore().fetchFailures();
+      } else if (tab === "health") {
+        this.fetchHealth();
+      }
+    },
+    async fetchHealth() {
+      if (!this.isOnline && this.health) {
+        // Keep the last known snapshot visible while offline.
+        return;
+      }
+      if (this.healthLoading) {
+        return;
+      }
+      this.healthLoading = true;
+      try {
+        const response = await axios.get(
+          `${(await Config.get()).SERVER_URL}/sync/health`,
+          await AuthService.getAuthHeader(),
+        );
+        this.health = response.data;
+        this.healthError = null;
+      } catch (err) {
+        this.healthError =
+          (err && err.response && err.response.data && err.response.data.error) ||
+          (err && err.message) ||
+          "Unable to load the library health";
+      } finally {
+        this.healthLoading = false;
+      }
+    },
+    accountNameFor(accountId) {
+      const account =
+        this.health &&
+        this.health.accounts.find((entry) => entry.accountId === accountId);
+      return account ? account.name : accountId;
+    },
+    formatDate(value) {
+      if (!value) return "unknown";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    },
+    openRetryConfirm(account) {
+      if (!this.canRetryEnrichment) return;
+      this.retryTarget = account || null;
+      this.showRetryConfirm = true;
+    },
+    async confirmRetry() {
+      this.showRetryConfirm = false;
+      const target = this.retryTarget;
+      this.retryTarget = null;
+      if (!this.isOnline || !this.health || !this.health.enrichment.enabled) {
+        return;
+      }
+      this.retryingHealth = true;
+      try {
+        const response = await axios.post(
+          `${(await Config.get()).SERVER_URL}/sync/enrichment/retry`,
+          target ? { accountId: target.accountId } : {},
+          await AuthService.getAuthHeader(),
+        );
+        EventBus.emit(EventTypes.ALERT_MESSAGE, {
+          text: `Enrichment retry queued ${response.data.queued} of ${response.data.matched} matching files`,
+        });
+        await this.fetchHealth();
+      } catch (err) {
+        handleError(err);
+      } finally {
+        this.retryingHealth = false;
       }
     },
     async fetchQueue() {
@@ -413,5 +783,128 @@ code {
 small {
   opacity: 0.6;
   font-size: var(--font-base);
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-overlay);
+}
+
+.health-offline,
+.health-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--color-warning);
+  background: rgba(253, 126, 20, 0.1);
+}
+
+.health-error {
+  border-left-color: var(--color-danger);
+  background: var(--color-danger-bg);
+  flex-wrap: wrap;
+}
+
+.health-error p {
+  margin: 0;
+  flex: 1;
+}
+
+.health-card {
+  padding: var(--space-base);
+  margin-bottom: var(--space-base);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.health-card h2 {
+  font-size: var(--font-lg);
+  margin: 0 0 var(--space-sm) 0;
+}
+
+.health-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.health-card-header h2 {
+  margin: 0;
+}
+
+.health-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.health-ok {
+  background-color: rgba(67, 160, 71, 0.2);
+  color: var(--color-success);
+}
+
+.health-danger {
+  background-color: rgba(220, 53, 69, 0.2);
+  color: var(--color-danger);
+}
+
+.health-muted {
+  color: var(--color-text-muted);
+}
+
+.health-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-xs) var(--space-base);
+  margin: 0;
+}
+
+.health-facts dt {
+  font-weight: 600;
+}
+
+.health-facts dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+.health-warning {
+  margin: var(--space-sm) 0 0 0;
+  color: var(--color-warning);
+}
+
+.health-error-text {
+  margin: 0 0 var(--space-xs) 0;
+  word-break: break-word;
+}
+
+.health-totals {
+  margin-bottom: var(--space-base);
+}
+
+.health-retry-account {
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-sm);
+}
+
+.health-generated {
+  display: block;
+  margin-top: var(--space-sm);
+  opacity: 0.6;
+  font-size: var(--font-sm);
 }
 </style>

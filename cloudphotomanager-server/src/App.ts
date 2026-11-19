@@ -26,6 +26,8 @@ import { ShareRoutes, ShareRoutesPublic } from "./shares/ShareRoutes";
 import { SyncFileCacheInit } from "./sync/SyncFileCache";
 import { SyncNotificationsInit } from "./sync/SyncNotifications";
 import { SyncRoutes } from "./sync/SyncRoutes";
+import { SyncEnrichmentRoutes } from "./sync/SyncEnrichmentRoutes";
+import { EnrichmentRuntimeInit } from "./sync/EnrichmentRuntime";
 import { AuthInit } from "./users/Auth";
 import { UserRoutes } from "./users/UserRoutes";
 import { MediaSigningInit } from "./media/MediaSigning";
@@ -58,6 +60,7 @@ Promise.resolve().then(async () => {
   watchFile(config.CONFIG_FILE, () => {
     logger.info(`Config updated: ${config.CONFIG_FILE}`);
     config.reload();
+    EnrichmentRuntimeInit(config);
   });
 
   OTelSetTracer(new StandardTracer(config));
@@ -67,6 +70,7 @@ Promise.resolve().then(async () => {
 
   const span = OTelTracer().startSpan("init");
 
+  EnrichmentRuntimeInit(config);
   await SqlDbUtilsInit(span, config, path.resolve(__dirname, "../sql"));
   await SyncQueueInit(span);
   await SyncFailuresInit(span);
@@ -176,6 +180,10 @@ Promise.resolve().then(async () => {
 
   fastify.register(new SyncFailureRoutes().getRoutes, {
     prefix: "/api/sync/failures",
+  });
+
+  fastify.register(new SyncEnrichmentRoutes().getRoutes, {
+    prefix: "/api/sync",
   });
 
   fastify.register(new MediaRoutes(config).getRoutes, {

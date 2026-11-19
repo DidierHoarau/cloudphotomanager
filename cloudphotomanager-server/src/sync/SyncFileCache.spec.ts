@@ -32,6 +32,7 @@ jest.mock("exifr", () => ({
 jest.mock("../analysis/AnalysisImages", () => ({
   AnalysisImagesGetLabels: jest.fn().mockResolvedValue([]),
   AnalysisImagesInit: jest.fn(),
+  AnalysisImagesIsModelError: jest.fn(() => false),
 }));
 
 // Resolver functions for the promises that hold queue ops in flight during
@@ -1029,4 +1030,142 @@ describe("SyncFileCache poison-file retry loop", () => {
     const rowsForPending = rowsForFile(pendingFile.id);
     expect(rowsForPending.length).toBeGreaterThan(0);
   });
+
+  it("keeps the file healthy and searchable when keyword classification fails", async () => {
+    const enrichmentRuntime = await import("./EnrichmentRuntime");
+    const analysisImages = await import("../analysis/AnalysisImages");
+    enrichmentRuntime.EnrichmentRuntimeInit({
+      ...config,
+      IMAGE_CLASSIFICATION_ENABLED: true,
+    } as unknown as Config);
+    (config as any).IMAGE_CLASSIFICATION_ENABLED = true;
+    (analysisImages.AnalysisImagesGetLabels as jest.Mock).mockRejectedValueOnce(
+      new Error("Unauthorized access to file"),
+    );
+
+    const accountDefinition = await createAccount("acct-enrich-fail");
+    const folder = await createFolder(accountDefinition.id, "photos-enrich-fail");
+    const file = await createImageFile(
+      accountDefinition.id,
+      folder,
+      "Sunset.Beach.JPG",
+      true,
+    );
+
+    // INTERACTIVE pool: NORMAL/BATCH slots may still be held by the earlier
+    // poison-file tests until afterAll releases them.
+    syncQueue.SyncQueueQueueItem(
+      accountDefinition.id,
+      `test-op-enrich:${file.id}`,
+      { fileId: file.id },
+      "syncPhotoKeyWords",
+      SyncQueueItemPriority.INTERACTIVE,
+      [file.id],
+    );
+    await waitForQueueDrain(`test-op-enrich:${file.id}`, "syncPhotoKeyWords");
+
+    const updated = await fileData.FileDataGet(span, file.id);
+    expect(updated.syncFailCount).toBe(0);
+    expect(updated.lastSyncError).toBeNull();
+    expect(updated.keywords).toBe("sunset.beach.jpg");
+    expect(updated.enrichmentStatus).toBe("failed");
+    expect(updated.lastEnrichmentError).toContain(
+      "Unauthorized access to file",
+    );
+    expect(updated.enrichmentFailCount).toBe(1);
+
+    // Enrichment failures never reach the sync-failure list or webhook path.
+    expect(
+      syncFailures
+        .SyncFailuresList()
+        .find(
+          (failure) =>
+            failure.functionName === "syncPhotoKeyWords" &&
+            failure.fileIds.includes(file.id),
+        ),
+    ).toBeUndefined();
+  }, 30000);
+
+  it("adds labels and records an ok enrichment status on success", async () => {
+    const enrichmentRuntime = await import("./EnrichmentRuntime");
+    const analysisImages = await import("../analysis/AnalysisImages");
+    enrichmentRuntime.EnrichmentRuntimeInit({
+      ...config,
+      IMAGE_CLASSIFICATION_ENABLED: true,
+    } as unknown as Config);
+    (config as any).IMAGE_CLASSIFICATION_ENABLED = true;
+    (
+      analysisImages.AnalysisImagesGetLabels as jest.Mock
+    ).mockResolvedValueOnce([
+      { label: "golden retriever", score: 0.91 },
+      { label: "dog", score: 0.75 },
+    ]);
+
+    const accountDefinition = await createAccount("acct-enrich-ok");
+    const folder = await createFolder(accountDefinition.id, "photos-enrich-ok");
+    const file = await createImageFile(
+      accountDefinition.id,
+      folder,
+      "Dog.png",
+      true,
+    );
+
+    // INTERACTIVE pool: NORMAL/BATCH slots may still be held by the earlier
+    // poison-file tests until afterAll releases them.
+    syncQueue.SyncQueueQueueItem(
+      accountDefinition.id,
+      `test-op-enrich:${file.id}`,
+      { fileId: file.id },
+      "syncPhotoKeyWords",
+      SyncQueueItemPriority.INTERACTIVE,
+      [file.id],
+    );
+    await waitForQueueDrain(`test-op-enrich:${file.id}`, "syncPhotoKeyWords");
+
+    const updated = await fileData.FileDataGet(span, file.id);
+    expect(updated.enrichmentStatus).toBe("ok");
+    expect(updated.lastEnrichmentError).toBeNull();
+    expect(updated.keywords).toContain("dog.png");
+    expect(updated.keywords).toContain("golden retriever");
+    expect(updated.syncFailCount).toBe(0);
+    expect(updated.lastSyncError).toBeNull();
+  }, 30000);
+
+  it("keeps filename keywords and marks enrichment disabled when classification is off", async () => {
+    const enrichmentRuntime = await import("./EnrichmentRuntime");
+    enrichmentRuntime.EnrichmentRuntimeInit({
+      ...config,
+      IMAGE_CLASSIFICATION_ENABLED: false,
+    } as unknown as Config);
+    (config as any).IMAGE_CLASSIFICATION_ENABLED = false;
+
+    const accountDefinition = await createAccount("acct-enrich-disabled");
+    const folder = await createFolder(
+      accountDefinition.id,
+      "photos-enrich-disabled",
+    );
+    const file = await createImageFile(
+      accountDefinition.id,
+      folder,
+      "Lake.jpeg",
+      true,
+    );
+
+    // INTERACTIVE pool: NORMAL/BATCH slots may still be held by the earlier
+    // poison-file tests until afterAll releases them.
+    syncQueue.SyncQueueQueueItem(
+      accountDefinition.id,
+      `test-op-enrich:${file.id}`,
+      { fileId: file.id },
+      "syncPhotoKeyWords",
+      SyncQueueItemPriority.INTERACTIVE,
+      [file.id],
+    );
+    await waitForQueueDrain(`test-op-enrich:${file.id}`, "syncPhotoKeyWords");
+
+    const updated = await fileData.FileDataGet(span, file.id);
+    expect(updated.enrichmentStatus).toBe("disabled");
+    expect(updated.keywords).toBe("lake.jpeg");
+    expect(updated.syncFailCount).toBe(0);
+  }, 30000);
 });
