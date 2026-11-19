@@ -3,6 +3,7 @@
     <TabNavigation :tabs="searchTabs" />
     <NavigationSearch
       class="search-layout-navigation"
+      :initialAccountId="initialAccountId"
       @onAccountSelected="onAccountSelected"
     />
     <slot />
@@ -11,6 +12,12 @@
 
 <script>
 export default {
+  props: {
+    initialAccountId: {
+      type: String,
+      default: "",
+    },
+  },
   data() {
     return {
       searchTabs: [

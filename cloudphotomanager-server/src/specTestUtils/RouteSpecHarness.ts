@@ -3,6 +3,7 @@ import { StandardTracerFastifyRegisterHooks } from "@devopsplaybook.io/otel-util
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsInit,
+  SqlDbUtilsQuerySQL,
   SqlDbUtilsSetOTel,
 } from "@devopsplaybook.io/common-utils";
 import { Span } from "@opentelemetry/sdk-trace";
@@ -358,7 +359,14 @@ export async function routeSpecSetFileMeta(
   meta: {
     dateMedia?: Date;
     keywords?: string;
+    size?: number;
     gps?: { latitude: number; longitude: number };
+    place?: {
+      country?: string;
+      countryCode?: string;
+      region?: string;
+      city?: string;
+    };
   },
 ): Promise<void> {
   if (meta.dateMedia) {
@@ -375,19 +383,41 @@ export async function routeSpecSetFileMeta(
       [meta.keywords, file.id],
     );
   }
-  if (meta.gps) {
-    const info = JSON.stringify({
-      exif: {
+  if (meta.size !== undefined || meta.gps) {
+    const rows = SqlDbUtilsQuerySQL(ctx.span, "SELECT info FROM files WHERE id = ?", [
+      file.id,
+    ]);
+    const info = rows.length > 0 ? JSON.parse(rows[0].info || "{}") : {};
+    if (meta.size !== undefined) {
+      info.size = meta.size;
+    }
+    if (meta.gps) {
+      info.exif = {
+        ...info.exif,
         GPSInfo: {
           GPSLatitudeDecimal: meta.gps.latitude,
           GPSLongitudeDecimal: meta.gps.longitude,
         },
-      },
-    });
+      };
+    }
     await SqlDbUtilsExecSQL(
       ctx.span,
       "UPDATE files SET info = ? WHERE id = ?",
-      [info, file.id],
+      [JSON.stringify(info), file.id],
+    );
+  }
+  if (meta.place) {
+    await SqlDbUtilsExecSQL(
+      ctx.span,
+      "UPDATE files SET placeCountry = ?, placeCountryCode = ?, placeRegion = ?, " +
+        "placeCity = ?, placeStatus = 'ok' WHERE id = ?",
+      [
+        meta.place.country ?? null,
+        meta.place.countryCode ?? null,
+        meta.place.region ?? null,
+        meta.place.city ?? null,
+        file.id,
+      ],
     );
   }
 }

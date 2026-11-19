@@ -14,6 +14,15 @@ export class File {
   public hash: string;
   public keywords: string;
 
+  // Reverse-geocoded place, resolved locally from the bundled dataset at sync
+  // time (or by the backfill job). placeStatus: null = not attempted,
+  // ok = place stored, none = geocoded but no populated place nearby.
+  public placeCountry: string;
+  public placeCountryCode: string;
+  public placeRegion: string;
+  public placeCity: string;
+  public placeStatus: string;
+
   // Consecutive thumbnail/preview sync failures (reset on success or manual retry)
   public syncFailCount: number;
   public lastSyncError: string;
@@ -69,6 +78,11 @@ export class File {
     this.favorite = 0;
     this.trashed = 0;
     this.dateTrashed = null;
+    this.placeCountry = null;
+    this.placeCountryCode = null;
+    this.placeRegion = null;
+    this.placeCity = null;
+    this.placeStatus = null;
   }
 
   public static getMediaType(name: string): FileMediaType {

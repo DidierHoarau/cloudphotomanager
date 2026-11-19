@@ -3,6 +3,7 @@ import {
   dmsToDecimal,
   buildGpsInfo,
   extractGps,
+  GpsCoordsFromInfo,
   GpsInfo,
 } from "./ExifGpsExtractor";
 
@@ -128,5 +129,47 @@ describe("extractGps", () => {
   it("should handle an empty buffer gracefully", async () => {
     const result = await extractGps(Buffer.alloc(0));
     expect(result.gpsInfo).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GpsCoordsFromInfo (stored file.info -> decimal coordinates)
+// ---------------------------------------------------------------------------
+
+describe("GpsCoordsFromInfo", () => {
+  it("reads decimal coordinates", () => {
+    expect(
+      GpsCoordsFromInfo({
+        exif: {
+          GPSInfo: {
+            GPSLatitudeDecimal: 48.11198,
+            GPSLongitudeDecimal: -1.67429,
+          },
+        },
+      }),
+    ).toEqual({ lat: 48.11198, lon: -1.67429 });
+  });
+
+  it("falls back to legacy DMS arrays with N/S/E/W refs", () => {
+    const coords = GpsCoordsFromInfo({
+      exif: {
+        GPSInfo: {
+          GPSLatitude: [48, 6, 43.128],
+          GPSLatitudeRef: "S",
+          GPSLongitude: [1, 40, 28.2],
+          GPSLongitudeRef: "W",
+        },
+      },
+    });
+    expect(coords.lat).toBeCloseTo(-48.11198, 3);
+    expect(coords.lon).toBeCloseTo(-1.6745, 3);
+  });
+
+  it("returns null without GPS and for malformed values", () => {
+    expect(GpsCoordsFromInfo({})).toBeNull();
+    expect(GpsCoordsFromInfo(null)).toBeNull();
+    expect(
+      GpsCoordsFromInfo({ exif: { GPSInfo: { GPSLatitude: "north" } } }),
+    ).toBeNull();
   });
 });

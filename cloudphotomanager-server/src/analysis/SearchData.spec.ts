@@ -14,10 +14,14 @@ import {
   DUPLICATES_MAX_ROWS,
   SEARCH_LABELS_MAX,
   SEARCH_MAX_RESULTS,
+  SEARCH_PLACES_MAX,
   SearchDataAggregateByGeoGrid,
+  SearchDataCountFiles,
   SearchDataListAccountDuplicates,
   SearchDataListAccountLabels,
+  SearchDataListAccountPlaces,
   SearchDataListFiles,
+  SearchSortNormalize,
 } from "./SearchData";
 
 describe("SearchData limits", () => {
@@ -32,6 +36,13 @@ describe("SearchData limits", () => {
     dateMedia: string;
     filename?: string;
     keywords?: string;
+    size?: number;
+    place?: {
+      country?: string;
+      countryCode?: string;
+      region?: string;
+      city?: string;
+    };
   }
 
   function insertFiles(accountId: string, rows: FileRow[]): void {
@@ -39,7 +50,7 @@ describe("SearchData limits", () => {
     for (let start = 0; start < rows.length; start += batchSize) {
       const batch = rows.slice(start, start + batchSize);
       const placeholders = batch
-        .map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .join(", ");
       const params: any[] = [];
       for (const row of batch) {
@@ -53,14 +64,19 @@ describe("SearchData limits", () => {
           row.dateMedia,
           row.dateMedia,
           row.dateMedia,
-          "{}",
+          JSON.stringify(row.size !== undefined ? { size: row.size } : {}),
           "{}",
           row.keywords ?? null,
+          row.place?.country ?? null,
+          row.place?.countryCode ?? null,
+          row.place?.region ?? null,
+          row.place?.city ?? null,
+          row.place ? "ok" : null,
         );
       }
       SqlDbUtilsExecSQL(
         span,
-        "INSERT INTO files (id, idCloud, accountId, filename, folderId, hash, dateUpdated, dateSync, dateMedia, info, metadata, keywords) " +
+        "INSERT INTO files (id, idCloud, accountId, filename, folderId, hash, dateUpdated, dateSync, dateMedia, info, metadata, keywords, placeCountry, placeCountryCode, placeRegion, placeCity, placeStatus) " +
           `VALUES ${placeholders}`,
         params,
       );
@@ -625,6 +641,282 @@ describe("SearchData limits", () => {
     expect(labels).toHaveLength(SEARCH_LABELS_MAX);
     // All counts equal: the alphabetical tiebreaker decides.
     expect(labels[0].label).toBe("label0000");
-    expect(labels[labels.length - 1].label).toBe("label0199");
+    expect(labels[labels.length - 1].label).toBe(
+      `label${String(SEARCH_LABELS_MAX - 1).padStart(4, "0")}`,
+    );
   });
+
+  it("treats the date range as inclusive, including same-day ranges", async () => {
+    const accountId = "account-search-dates";
+    const gps = {
+      exif: { GPSInfo: { GPSLatitudeDecimal: 48.1, GPSLongitudeDecimal: 2.1 } },
+    };
+    const rows: FileRow[] = [
+      { id: "dt-before", folderId: "f", hash: "h0", dateMedia: "2024-02-29T23:59:59.000Z" },
+      { id: "dt-start", folderId: "f", hash: "h1", dateMedia: "2024-03-01T00:00:00.000Z" },
+      { id: "dt-mid", folderId: "f", hash: "h2", dateMedia: "2024-03-01T10:00:00.000Z" },
+      { id: "dt-end", folderId: "f", hash: "h3", dateMedia: "2024-03-01T23:59:59.999Z" },
+      { id: "dt-after", folderId: "f", hash: "h4", dateMedia: "2024-03-02T00:00:00.000Z" },
+    ];
+    insertFiles(accountId, rows);
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files SET info = ? WHERE accountId = ?",
+      [JSON.stringify(gps), accountId],
+    );
+
+    const sameDay = {
+      dateFrom: "2024-03-01T00:00:00.000Z",
+      dateTo: "2024-03-01T23:59:59.999Z",
+    };
+    const files = await SearchDataListFiles(span, accountId, sameDay);
+    expect(files.map((file) => file.id).sort()).toEqual([
+      "dt-end",
+      "dt-mid",
+      "dt-start",
+    ]);
+    expect(await SearchDataCountFiles(span, accountId, sameDay)).toBe(3);
+
+    const grid = await SearchDataAggregateByGeoGrid(span, accountId, {
+      bbox: { minLat: 48, maxLat: 49, minLon: 2, maxLon: 3 },
+      gridRows: 2,
+      gridCols: 2,
+      filters: sameDay,
+    });
+    expect(grid.cells.reduce((total, cell) => total + cell.count, 0)).toBe(3);
+  });
+
+  it("sorts deterministically on every whitelisted key", async () => {
+    const accountId = "account-search-sort";
+    insertFiles(accountId, [
+      { id: "s1", folderId: "f", hash: "h1", dateMedia: "2024-01-01T10:00:00.000Z", filename: "b.jpg", size: 300 },
+      { id: "s2", folderId: "f", hash: "h2", dateMedia: "2024-01-02T10:00:00.000Z", filename: "A.jpg", size: 200 },
+      { id: "s3", folderId: "f", hash: "h3", dateMedia: "2024-01-02T10:00:00.000Z", filename: "c.jpg" },
+      { id: "s4", folderId: "f", hash: "h4", dateMedia: "2024-01-03T10:00:00.000Z", filename: "a.jpg", size: 100 },
+    ]);
+    const ids = async (sort: string) =>
+      (
+        await SearchDataListFiles(span, accountId, {}, null, { sort })
+      ).map((file) => file.id);
+
+    expect(await ids("date_desc")).toEqual(["s4", "s3", "s2", "s1"]);
+    expect(await ids("date_asc")).toEqual(["s1", "s2", "s3", "s4"]);
+    expect(await ids("filename_asc")).toEqual(["s2", "s4", "s1", "s3"]);
+    expect(await ids("filename_desc")).toEqual(["s3", "s1", "s4", "s2"]);
+    expect(await ids("size_asc")).toEqual(["s4", "s2", "s1", "s3"]);
+    expect(await ids("size_desc")).toEqual(["s1", "s2", "s4", "s3"]);
+    // Unknown keys fall back to the default date_desc order.
+    expect(await ids("nonsense")).toEqual(["s4", "s3", "s2", "s1"]);
+    expect(SearchSortNormalize("size_asc")).toBe("size_asc");
+  }, 30000);
+
+  it("paginates with limit/offset without gaps or duplicates", async () => {
+    const accountId = "account-search-pagination";
+    const rows: FileRow[] = [];
+    for (let index = 0; index < 25; index++) {
+      rows.push({
+        id: `page-${String(index).padStart(3, "0")}`,
+        folderId: "f",
+        hash: `h${index}`,
+        dateMedia: `2024-04-${String(index + 1).padStart(2, "0")}T10:00:00.000Z`,
+      });
+    }
+    insertFiles(accountId, rows);
+
+    const paged: string[] = [];
+    for (let offset = 0; offset < 30; offset += 10) {
+      const page = await SearchDataListFiles(span, accountId, {}, null, {
+        limit: 10,
+        offset,
+      });
+      paged.push(...page.map((file) => file.id));
+    }
+    expect(paged).toHaveLength(25);
+    expect(new Set(paged).size).toBe(25);
+    // date_desc: newest first.
+    expect(paged[0]).toBe("page-024");
+    expect(paged[24]).toBe("page-000");
+    expect(await SearchDataCountFiles(span, accountId, {})).toBe(25);
+  });
+
+  it("filters by exact place, matches places in keywords and lists account places", async () => {
+    const accountId = "account-search-places";
+    insertFolders(accountId, [
+      { id: "places-p", folderpath: "/places-p" },
+      { id: "places-q", folderpath: "/places-q" },
+    ]);
+    insertFiles(accountId, [
+      {
+        id: "pl-rennes1",
+        folderId: "places-p",
+        hash: "h1",
+        dateMedia: "2024-06-01T10:00:00.000Z",
+        filename: "beach.jpg",
+        keywords: "beach.jpg beach",
+        place: { country: "France", countryCode: "FR", region: "Bretagne", city: "Rennes" },
+      },
+      {
+        id: "pl-rennes2",
+        folderId: "places-p",
+        hash: "h2",
+        dateMedia: "2024-06-02T10:00:00.000Z",
+        place: { country: "France", countryCode: "FR", region: "Bretagne", city: "Rennes" },
+      },
+      {
+        id: "pl-paris",
+        folderId: "places-q",
+        hash: "h3",
+        dateMedia: "2024-06-03T10:00:00.000Z",
+        place: { country: "France", countryCode: "FR", region: "Ile-de-France", city: "Paris" },
+      },
+      {
+        id: "pl-none",
+        folderId: "places-p",
+        hash: "h4",
+        dateMedia: "2024-06-04T10:00:00.000Z",
+      },
+      {
+        id: "pl-trashed",
+        folderId: "places-p",
+        hash: "h5",
+        dateMedia: "2024-06-05T10:00:00.000Z",
+        place: { country: "France", countryCode: "FR", region: "Bretagne", city: "Rennes" },
+      },
+    ]);
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files SET trashed = 1, dateTrashed = ? WHERE id = 'pl-trashed'",
+      [new Date().toISOString()],
+    );
+
+    const exact = await SearchDataListFiles(span, accountId, {
+      placeCountry: "France",
+      placeRegion: "Bretagne",
+      placeCity: "Rennes",
+    });
+    expect(exact.map((file) => file.id).sort()).toEqual([
+      "pl-rennes1",
+      "pl-rennes2",
+    ]);
+
+    // Free-text search also matches the place columns.
+    const keywordPlace = await SearchDataListFiles(span, accountId, {
+      keywords: "Rennes",
+    });
+    expect(keywordPlace.map((file) => file.id).sort()).toEqual([
+      "pl-rennes1",
+      "pl-rennes2",
+    ]);
+
+    // Folder permission scoping applies to the place filter too.
+    const scoped = await SearchDataListFiles(
+      span,
+      accountId,
+      { placeCity: "Rennes" },
+      ["places-q"],
+    );
+    expect(scoped).toHaveLength(0);
+
+    const places = await SearchDataListAccountPlaces(span, accountId, null);
+    expect(places).toEqual([
+      {
+        country: "France",
+        countryCode: "FR",
+        region: "Bretagne",
+        city: "Rennes",
+        label: "Rennes, Bretagne, France",
+        count: 2,
+      },
+      {
+        country: "France",
+        countryCode: "FR",
+        region: "Ile-de-France",
+        city: "Paris",
+        label: "Paris, Ile-de-France, France",
+        count: 1,
+      },
+    ]);
+
+    const scopedPlaces = await SearchDataListAccountPlaces(span, accountId, [
+      "places-q",
+    ]);
+    expect(scopedPlaces.map((place) => place.city)).toEqual(["Paris"]);
+    expect(SEARCH_PLACES_MAX).toBe(500);
+  }, 30000);
+
+  it("exposes the dominant place label per geo grid cell", async () => {
+    const accountId = "account-search-grid-places";
+    insertFiles(accountId, [
+      {
+        id: "gp-1",
+        folderId: "f",
+        hash: "h1",
+        dateMedia: "2024-07-01T10:00:00.000Z",
+        place: { country: "France", countryCode: "FR", region: "Bretagne", city: "Rennes" },
+      },
+      {
+        id: "gp-2",
+        folderId: "f",
+        hash: "h2",
+        dateMedia: "2024-07-02T10:00:00.000Z",
+        place: { country: "France", countryCode: "FR", region: "Bretagne", city: "Rennes" },
+      },
+      {
+        id: "gp-3",
+        folderId: "f",
+        hash: "h3",
+        dateMedia: "2024-07-03T10:00:00.000Z",
+        place: { country: "France", countryCode: "FR", region: "Ile-de-France", city: "Paris" },
+      },
+      {
+        id: "gp-4",
+        folderId: "f",
+        hash: "h4",
+        dateMedia: "2024-07-04T10:00:00.000Z",
+      },
+    ]);
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files SET info = ? WHERE id IN ('gp-1', 'gp-2', 'gp-3', 'gp-4')",
+      [
+        JSON.stringify({
+          exif: {
+            GPSInfo: { GPSLatitudeDecimal: 48.1, GPSLongitudeDecimal: 2.1 },
+          },
+        }),
+      ],
+    );
+
+    const grid = await SearchDataAggregateByGeoGrid(span, accountId, {
+      bbox: { minLat: 48, maxLat: 49, minLon: 2, maxLon: 3 },
+      gridRows: 2,
+      gridCols: 2,
+    });
+    expect(grid.cells).toHaveLength(1);
+    expect(grid.cells[0].count).toBe(4);
+    expect(grid.cells[0].placeLabel).toBe("Rennes, Bretagne, France");
+
+    // A cell whose files have no place keeps a null label.
+    const accountNoPlace = "account-search-grid-noplace";
+    insertFiles(accountNoPlace, [
+      { id: "gnp-1", folderId: "f", hash: "h1", dateMedia: "2024-07-01T10:00:00.000Z" },
+    ]);
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files SET info = ? WHERE id = 'gnp-1'",
+      [
+        JSON.stringify({
+          exif: {
+            GPSInfo: { GPSLatitudeDecimal: 48.1, GPSLongitudeDecimal: 2.1 },
+          },
+        }),
+      ],
+    );
+    const noPlaceGrid = await SearchDataAggregateByGeoGrid(span, accountNoPlace, {
+      bbox: { minLat: 48, maxLat: 49, minLon: 2, maxLon: 3 },
+      gridRows: 2,
+      gridCols: 2,
+    });
+    expect(noPlaceGrid.cells[0].placeLabel).toBeNull();
+  }, 30000);
 });

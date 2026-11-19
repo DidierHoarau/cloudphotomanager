@@ -1,12 +1,15 @@
 <template>
-  <SearchLayout @onAccountSelected="onAccountSelected">
+  <SearchLayout
+    :initialAccountId="initialAccountId"
+    @onAccountSelected="onAccountSelected"
+  >
     <div class="search-gallery-content">
       <div class="search-gallery-criteria">
         <input
           v-model="searchKeyword"
           type="search"
           name="search"
-          placeholder="Search File"
+          placeholder="Search File or Place"
           aria-label="Search"
           class="folder-component-layout-filter"
           v-on:input="onSearchFilterChanged"
@@ -32,7 +35,6 @@
               v-on:input="onSearchFilterChanged"
             />
           </label>
-          <kbd v-if="files.length > 0">Images Found: {{ files.length }}</kbd>
         </div>
         <div class="search-facets">
           <button
@@ -89,10 +91,54 @@
               {{ folder.folderpath }}
             </option>
           </select>
+          <select
+            v-model="placeFilterKey"
+            class="facet-folder-select"
+            aria-label="Place"
+            v-on:change="onPlaceChanged"
+          >
+            <option value="">All places</option>
+            <option
+              v-for="option in placeOptions"
+              :key="option.key"
+              :value="option.key"
+            >
+              {{ option.label }} ({{ option.count }})
+            </option>
+          </select>
+          <select
+            v-model="sort"
+            class="facet-folder-select"
+            aria-label="Sort"
+            v-on:change="onSearchFilterChanged"
+          >
+            <option
+              v-for="option in sortOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+          <button
+            v-if="bbox"
+            class="facet-chip facet-chip-active"
+            title="Clear the map area filter"
+            v-on:click="clearBbox()"
+          >
+            <i class="bi bi-map"></i> Map area <i class="bi bi-x-lg"></i>
+          </button>
         </div>
         <div v-if="labels.length > 0" class="search-labels">
+          <input
+            v-model="labelFilter"
+            type="search"
+            class="search-label-filter"
+            placeholder="Filter labels"
+            aria-label="Filter labels"
+          />
           <button
-            v-for="label in labels"
+            v-for="label in filteredLabels"
             :key="label.label"
             class="label-chip"
             :class="{ 'facet-chip-active': isLabelActive(label.label) }"
@@ -100,6 +146,9 @@
           >
             {{ label.label }} ({{ label.count }})
           </button>
+          <small v-if="filteredLabels.length === 0" class="search-labels-empty">
+            No label matches "{{ labelFilter }}"
+          </small>
         </div>
       </div>
 
@@ -145,6 +194,13 @@
           <i class="bi bi-collection"></i> Add to Album...
         </button>
       </div>
+      <div v-if="total > 0" class="search-results-header">
+        <kbd>Showing {{ files.length }} of {{ total }}</kbd>
+        <small v-if="hasMore" class="search-results-notice">
+          Results are limited to {{ pageSize }} per page; load more to see the
+          rest.
+        </small>
+      </div>
       <div class="search-item-list">
         <Loading v-if="loading" />
         <Gallery
@@ -156,6 +212,16 @@
           @onFileSelected="onFileSelected"
           :selectedFiles="selectedFiles"
         />
+      </div>
+      <div v-if="hasMore" class="search-load-more">
+        <button
+          class="secondary outline"
+          :disabled="loadingMore"
+          v-on:click="loadMore()"
+        >
+          <i class="bi bi-arrow-down-circle"></i>
+          {{ loadingMore ? "Loading..." : "Load more" }}
+        </button>
       </div>
       <GalleryItemFocus
         v-if="displayFullScreen"
@@ -192,14 +258,28 @@ const authenticationStore = AuthenticationStore();
 
 <script>
 import axios from "axios";
-import { debounce, filter, find, findIndex } from "lodash";
+import { debounce, filter, findIndex } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { BulkDownloadService } from "~~/services/BulkDownloadService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
+import {
+  buildDateFilters,
+  filterLabels,
+  parseBboxQuery,
+  parsePlaceKey,
+  placeKey,
+  SORT_DEFAULT,
+  SORT_OPTIONS,
+} from "~~/utils/SearchFilters";
 
-// Number of label chips rendered under the criteria area.
-const LABELS_DISPLAY_MAX = 50;
+// Matches SEARCH_MAX_RESULTS on the server: the per-request maximum. More
+// results are fetched explicitly with the "Load more" button.
+const SEARCH_PAGE_SIZE = 5000;
+
+function placeLabel(place) {
+  return [place.city, place.region, place.country].filter(Boolean).join(", ");
+}
 
 export default {
   data() {
@@ -211,8 +291,10 @@ export default {
       serverUrl: "",
       selectedFile: null,
       loading: false,
+      loadingMore: false,
       requestEtag: "",
       currentAccountId: "",
+      initialAccountId: "",
       currentFolderId: "",
       analysisFilter: "",
       searchKeyword: "",
@@ -224,6 +306,18 @@ export default {
       outtakesOnly: false,
       folderId: "",
       labels: [],
+      labelFilter: "",
+      places: [],
+      placeFilterKey: "",
+      placeFilter: null,
+      sort: SORT_DEFAULT,
+      sortOptions: SORT_OPTIONS,
+      bbox: null,
+      total: 0,
+      offset: 0,
+      hasMore: false,
+      pageSize: SEARCH_PAGE_SIZE,
+      searchRequestId: 0,
       selectedFiles: [],
       displayFullScreen: false,
       positionFocus: 0,
@@ -238,23 +332,73 @@ export default {
         accountId: this.currentAccountId,
       });
     },
+    filteredLabels() {
+      return filterLabels(this.labels, this.labelFilter);
+    },
+    // The place select lists the account's places, plus the deep-linked place
+    // when it is not part of that list (e.g. before the places request lands).
+    placeOptions() {
+      const options = this.places.map((place) => ({
+        key: placeKey(place),
+        label: place.label,
+        count: place.count,
+      }));
+      if (
+        this.placeFilter &&
+        !options.some((option) => option.key === this.placeFilterKey)
+      ) {
+        options.unshift({
+          key: this.placeFilterKey,
+          label: placeLabel(this.placeFilter),
+          count: 0,
+        });
+      }
+      return options;
+    },
   },
   async created() {
+    this.applyDeepLink(this.$route.query);
     this.serverUrl = (await Config.get()).SERVER_URL;
     await AccountsStore().fetch();
   },
   methods: {
+    applyDeepLink(query) {
+      if (!query) return;
+      if (typeof query.accountId === "string" && query.accountId) {
+        this.initialAccountId = query.accountId;
+        this.currentAccountId = query.accountId;
+      }
+      if (typeof query.keywords === "string") {
+        this.searchKeyword = query.keywords;
+      }
+      if (typeof query.dateFrom === "string") {
+        this.dateFrom = query.dateFrom;
+      }
+      if (typeof query.dateTo === "string") {
+        this.dateTo = query.dateTo;
+      }
+      if (typeof query.sort === "string") {
+        this.sort = SORT_OPTIONS.some((option) => option.value === query.sort)
+          ? query.sort
+          : SORT_DEFAULT;
+      }
+      const place = {
+        country: typeof query.placeCountry === "string" ? query.placeCountry : "",
+        region: typeof query.placeRegion === "string" ? query.placeRegion : "",
+        city: typeof query.placeCity === "string" ? query.placeCity : "",
+      };
+      if (place.city || place.region || place.country) {
+        this.placeFilter = place;
+        this.placeFilterKey = placeKey(place);
+      }
+      this.bbox = parseBboxQuery(query.bbox);
+    },
     buildFilters() {
       const filters = {};
       if (this.searchKeyword.trim().length > 1) {
         filters.keywords = this.searchKeyword.trim();
       }
-      if (this.dateFrom) {
-        filters.dateFrom = new Date(this.dateFrom);
-      }
-      if (this.dateTo) {
-        filters.dateTo = new Date(this.dateTo);
-      }
+      Object.assign(filters, buildDateFilters(this.dateFrom, this.dateTo));
       if (this.favoriteOnly) {
         filters.favoriteOnly = true;
       }
@@ -270,37 +414,87 @@ export default {
       if (this.folderId) {
         filters.folderId = this.folderId;
       }
+      if (this.placeFilter) {
+        if (this.placeFilter.country) {
+          filters.placeCountry = this.placeFilter.country;
+        }
+        if (this.placeFilter.region) {
+          filters.placeRegion = this.placeFilter.region;
+        }
+        if (this.placeFilter.city) {
+          filters.placeCity = this.placeFilter.city;
+        }
+      }
+      if (this.bbox) {
+        filters.geoBox = { ...this.bbox };
+      }
       return filters;
     },
-    onSearchFilterChanged: debounce(async function (e) {
+    clearBbox() {
+      this.bbox = null;
+      this.onSearchFilterChanged();
+    },
+    onPlaceChanged() {
+      this.placeFilter = parsePlaceKey(this.placeFilterKey);
+      this.onSearchFilterChanged();
+    },
+    async runSearch(append = false) {
+      if (!this.currentAccountId) return;
       const filters = this.buildFilters();
-      // A facet toggle alone must trigger a request even when no other
-      // filter is set.
-      if (Object.keys(filters).length > 0) {
-        this.loading = true;
-        this.selectedFiles = [];
-        await axios
-          .post(
-            `${this.serverUrl}/accounts/${this.currentAccountId}/files/search`,
-            { filters },
-            await AuthService.getAuthHeader(),
-          )
-          .then((res) => {
-            this.files = res.data.files;
-          })
-          .catch(handleError)
-          .finally(() => {
-            this.loading = false;
-          });
-      } else {
+      if (Object.keys(filters).length === 0) {
         this.files = [];
         this.selectedFiles = [];
+        this.total = 0;
+        this.offset = 0;
+        this.hasMore = false;
+        return;
       }
+      this.searchRequestId += 1;
+      const requestId = this.searchRequestId;
+      if (append) {
+        this.loadingMore = true;
+      } else {
+        this.loading = true;
+        this.selectedFiles = [];
+      }
+      try {
+        const res = await axios.post(
+          `${this.serverUrl}/accounts/${this.currentAccountId}/files/search`,
+          {
+            filters,
+            sort: this.sort,
+            limit: SEARCH_PAGE_SIZE,
+            offset: append ? this.offset : 0,
+          },
+          await AuthService.getAuthHeader(),
+        );
+        if (requestId !== this.searchRequestId) return;
+        const files = res.data.files || [];
+        this.files = append ? [...this.files, ...files] : files;
+        this.total = Number(res.data.total ?? this.files.length);
+        this.offset = Number(res.data.offset ?? 0) + files.length;
+        this.hasMore = Boolean(res.data.hasMore);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        if (requestId === this.searchRequestId) {
+          this.loading = false;
+          this.loadingMore = false;
+        }
+      }
+    },
+    loadMore() {
+      if (this.loading || this.loadingMore || !this.hasMore) return;
+      this.runSearch(true);
+    },
+    onSearchFilterChanged: debounce(async function () {
+      this.offset = 0;
+      await this.runSearch(false);
     }, 500),
     async onAccountSelected(event) {
       this.currentAccountId = event.id;
       this.folderId = "";
-      await this.fetchLabels();
+      await Promise.all([this.fetchLabels(), this.fetchPlaces()]);
       this.onSearchFilterChanged();
     },
     async fetchLabels() {
@@ -312,7 +506,20 @@ export default {
           await AuthService.getAuthHeader(),
         )
         .then((res) => {
-          this.labels = (res.data.labels || []).slice(0, LABELS_DISPLAY_MAX);
+          this.labels = res.data.labels || [];
+        })
+        .catch(handleError);
+    },
+    async fetchPlaces() {
+      this.places = [];
+      if (!this.currentAccountId) return;
+      await axios
+        .get(
+          `${this.serverUrl}/accounts/${this.currentAccountId}/files/search/places`,
+          await AuthService.getAuthHeader(),
+        )
+        .then((res) => {
+          this.places = res.data.places || [];
         })
         .catch(handleError);
     },
@@ -387,6 +594,7 @@ export default {
             text: "Moved to Trash",
           });
           this.fetchLabels();
+          this.fetchPlaces();
           this.onSearchFilterChanged();
         })
         .catch(handleError);
@@ -422,6 +630,7 @@ export default {
       this.activeOperation = "";
       this.selectedFiles = [];
       this.fetchLabels();
+      this.fetchPlaces();
       this.onSearchFilterChanged();
     },
     focusGalleryItem(file) {
@@ -508,8 +717,21 @@ export default {
 .search-labels {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-xs);
   margin-top: var(--space-sm);
+}
+
+.search-label-filter {
+  margin: 0;
+  width: 100%;
+  max-width: 14em;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-sm);
+}
+
+.search-labels-empty {
+  opacity: 0.7;
 }
 
 .label-chip {
@@ -541,6 +763,29 @@ export default {
   padding: var(--space-xs) var(--space-sm);
   margin-right: var(--space-sm);
   font-size: var(--font-base);
+}
+
+.search-results-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.search-results-header kbd {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-base);
+}
+
+.search-results-notice {
+  opacity: 0.75;
+}
+
+.search-load-more {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-base) 0;
 }
 
 @media (prefers-color-scheme: dark) {

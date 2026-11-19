@@ -153,6 +153,11 @@ describe("SearchRoutes permissions", () => {
       url: `/api/accounts/${accountA.id}/files/search/labels`,
     });
     expect(labels.statusCode).toBe(403);
+    const places = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/files/search/places`,
+    });
+    expect(places.statusCode).toBe(403);
   });
 
   it("lists account labels scoped to the permitted folders", async () => {
@@ -310,5 +315,146 @@ describe("SearchRoutes permissions", () => {
       payload: { bbox, gridRows: 2, gridCols: 2 },
     });
     expect(sum(userNon)).toBe(0);
+  });
+
+  it("returns pagination metadata and normalizes sort/limit/offset", async () => {
+    const res = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/files/search`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { filters: {}, limit: 2, offset: 0, sort: "filename_asc" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(Object.keys(body).sort()).toEqual([
+      "files",
+      "hasMore",
+      "limit",
+      "offset",
+      "total",
+    ]);
+    expect(body.total).toBe(5);
+    expect(body.files).toHaveLength(2);
+    expect(body.limit).toBe(2);
+    expect(body.offset).toBe(0);
+    expect(body.hasMore).toBe(true);
+
+    // Invalid sort falls back to the default date_desc order.
+    const fallback = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/files/search`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { filters: {}, sort: "bogus" },
+    });
+    expect(fallback.json().files.map((f: any) => f.id)).toEqual([
+      fq2.id,
+      fp2.id,
+      fq1.id,
+      fp3.id,
+      fp1.id,
+    ]);
+
+    // limit is clamped to the per-request maximum and negative offsets to 0.
+    const clamped = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/files/search`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { filters: {}, limit: 999999, offset: -5 },
+    });
+    expect(clamped.json().limit).toBe(5000);
+    expect(clamped.json().offset).toBe(0);
+
+    const secondPage = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/files/search`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { filters: {}, limit: 4, offset: 4, sort: "date_desc" },
+    });
+    expect(secondPage.json().files).toHaveLength(1);
+    expect(secondPage.json().hasMore).toBe(false);
+  });
+
+  it("rejects invalid dates and bounding boxes", async () => {
+    const badDate = await search(tokenAdmin, { dateFrom: "not-a-date" });
+    expect(badDate.statusCode).toBe(400);
+    const badDateTo = await search(tokenAdmin, { dateTo: "2024-13-45" });
+    expect(badDateTo.statusCode).toBe(400);
+    const badBox = await search(tokenAdmin, {
+      geoBox: { minLat: 10, maxLat: 5, minLon: 0, maxLon: 1 },
+    });
+    expect(badBox.statusCode).toBe(400);
+    const outOfRange = await search(tokenAdmin, {
+      geoBox: { minLat: -100, maxLat: 5, minLon: 0, maxLon: 1 },
+    });
+    expect(outOfRange.statusCode).toBe(400);
+  });
+
+  it("lists places scoped to the permitted folders and labels geo grid cells", async () => {
+    await routeSpecSetFileMeta(ctx, fp1, {
+      place: {
+        country: "France",
+        countryCode: "FR",
+        region: "Bretagne",
+        city: "Rennes",
+      },
+    });
+    await routeSpecSetFileMeta(ctx, fq1, {
+      place: {
+        country: "France",
+        countryCode: "FR",
+        region: "Bretagne",
+        city: "Rennes",
+      },
+    });
+
+    const admin = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/files/search/places`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(admin.statusCode).toBe(200);
+    expect(admin.json().places).toEqual([
+      {
+        country: "France",
+        countryCode: "FR",
+        region: "Bretagne",
+        city: "Rennes",
+        label: "Rennes, Bretagne, France",
+        count: 2,
+      },
+    ]);
+
+    const userP = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/files/search/places`,
+      headers: routeSpecAuthHeaders(tokenUserP),
+    });
+    expect(userP.json().places).toEqual([
+      {
+        country: "France",
+        countryCode: "FR",
+        region: "Bretagne",
+        city: "Rennes",
+        label: "Rennes, Bretagne, France",
+        count: 1,
+      },
+    ]);
+
+    const userNon = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/files/search/places`,
+      headers: routeSpecAuthHeaders(tokenUserNon),
+    });
+    expect(userNon.json().places).toEqual([]);
+
+    const grid = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/files/search/geoGrid`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { bbox: { minLat: 48, maxLat: 49, minLon: 2, maxLon: 3 }, gridRows: 2, gridCols: 2 },
+    });
+    expect(grid.statusCode).toBe(200);
+    expect(grid.json().cells).toHaveLength(1);
+    expect(grid.json().cells[0].placeLabel).toBe("Rennes, Bretagne, France");
   });
 });

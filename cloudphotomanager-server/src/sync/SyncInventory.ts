@@ -5,6 +5,7 @@ import {
   FileDataGet,
   FileDataListByFolder,
   FileDataRecordSyncSuccess,
+  FileDataResetPlace,
   FileDataUpdate,
   FileDataUpdateKeywords,
 } from "../files/FileData";
@@ -114,6 +115,7 @@ export async function SyncInventorySyncFolder(
         await SyncFileCacheRemoveFile(span, account, knownFile);
         knownFile.keywords = null;
         await FileDataUpdateKeywords(span, knownFile);
+        await FileDataResetPlace(span, knownFile.id);
         await FileDataRecordSyncSuccess(span, knownFile.id);
       }
     }

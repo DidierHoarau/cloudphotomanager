@@ -69,13 +69,26 @@ export interface GeoBox {
 }
 
 export function isValidGeoBox(box: any): box is GeoBox {
+  if (box === null || box === undefined) {
+    return false;
+  }
+  const { minLat, maxLat, minLon, maxLon } = box;
+  if (
+    typeof minLat !== "number" ||
+    typeof maxLat !== "number" ||
+    typeof minLon !== "number" ||
+    typeof maxLon !== "number" ||
+    ![minLat, maxLat, minLon, maxLon].every(Number.isFinite)
+  ) {
+    return false;
+  }
   return (
-    box !== null &&
-    box !== undefined &&
-    typeof box.minLat === "number" &&
-    typeof box.maxLat === "number" &&
-    typeof box.minLon === "number" &&
-    typeof box.maxLon === "number"
+    minLat >= -90 &&
+    maxLat <= 90 &&
+    minLon >= -180 &&
+    maxLon <= 180 &&
+    minLat < maxLat &&
+    minLon < maxLon
   );
 }
 

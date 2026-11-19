@@ -53,6 +53,46 @@ export function dmsToDecimal(
   return ref === "S" || ref === "W" ? -dec : dec;
 }
 
+/**
+ * Read decimal coordinates from a stored `file.info` JSON, mirroring the SQL
+ * COALESCE logic in SearchGeoSql: prefer the pre-computed decimal values,
+ * fall back to the legacy DMS arrays with their N/S/E/W refs.
+ */
+export function GpsCoordsFromInfo(
+  info: any,
+): { lat: number; lon: number } | null {
+  const gps = info?.exif?.GPSInfo;
+  if (!gps) {
+    return null;
+  }
+  const decimalOrDms = (decimal: any, dms: any, ref: any): number | null => {
+    if (typeof decimal === "number" && Number.isFinite(decimal)) {
+      return decimal;
+    }
+    if (Array.isArray(dms) && dms.length >= 3) {
+      const [d, m, s] = dms.map(Number);
+      if ([d, m, s].every(Number.isFinite)) {
+        return dmsToDecimal([d, m, s], ref);
+      }
+    }
+    return null;
+  };
+  const lat = decimalOrDms(
+    gps.GPSLatitudeDecimal,
+    gps.GPSLatitude,
+    gps.GPSLatitudeRef,
+  );
+  const lon = decimalOrDms(
+    gps.GPSLongitudeDecimal,
+    gps.GPSLongitude,
+    gps.GPSLongitudeRef,
+  );
+  if (lat === null || lon === null) {
+    return null;
+  }
+  return { lat, lon };
+}
+
 /** Build a GpsInfo object from decimal lat/lon */
 export function buildGpsInfo(lat: number, lon: number): GpsInfo {
   const latRef: "N" | "S" = lat >= 0 ? "N" : "S";

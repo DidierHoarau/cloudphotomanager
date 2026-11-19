@@ -1,13 +1,22 @@
 <template>
-  <SearchLayout @onAccountSelected="onAccountSelected">
+  <SearchLayout
+    :initialAccountId="initialAccountId"
+    @onAccountSelected="onAccountSelected"
+  >
     <div class="search-map-content">
       <div class="search-map-info">
         <kbd v-if="totalGeoTagged > 0">
           Geo-tagged photos in view: {{ totalGeoTagged }}
         </kbd>
-        <kbd v-else-if="!loadingGrid && currentAccountId">
+        <kbd v-else-if="!loadingGrid && currentAccountId && isOnline">
           No geo-tagged photos in view
         </kbd>
+        <small v-if="!isOnline" class="search-map-offline" role="status">
+          Offline: map tiles and places are unavailable
+        </small>
+        <span class="search-map-live" role="status" aria-live="polite">
+          {{ liveStatusText }}
+        </span>
       </div>
       <div class="search-map-container">
         <div ref="mapEl" class="search-map"></div>
@@ -22,7 +31,15 @@
         class="dialog-overlay"
         @click.self="closeCellDialog()"
       >
-        <article class="dialog-article">
+        <article
+          ref="cellDialog"
+          class="dialog-article"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="search-map-cell-title"
+          tabindex="-1"
+          @keydown="onDialogKeydown"
+        >
           <header>
             <a
               href="#close"
@@ -30,11 +47,13 @@
               class="close"
               @click.prevent="closeCellDialog()"
             ></a>
-            <span v-if="selectedCell">
-              Cell {{ selectedCell.row }}/{{ selectedCell.col }} -
-              {{ selectedCell.count }} photo(s)
-            </span>
+            <span id="search-map-cell-title">{{ cellDialogTitle }}</span>
           </header>
+          <div v-if="cellSearchHref" class="search-map-cell-actions">
+            <NuxtLink :to="cellSearchHref" @click="closeCellDialog()">
+              <i class="bi bi-search"></i> Open in search
+            </NuxtLink>
+          </div>
           <Loading v-if="loadingCell" />
           <Gallery
             v-else
@@ -57,6 +76,10 @@
   </SearchLayout>
 </template>
 
+<script setup>
+const { isOnline } = useNetworkStatus();
+</script>
+
 <script>
 import axios from "axios";
 import L from "leaflet";
@@ -65,33 +88,23 @@ import { debounce, findIndex } from "lodash";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError } from "~~/services/EventBus";
-
-const GRID_ROWS = 10;
-const GRID_COLS = 10;
-// Deep-link zoom bounds (matching the tile layer maxZoom) and the default
-// zoom used when a link carries coordinates but no explicit zoom.
-const ZOOM_MIN = 2;
-const ZOOM_MAX = 19;
-const DEEP_LINK_ZOOM_DEFAULT = 16;
-
-function parseCoordinate(value) {
-  const num = typeof value === "string" ? parseFloat(value) : NaN;
-  return Number.isFinite(num) ? num : null;
-}
-
-function parseZoom(value) {
-  const num = typeof value === "string" ? parseFloat(value) : NaN;
-  if (!Number.isFinite(num)) {
-    return DEEP_LINK_ZOOM_DEFAULT;
-  }
-  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(num)));
-}
+import { dialogFocusFirst, dialogTrapFocus } from "~~/utils/DialogFocus";
+import {
+  cellSearchQuery,
+  cellSubBbox,
+  formatCellLabel,
+  gridDimensionsForZoom,
+  parseMapView,
+  readMapView,
+  storeMapView,
+} from "~~/services/MapUtils";
 
 export default {
   data() {
     return {
       serverUrl: "",
       currentAccountId: "",
+      initialAccountId: "",
       loadingMap: true,
       loadingGrid: false,
       // Map / Leaflet state
@@ -99,14 +112,16 @@ export default {
       markersLayer: null,
       resizeObserver: null,
       // Grid state
-      lastBbox: null,
+      lastGrid: null,
       gridRequestId: 0,
       cells: [],
       // Cell dialog state
       cellDialogOpen: false,
       selectedCell: null,
       cellFiles: [],
+      cellBbox: null,
       loadingCell: false,
+      restoreFocusElement: null,
       // Full-screen viewer
       displayFullScreen: false,
       positionFocus: 0,
@@ -115,6 +130,39 @@ export default {
   computed: {
     totalGeoTagged() {
       return this.cells.reduce((acc, c) => acc + c.count, 0);
+    },
+    liveStatusText() {
+      if (!this.currentAccountId) return "";
+      const total = this.totalGeoTagged;
+      return total === 1
+        ? "1 geo-tagged photo in view"
+        : `${total} geo-tagged photos in view`;
+    },
+    cellDialogTitle() {
+      if (!this.selectedCell) return "Map cell";
+      const count = this.selectedCell.count;
+      if (this.selectedCell.placeLabel) {
+        return `${count} photo(s) near ${this.selectedCell.placeLabel}`;
+      }
+      const grid = this.lastGrid;
+      return `${formatCellLabel(
+        this.selectedCell,
+        grid?.rows,
+        grid?.cols,
+      )} - ${count} photo(s)`;
+    },
+    cellSearchHref() {
+      if (!this.selectedCell || !this.currentAccountId || !this.cellBbox) {
+        return null;
+      }
+      return {
+        path: "/search",
+        query: cellSearchQuery(this.currentAccountId, this.cellBbox, {
+          country: this.selectedCell.placeCountry || undefined,
+          region: this.selectedCell.placeRegion || undefined,
+          city: this.selectedCell.placeCity || undefined,
+        }),
+      };
     },
   },
   async created() {
@@ -125,21 +173,24 @@ export default {
     // Deep-link override: /search/map?accountId=…&lat=…&lon=…&zoom=… takes
     // precedence over the auto-selected first account (NavigationSearch has
     // already emitted its selection by the time this runs).
-    const route = useRoute();
-    const queryAccountId = route.query.accountId;
-    if (typeof queryAccountId === "string" && queryAccountId) {
-      this.currentAccountId = queryAccountId;
+    const query = this.$route.query;
+    if (typeof query.accountId === "string" && query.accountId) {
+      this.initialAccountId = query.accountId;
+      this.currentAccountId = query.accountId;
     }
-    const lat = parseCoordinate(route.query.lat);
-    const lon = parseCoordinate(route.query.lon);
+    const deepView = parseMapView(query);
     try {
       // Wait for the map container to be laid out before instantiating
       // Leaflet so it can measure its size correctly. Otherwise tiles only
       // render in the top-left corner until the next resize event.
       await this.$nextTick();
       this.initMap();
-      if (lat !== null && lon !== null) {
-        this.map.setView([lat, lon], parseZoom(route.query.zoom));
+      if (deepView) {
+        this.map.setView([deepView.lat, deepView.lon], deepView.zoom, {
+          animate: false,
+        });
+      } else if (this.currentAccountId) {
+        this.applyStoredView(this.currentAccountId);
       }
       // The account selection may have been received before the map existed,
       // in which case its refresh was skipped: load the grid now.
@@ -172,8 +223,8 @@ export default {
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       }).addTo(this.map);
       this.markersLayer = L.layerGroup().addTo(this.map);
-      this.map.on("moveend", this.refreshGridDebounced);
-      this.map.on("zoomend", this.refreshGridDebounced);
+      this.map.on("moveend", this.onMapViewChanged);
+      this.map.on("zoomend", this.onMapViewChanged);
 
       // Belt-and-suspenders against the classic "map only renders the
       // top-left tile on initial load" Leaflet bug: force a size
@@ -192,9 +243,64 @@ export default {
         this.resizeObserver.observe(this.$refs.mapEl);
       }
     },
+    storage() {
+      return typeof window !== "undefined" ? window.sessionStorage : null;
+    },
+    applyStoredView(accountId) {
+      if (!this.map) return;
+      const stored = readMapView(this.storage(), accountId);
+      if (stored) {
+        this.map.setView([stored.lat, stored.lon], stored.zoom, {
+          animate: false,
+        });
+      }
+    },
     onAccountSelected(event) {
+      const accountChanged = this.currentAccountId !== event.id;
       this.currentAccountId = event.id;
+      // Restore the previously browsed view for this account unless the URL
+      // carries explicit coordinates (deep link precedence).
+      const queryView = parseMapView(this.$route.query);
+      if (accountChanged && !queryView) {
+        this.applyStoredView(event.id);
+      }
       this.refreshGridDebounced();
+    },
+    onMapViewChanged() {
+      if (!this.map) return;
+      const center = this.map.getCenter();
+      const view = {
+        lat: center.lat,
+        lon: center.lng,
+        zoom: this.map.getZoom(),
+      };
+      if (this.currentAccountId) {
+        storeMapView(this.storage(), this.currentAccountId, view);
+      }
+      this.updateRouteQuery(view);
+      this.refreshGridDebounced();
+    },
+    updateRouteQuery(view) {
+      const lat = view.lat.toFixed(5);
+      const lon = view.lon.toFixed(5);
+      const zoom = String(view.zoom);
+      const current = this.$route.query;
+      if (
+        current.lat === lat &&
+        current.lon === lon &&
+        current.zoom === zoom &&
+        (!this.currentAccountId ||
+          current.accountId === this.currentAccountId)
+      ) {
+        return;
+      }
+      const query = { ...current, lat, lon, zoom };
+      if (this.currentAccountId) {
+        query.accountId = this.currentAccountId;
+      }
+      this.$router
+        .replace({ path: this.$route.path, query })
+        .catch(() => {});
     },
     // Debounced viewport refresh: requests aggregated cell counts for the
     // current map bounds, then redraws markers.
@@ -204,28 +310,37 @@ export default {
     }, 400),
     async refreshGrid() {
       if (!this.map || !this.currentAccountId) return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        // Offline: keep the cells already in memory.
+        return;
+      }
       const bbox = this.getCurrentBbox();
-      this.lastBbox = bbox;
+      const dims = gridDimensionsForZoom(this.map.getZoom());
       this.gridRequestId += 1;
       const requestId = this.gridRequestId;
       this.loadingGrid = true;
       try {
         const res = await axios.post(
           `${this.serverUrl}/accounts/${this.currentAccountId}/files/search/geoGrid`,
-          { bbox, gridRows: GRID_ROWS, gridCols: GRID_COLS },
+          { bbox, gridRows: dims.rows, gridCols: dims.cols },
           await AuthService.getAuthHeader(),
         );
         // Drop the response if a more recent request has been issued in the
-        // meantime (debounce + slow network protection). Compare request ids:
-        // lastBbox becomes a reactive proxy, which never matches `bbox` by
-        // identity.
+        // meantime (debounce + slow network protection).
         if (requestId !== this.gridRequestId) return;
+        this.lastGrid = {
+          bbox: res.data.bbox || bbox,
+          rows: res.data.gridRows || dims.rows,
+          cols: res.data.gridCols || dims.cols,
+        };
         this.cells = res.data.cells || [];
         this.renderMarkers();
       } catch (err) {
         handleError(err);
       } finally {
-        this.loadingGrid = false;
+        if (requestId === this.gridRequestId) {
+          this.loadingGrid = false;
+        }
       }
     },
     getCurrentBbox() {
@@ -238,15 +353,14 @@ export default {
       };
     },
     cellSubBbox(cell) {
-      const b = this.lastBbox;
-      const cellHeight = (b.maxLat - b.minLat) / GRID_ROWS;
-      const cellWidth = (b.maxLon - b.minLon) / GRID_COLS;
-      return {
-        minLat: b.minLat + cell.row * cellHeight,
-        maxLat: b.minLat + (cell.row + 1) * cellHeight,
-        minLon: b.minLon + cell.col * cellWidth,
-        maxLon: b.minLon + (cell.col + 1) * cellWidth,
-      };
+      const grid = this.lastGrid;
+      if (!grid) return null;
+      return cellSubBbox(grid.bbox, cell, grid.rows, grid.cols);
+    },
+    markerAriaLabel(cell) {
+      const label = formatCellLabel(cell, this.lastGrid?.rows, this.lastGrid?.cols);
+      const photos = cell.count === 1 ? "photo" : "photos";
+      return `${cell.count} ${photos} near ${label} - open`;
     },
     renderMarkers() {
       if (!this.markersLayer) return;
@@ -261,6 +375,7 @@ export default {
           weight: 1.5,
           fillColor: this.colorForCount(cell.count, maxCount),
           fillOpacity: 0.85,
+          keyboard: false,
         });
         marker.bindTooltip(String(cell.count), {
           permanent: true,
@@ -269,6 +384,29 @@ export default {
         });
         marker.on("click", () => this.openCellDialog(cell));
         marker.addTo(this.markersLayer);
+
+        // Leaflet renders paths as SVG without semantics: make every cell a
+        // focusable button so keyboard and screen-reader users can open it.
+        const element = marker.getElement();
+        const tooltip = marker.getTooltip();
+        if (tooltip?.getElement()) {
+          tooltip.getElement().setAttribute("aria-hidden", "true");
+        }
+        if (element) {
+          element.setAttribute("role", "button");
+          element.setAttribute("tabindex", "0");
+          element.setAttribute("aria-label", this.markerAriaLabel(cell));
+          element.addEventListener("keydown", (event) => {
+            if (
+              event.key === "Enter" ||
+              event.key === " " ||
+              event.key === "Spacebar"
+            ) {
+              event.preventDefault();
+              this.openCellDialog(cell);
+            }
+          });
+        }
       }
     },
     colorForCount(count, maxCount) {
@@ -280,12 +418,21 @@ export default {
       return `hsl(${hue}, 75%, 50%)`;
     },
     async openCellDialog(cell) {
+      if (typeof document !== "undefined") {
+        this.restoreFocusElement =
+          document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
+      }
       this.selectedCell = cell;
+      this.cellBbox = this.cellSubBbox(cell);
       this.cellDialogOpen = true;
       this.cellFiles = [];
       this.loadingCell = true;
+      this.$nextTick(() => dialogFocusFirst(this.$refs.cellDialog));
       try {
-        const geoBox = this.cellSubBbox(cell);
+        const geoBox = this.cellBbox;
+        if (!geoBox) return;
         const res = await axios.post(
           `${this.serverUrl}/accounts/${this.currentAccountId}/files/search`,
           { filters: { geoBox } },
@@ -301,7 +448,24 @@ export default {
     closeCellDialog() {
       this.cellDialogOpen = false;
       this.selectedCell = null;
+      this.cellBbox = null;
       this.cellFiles = [];
+      // Give focus back to the marker (or control) that opened the dialog.
+      if (
+        this.restoreFocusElement &&
+        document.contains(this.restoreFocusElement)
+      ) {
+        this.restoreFocusElement.focus();
+      }
+      this.restoreFocusElement = null;
+    },
+    onDialogKeydown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeCellDialog();
+        return;
+      }
+      dialogTrapFocus(event, this.$refs.cellDialog);
     },
     focusGalleryItem(file) {
       if (!file) {
@@ -324,6 +488,23 @@ export default {
 }
 .search-map-info {
   min-height: 1.6em;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.search-map-offline {
+  opacity: 0.75;
+}
+/* Announce cell-count changes to screen readers without repeating the
+ * visible <kbd> line. */
+.search-map-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 .search-map-container {
   position: relative;
@@ -369,6 +550,9 @@ export default {
   max-height: 85vh;
   overflow: auto;
   padding: var(--space-base);
+}
+.search-map-cell-actions {
+  margin-bottom: var(--space-sm);
 }
 .gallery-item-focus {
   background-color: black;
@@ -471,17 +655,25 @@ export default {
   all: revert;
 }
 
-/* Per-cell count tooltip. */
+/* Visible keyboard focus for cell markers (SVG paths are focusable). */
+.leaflet-container .leaflet-interactive:focus {
+  outline: 3px solid #fff !important;
+  outline-offset: 2px;
+  filter: drop-shadow(0 0 2px #000);
+}
+
+/* Per-cell count tooltip: solid dark pill with AA-contrast white text. */
 .search-map-cell-label {
-  background: transparent !important;
+  background: rgba(0, 0, 0, 0.85) !important;
   border: 0 !important;
   box-shadow: none !important;
-  padding: 0 !important;
+  padding: 1px 6px !important;
+  border-radius: 999px !important;
   color: #fff !important;
   font-weight: 700 !important;
-  text-shadow:
-    0 0 3px #000,
-    0 0 3px #000 !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  text-shadow: none !important;
   pointer-events: none !important;
 }
 .search-map-cell-label::before {

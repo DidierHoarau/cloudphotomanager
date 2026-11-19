@@ -162,7 +162,7 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(15);
+    expect(dbVersion()).toBe(16);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
     const enrichmentColumns = SqlDbUtilsQuerySQL(
       undefined,
@@ -173,6 +173,29 @@ describe("SQL migrations", () => {
       "enrichmentStatus",
       "lastEnrichmentAttempt",
       "lastEnrichmentError",
+    ]);
+    const placeColumns = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM pragma_table_info('files') WHERE name IN " +
+        "('placeCountry', 'placeCountryCode', 'placeRegion', 'placeCity', 'placeStatus')",
+    )
+      .map((row) => row.name)
+      .sort();
+    expect(placeColumns).toEqual([
+      "placeCity",
+      "placeCountry",
+      "placeCountryCode",
+      "placeRegion",
+      "placeStatus",
+    ]);
+    const placeIndexes = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM sqlite_master WHERE type='index' AND name IN " +
+        "('files_accountId_placeStatus', 'files_accountId_place') ORDER BY name",
+    ).map((row) => row.name);
+    expect(placeIndexes).toEqual([
+      "files_accountId_place",
+      "files_accountId_placeStatus",
     ]);
     const ignoreColumns = SqlDbUtilsQuerySQL(
       undefined,
@@ -560,7 +583,7 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(15);
+    expect(dbVersion()).toBe(16);
 
     SqlDbUtilsExecSQL(
       undefined,
@@ -581,7 +604,7 @@ describe("SQL migrations", () => {
     );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(15);
+    expect(dbVersion()).toBe(16);
 
     const rows = SqlDbUtilsQuerySQL(
       undefined,

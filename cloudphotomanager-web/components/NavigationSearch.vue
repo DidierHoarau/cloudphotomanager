@@ -24,6 +24,12 @@ const accountsStore = AccountsStore();
 
 <script>
 export default {
+  props: {
+    initialAccountId: {
+      type: String,
+      default: "",
+    },
+  },
   data() {
     return {
       selectedAccount: "",
@@ -31,9 +37,14 @@ export default {
   },
   async created() {
     await AccountsStore().fetch();
-    if (AccountsStore().accounts.length > 0) {
-      this.selectAccount(AccountsStore().accounts[0].id);
+    const accounts = AccountsStore().accounts;
+    if (accounts.length === 0) {
+      return;
     }
+    const preferred = accounts.find(
+      (account) => account.id === this.initialAccountId,
+    );
+    this.selectAccount((preferred || accounts[0]).id);
   },
   methods: {
     selectAccount(accountId) {
