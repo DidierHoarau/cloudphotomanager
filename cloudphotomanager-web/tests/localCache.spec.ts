@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 
 const DB_NAME = "cloudphotomanager-cache";
-const STORES = ["accounts", "folders", "fileMetadata"];
+const STORES = ["accounts", "folders", "fileMetadata", "albums"];
 
 // Fresh IndexedDB factory per test for isolation.
 beforeEach(() => {
@@ -19,7 +19,7 @@ async function freshLocalCache() {
 
 function rawOpen(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(DB_NAME, 2);
     req.onupgradeneeded = () => {
       const db = req.result;
       for (const name of STORES) {

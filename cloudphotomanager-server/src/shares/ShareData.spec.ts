@@ -4,9 +4,16 @@ import {
 } from "@devopsplaybook.io/common-utils";
 import {
   ShareDataCreate,
+  ShareDataCreateForScope,
   ShareDataDelete,
+  ShareDataDeleteForAccount,
+  ShareDataGet,
+  ShareDataGetById,
   ShareDataGetByToken,
+  ShareDataListActive,
   ShareDataListForFolder,
+  ShareDataPathFor,
+  ShareDataTokenDerive,
 } from "./ShareData";
 import { routeSpecSetup, RouteSpecContext } from "../specTestUtils/RouteSpecHarness";
 
@@ -105,5 +112,125 @@ describe("ShareData", () => {
     await ShareDataDelete(ctx.span, created.share.id);
     const resolved = await ShareDataGetByToken(ctx.span, created.token);
     expect(resolved).toBeNull();
+  });
+
+  it("derives a stable token and re-copyable path for new shares", async () => {
+    const created = await ShareDataCreateForScope(ctx.span, {
+      accountId,
+      scope: "file",
+      scopeId: "file-derive",
+    });
+    expect(created.share.tokenMode).toBe("derived");
+    expect(created.token).toBe(ShareDataTokenDerive(created.share.id));
+    expect(ShareDataPathFor(created.share)).toBe(
+      `/share?t=${encodeURIComponent(created.token)}`,
+    );
+
+    // Re-derivation after a reload yields the same working link.
+    const loaded = await ShareDataGetById(ctx.span, created.share.id);
+    expect(ShareDataPathFor(loaded)).toBe(ShareDataPathFor(created.share));
+    const token = decodeURIComponent(
+      ShareDataPathFor(loaded).split("t=")[1],
+    );
+    expect((await ShareDataGetByToken(ctx.span, token)).id).toBe(
+      created.share.id,
+    );
+  });
+
+  it("has no copyable path for legacy random tokens", async () => {
+    const created = await ShareDataCreateForScope(ctx.span, {
+      accountId,
+      scope: "folder",
+      scopeId: "folder-legacy",
+    });
+    await SqlDbUtilsExecSQL(
+      ctx.span,
+      "UPDATE shares SET tokenMode = 'random' WHERE id = ?",
+      [created.share.id],
+    );
+    const loaded = await ShareDataGetById(ctx.span, created.share.id);
+    expect(ShareDataPathFor(loaded)).toBeNull();
+  });
+
+  it("lists active shares with account, scope and target filters", async () => {
+    const sf = await ShareDataCreateForScope(ctx.span, {
+      accountId: "acct-list-active",
+      scope: "folder",
+      scopeId: "folder-a",
+    });
+    const sa = await ShareDataCreateForScope(ctx.span, {
+      accountId: "acct-list-active",
+      scope: "album",
+      scopeId: "album-a",
+    });
+    const expired = await ShareDataCreateForScope(ctx.span, {
+      accountId: "acct-list-active",
+      scope: "file",
+      scopeId: "file-a",
+    });
+    await SqlDbUtilsExecSQL(
+      ctx.span,
+      "UPDATE shares SET dateExpires = ? WHERE id = ?",
+      ["2000-01-01T00:00:00.000Z", expired.share.id],
+    );
+
+    const all = await ShareDataListActive(ctx.span, {
+      accountId: "acct-list-active",
+    });
+    expect(all.map((share) => share.id).sort()).toEqual(
+      [sa.share.id, sf.share.id].sort(),
+    );
+
+    const albumOnly = await ShareDataListActive(ctx.span, {
+      scope: "album",
+    });
+    expect(albumOnly.some((share) => share.id === sa.share.id)).toBe(true);
+    expect(albumOnly.some((share) => share.id === sf.share.id)).toBe(false);
+
+    const byTarget = await ShareDataListActive(ctx.span, {
+      scopeId: "folder-a",
+    });
+    expect(byTarget.map((share) => share.id)).toEqual([sf.share.id]);
+  });
+
+  it("resolves expired rows by id (management) but not for serving", async () => {
+    const created = await ShareDataCreateForScope(ctx.span, {
+      accountId,
+      scope: "folder",
+      scopeId: "folder-expired-id",
+    });
+    await SqlDbUtilsExecSQL(
+      ctx.span,
+      "UPDATE shares SET dateExpires = ? WHERE id = ?",
+      ["2000-01-01T00:00:00.000Z", created.share.id],
+    );
+    expect(await ShareDataGet(ctx.span, created.share.id)).toBeNull();
+    expect((await ShareDataGetById(ctx.span, created.share.id)).id).toBe(
+      created.share.id,
+    );
+  });
+
+  it("scopes deletion to the account", async () => {
+    const created = await ShareDataCreateForScope(ctx.span, {
+      accountId: "acct-delete-owner",
+      scope: "folder",
+      scopeId: "folder-delete",
+    });
+    expect(
+      await ShareDataDeleteForAccount(
+        ctx.span,
+        "acct-delete-other",
+        created.share.id,
+      ),
+    ).toBe(0);
+    expect(await ShareDataGetById(ctx.span, created.share.id)).toBeTruthy();
+    expect(
+      await ShareDataDeleteForAccount(
+        ctx.span,
+        "acct-delete-owner",
+        created.share.id,
+      ),
+    ).toBe(1);
+    expect(await ShareDataGetById(ctx.span, created.share.id)).toBeNull();
   });
 });

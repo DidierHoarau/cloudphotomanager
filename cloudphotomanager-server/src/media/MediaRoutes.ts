@@ -10,6 +10,7 @@ import { ShareLink } from "../model/ShareLink";
 import { SyncQueueItemPriority } from "../model/SyncQueueItemPriority";
 import { OTelLogger } from "../OTelContext";
 import { ShareDataGet } from "../shares/ShareData";
+import { ShareScopeCanAccessFile } from "../shares/ShareScope";
 import { SyncFileCacheCheckAsync } from "../sync/SyncFileCache";
 import { AuthGetUserSession } from "../users/Auth";
 import {
@@ -29,18 +30,6 @@ const ASSET_MIME_TYPES: Record<string, string> = {
   "preview.webp": "image/webp",
   "preview.mp4": "video/mp4",
 };
-
-function FolderPathIsInSubtree(
-  folderpath: string,
-  ancestorPath: string,
-): boolean {
-  if (ancestorPath === "/") {
-    return true;
-  }
-  return (
-    folderpath === ancestorPath || folderpath.startsWith(`${ancestorPath}/`)
-  );
-}
 
 // Serves the cache assets (thumbnails, previews, video previews) through
 // short-lived signed URLs instead of the public /static tree. Every request
@@ -112,12 +101,10 @@ export class MediaRoutes {
         if (!file || file.accountId !== accountId || file.trashed) {
           return res.status(404).send({ error: "Not Found" });
         }
-        const folder = await FolderDataGet(span, file.folderId);
-        const shareFolder = await FolderDataGet(span, share.folderId);
-        if (!folder || !shareFolder || folder.accountId !== accountId) {
-          return res.status(404).send({ error: "Not Found" });
-        }
-        if (!FolderPathIsInSubtree(folder.folderpath, shareFolder.folderpath)) {
+        // Folder subtree, album membership or the single shared file: the
+        // scope is re-checked on every media request, so removing an item
+        // from an album stops its media immediately.
+        if (!(await ShareScopeCanAccessFile(span, share, file))) {
           return res.status(403).send({ error: "Access Denied" });
         }
       } else {

@@ -95,6 +95,96 @@ describe("ShareService", () => {
     );
   });
 
+  it("creates a scope-aware share with an optional expiry", async () => {
+    const payload = {
+      shareId: "s1",
+      sharePath: "/share?t=tok",
+      dateExpires: null,
+    };
+    mocks.post.mockResolvedValue({ data: payload });
+    await expect(
+      ShareService.createForScope({
+        accountId: "a1",
+        scope: "album",
+        scopeId: "al1",
+        expiresInDays: 30,
+      }),
+    ).resolves.toBe(payload);
+    expect(mocks.post).toHaveBeenCalledWith("/api/shares", {
+      accountId: "a1",
+      scope: "album",
+      scopeId: "al1",
+      expiresInDays: 30,
+    });
+  });
+
+  it("omits the expiry when creating a non-expiring share", async () => {
+    mocks.post.mockResolvedValue({ data: {} });
+    await ShareService.createForScope({
+      accountId: "a1",
+      scope: "file",
+      scopeId: "f1",
+      expiresInDays: 0,
+    });
+    expect(mocks.post).toHaveBeenCalledWith("/api/shares", {
+      accountId: "a1",
+      scope: "file",
+      scopeId: "f1",
+    });
+  });
+
+  it("lists shares with encoded filters", async () => {
+    const shares = [{ id: "s1", scope: "album" }];
+    mocks.get.mockResolvedValue({ data: { shares } });
+    await expect(
+      ShareService.listAll({
+        accountId: "a 1",
+        scope: "album",
+        scopeId: "al/1",
+      }),
+    ).resolves.toEqual(shares);
+    expect(mocks.get).toHaveBeenCalledWith(
+      "/api/shares?accountId=a+1&scope=album&scopeId=al%2F1",
+    );
+  });
+
+  it("lists all shares without a query string when unfiltered", async () => {
+    mocks.get.mockResolvedValue({ data: { shares: [] } });
+    await expect(ShareService.listAll()).resolves.toEqual([]);
+    expect(mocks.get).toHaveBeenCalledWith("/api/shares");
+  });
+
+  it("revokes a share by id with an encoded id", async () => {
+    mocks.delete.mockResolvedValue({});
+    await ShareService.revokeById("s/1");
+    expect(mocks.delete).toHaveBeenCalledWith("/api/shares/s%2F1");
+  });
+
+  it("rotates a share", async () => {
+    const rotated = { shareId: "s2", sharePath: "/share?t=new", dateExpires: null };
+    mocks.post.mockResolvedValue({ data: rotated });
+    await expect(ShareService.rotate("s1")).resolves.toBe(rotated);
+    expect(mocks.post).toHaveBeenCalledWith("/api/shares/s1/rotate");
+  });
+
+  it("fetches album and file share items with pagination", async () => {
+    const page = { files: [], page: 0, pageSize: 100, total: 0 };
+    mocks.get.mockResolvedValue({ data: page });
+    await expect(ShareService.getItems("t0k/en")).resolves.toBe(page);
+    expect(mocks.get).toHaveBeenCalledWith(
+      "/api/share/t0k%2Fen/items?page=0&pageSize=100&sortOrder=desc",
+    );
+
+    await ShareService.getItems("tok", {
+      page: 1,
+      pageSize: 20,
+      sortOrder: "asc",
+    });
+    expect(mocks.get).toHaveBeenLastCalledWith(
+      "/api/share/tok/items?page=1&pageSize=20&sortOrder=asc",
+    );
+  });
+
   it("public reads hit the token-scoped endpoints and encode the token", async () => {
     mocks.get
       .mockResolvedValueOnce({ data: { folderName: "trip", dateExpires: null } })

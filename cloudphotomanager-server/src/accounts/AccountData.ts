@@ -122,6 +122,15 @@ export async function AccountDataDelete(
       SqlDbUtilsExecSQL(span, "DELETE FROM shares WHERE accountId = ?", [
         accountId,
       ]);
+      SqlDbUtilsExecSQL(
+        span,
+        "DELETE FROM album_items WHERE albumId IN (SELECT id FROM albums WHERE accountId = ?) " +
+          "OR fileId IN (SELECT id FROM files WHERE accountId = ?)",
+        [accountId, accountId],
+      );
+      SqlDbUtilsExecSQL(span, "DELETE FROM albums WHERE accountId = ?", [
+        accountId,
+      ]);
       SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE accountId = ?", [
         accountId,
       ]);

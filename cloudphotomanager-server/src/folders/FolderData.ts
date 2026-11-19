@@ -410,7 +410,26 @@ export async function FolderDataDeletePathRecursive(
     // the path are escaped so "/2023" does not match "/2023-backup" and
     // literal "%"/"_" characters in folder names stay literal.
     const subtreePattern = SqlFolderSubtreePattern(folderpath);
+    const subtreeFileIds =
+      "SELECT id FROM files WHERE accountId = ? AND folderId IN ( SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ? ESCAPE '\\') )";
     const apply = SqlDbUtilsGetDatabase().transaction(() => {
+      // Album memberships and covers of deleted files go away with them; the
+      // albums themselves survive because they may span other folders.
+      SqlDbUtilsExecSQL(
+        span,
+        `DELETE FROM album_items WHERE fileId IN (${subtreeFileIds})`,
+        [accountId, accountId, folderpath, subtreePattern],
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        `UPDATE albums SET coverFileId = NULL WHERE coverFileId IN (${subtreeFileIds})`,
+        [accountId, accountId, folderpath, subtreePattern],
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        `DELETE FROM shares WHERE scope = 'file' AND fileId IN (${subtreeFileIds})`,
+        [accountId, accountId, folderpath, subtreePattern],
+      );
       SqlDbUtilsExecSQL(
         span,
         "DELETE FROM files " +
@@ -523,6 +542,26 @@ export async function FolderDataRenameSubtree(
       SqlDbUtilsExecSQL(
         span,
         "UPDATE files SET folderId = (SELECT newId FROM _folder_id_map WHERE oldId = files.folderId) WHERE folderId IN (SELECT oldId FROM _folder_id_map)",
+      );
+      // Album memberships, covers and single-file shares follow the re-keyed
+      // file ids. Rows already sitting on a future id are dropped so the PK
+      // update cannot collide; ids that are themselves being remapped are
+      // excluded from that cleanup.
+      SqlDbUtilsExecSQL(
+        span,
+        "DELETE FROM album_items WHERE fileId IN (SELECT newId FROM _file_id_map WHERE newId NOT IN (SELECT oldId FROM _file_id_map))",
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        "UPDATE album_items SET fileId = (SELECT newId FROM _file_id_map WHERE oldId = album_items.fileId) WHERE fileId IN (SELECT oldId FROM _file_id_map)",
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        "UPDATE albums SET coverFileId = (SELECT newId FROM _file_id_map WHERE oldId = albums.coverFileId) WHERE coverFileId IN (SELECT oldId FROM _file_id_map)",
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        "UPDATE shares SET fileId = (SELECT newId FROM _file_id_map WHERE oldId = shares.fileId) WHERE scope = 'file' AND fileId IN (SELECT oldId FROM _file_id_map)",
       );
       SqlDbUtilsExecSQL(
         span,

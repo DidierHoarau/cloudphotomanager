@@ -61,6 +61,13 @@
           <i class="bi bi-download"></i>
           {{ bulkDownloading ? "Zipping..." : "Download" }}
         </button>
+        <button
+          v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
+          class="secondary outline"
+          v-on:click="clickedAddToAlbum()"
+        >
+          <i class="bi bi-collection"></i> Add to Album...
+        </button>
       </div>
       <div class="timeline-file-list">
         <Loading v-if="loading" />
@@ -96,6 +103,11 @@
         :message="confirmMessage"
         @onConfirm="executeTrash"
         @onCancel="activeOperation = ''"
+      />
+      <DialogAddToAlbum
+        v-if="activeOperation == 'add-to-album'"
+        :files="selectedFiles"
+        @onDone="onAddToAlbumDone"
       />
     </div>
   </SearchLayout>
@@ -409,6 +421,13 @@ export default {
       } finally {
         this.bulkDownloading = false;
       }
+    },
+    clickedAddToAlbum() {
+      this.activeOperation = "add-to-album";
+    },
+    onAddToAlbumDone() {
+      this.activeOperation = "";
+      this.selectedFiles = [];
     },
   },
 };

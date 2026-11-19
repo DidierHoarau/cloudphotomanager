@@ -101,6 +101,33 @@ describe("FolderData", () => {
     insertFileRow(backupSub.id, "f-backup-sub");
     insertFileRow(other.id, "f-other");
 
+    const now = new Date().toISOString();
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO albums (id, accountId, name, coverFileId, orderMode, dateCreated, dateUpdated, info) VALUES (?, ?, ?, ?, 'capture', ?, ?, '{}')",
+      ["album-subtree", accountId, "Subtree", "f-2023", now, now],
+    );
+    for (const [fileId, position] of [
+      ["f-2023", 1],
+      ["f-other", 2],
+    ] as const) {
+      SqlDbUtilsExecSQL(
+        span,
+        "INSERT INTO album_items (albumId, fileId, position, dateAdded) VALUES (?, ?, ?, ?)",
+        ["album-subtree", fileId, position, now],
+      );
+    }
+    for (const [shareId, fileId] of [
+      ["share-file-deleted", "f-2023"],
+      ["share-file-kept", "f-other"],
+    ] as const) {
+      SqlDbUtilsExecSQL(
+        span,
+        "INSERT INTO shares (id, accountId, scope, folderId, fileId, tokenHash, dateCreated, info) VALUES (?, ?, 'file', '', ?, ?, ?, '{}')",
+        [shareId, accountId, fileId, `hash-${shareId}`, now],
+      );
+    }
+
     await folderData.FolderDataDeletePathRecursive(span, accountId, "/2023");
 
     expect(folderpaths()).toEqual([
@@ -111,6 +138,25 @@ describe("FolderData", () => {
     expect(fileIds()).toEqual(["f-backup", "f-backup-sub", "f-other"]);
     expect(year2023.id).toBeTruthy();
     expect(backup.id).toBeTruthy();
+    // The album survives, minus the deleted member and its cover; the
+    // single-file share of the deleted file is revoked.
+    expect(
+      SqlDbUtilsQuerySQL(
+        span,
+        "SELECT fileId FROM album_items WHERE albumId = ?",
+        ["album-subtree"],
+      ).map((row: any) => row.fileId),
+    ).toEqual(["f-other"]);
+    expect(
+      SqlDbUtilsQuerySQL(span, "SELECT coverFileId FROM albums WHERE id = ?", [
+        "album-subtree",
+      ])[0].coverFileId,
+    ).toBeNull();
+    expect(
+      SqlDbUtilsQuerySQL(span, "SELECT id FROM shares WHERE accountId = ?", [
+        accountId,
+      ]).map((row: any) => row.id),
+    ).toEqual(["share-file-kept"]);
   });
 
   it("treats LIKE wildcards in folder paths as literals", async () => {
@@ -272,8 +318,28 @@ describe("FolderData", () => {
     const now = new Date().toISOString();
     SqlDbUtilsExecSQL(
       span,
+      "INSERT INTO albums (id, accountId, name, coverFileId, orderMode, dateCreated, dateUpdated, info) VALUES (?, ?, ?, ?, 'capture', ?, ?, '{}')",
+      ["album-rename", accountId, "Rename", "mv-child-file", now, now],
+    );
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO album_items (albumId, fileId, position, dateAdded) VALUES (?, ?, ?, ?)",
+      ["album-rename", "mv-child-file", 1, now],
+    );
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO album_items (albumId, fileId, position, dateAdded) VALUES (?, ?, ?, ?)",
+      ["album-rename", "mv-sibling-file", 2, now],
+    );
+    SqlDbUtilsExecSQL(
+      span,
       "INSERT INTO shares (id, accountId, folderId, tokenHash, dateCreated, info) VALUES (?, ?, ?, ?, ?, ?)",
       ["share-rename", accountId, child.id, "tokenhash", now, "{}"],
+    );
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO shares (id, accountId, scope, folderId, fileId, tokenHash, dateCreated, info) VALUES (?, ?, 'file', '', ?, ?, ?, '{}')",
+      ["share-file-rename", accountId, "mv-child-file", "tokenhash-file", now],
     );
     SqlDbUtilsExecSQL(
       span,
@@ -383,6 +449,23 @@ describe("FolderData", () => {
     expect(permInfo.folders).toEqual([
       { folderId: expectedChildId, scope: "ro_recursive" },
     ]);
+    // Album memberships, covers and single-file shares follow the re-key.
+    const albumItems = SqlDbUtilsQuerySQL(
+      span,
+      "SELECT fileId FROM album_items WHERE albumId = ? ORDER BY position",
+      ["album-rename"],
+    ).map((row: any) => row.fileId);
+    expect(albumItems).toEqual([expectedChildFileId, "mv-sibling-file"]);
+    expect(
+      SqlDbUtilsQuerySQL(span, "SELECT coverFileId FROM albums WHERE id = ?", [
+        "album-rename",
+      ])[0].coverFileId,
+    ).toBe(expectedChildFileId);
+    expect(
+      SqlDbUtilsQuerySQL(span, "SELECT fileId FROM shares WHERE id = ?", [
+        "share-file-rename",
+      ])[0].fileId,
+    ).toBe(expectedChildFileId);
 
     const moveTargets = fileIdMoves.map((move) => move.to).sort();
     expect(moveTargets).toEqual(

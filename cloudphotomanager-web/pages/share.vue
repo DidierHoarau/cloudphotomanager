@@ -8,13 +8,28 @@
     <template v-else>
       <div class="share-header">
         <h1 class="share-title">
-          <i class="bi bi-images"></i>
-          {{ folderName }}
-          <small v-if="shareMeta && shareMeta.dateExpires" class="share-expiry">
-            &middot; link expires {{ formatDate(shareMeta.dateExpires) }}
-          </small>
+          <i :class="shareIcon"></i>
+          {{ shareTitle }}
         </h1>
-        <nav class="share-breadcrumb" aria-label="Shared folders">
+        <p class="share-stats">
+          <span class="share-stat">{{ photoCountText }}</span>
+          <span v-if="shareMeta && shareMeta.totalSize" class="share-stat">{{
+            displaySize(shareMeta.totalSize)
+          }}</span>
+        </p>
+        <p
+          v-if="shareMeta && shareMeta.dateExpires"
+          class="share-expiry-notice"
+          role="note"
+        >
+          <i class="bi bi-clock" aria-hidden="true"></i>
+          This link expires on {{ formatDate(shareMeta.dateExpires) }}.
+        </p>
+        <nav
+          v-if="isFolder"
+          class="share-breadcrumb"
+          aria-label="Shared folders"
+        >
           <template v-for="(crumb, index) in breadcrumbs" :key="crumb.path">
             <span v-if="index > 0" class="share-breadcrumb-sep">/</span>
             <a
@@ -26,7 +41,7 @@
             <strong v-else>{{ crumb.name }}</strong>
           </template>
         </nav>
-        <div class="share-folders" v-if="childFolders.length > 0">
+        <div v-if="isFolder && childFolders.length > 0" class="share-folders">
           <button
             v-for="sub in childFolders"
             :key="sub.id"
@@ -36,17 +51,54 @@
             <i class="bi bi-folder2"></i> {{ sub.name }}
           </button>
         </div>
+        <div v-if="files.length > 0" class="share-actions">
+          <kbd v-if="selectedFiles.length > 0">
+            Selected: {{ selectedFiles.length }}
+          </kbd>
+          <button
+            v-if="selectedFiles.length > 0"
+            class="secondary outline"
+            @click="clearSelection()"
+          >
+            Clear selection
+          </button>
+          <button
+            v-if="selectedFiles.length > 0"
+            class="secondary outline"
+            :disabled="downloading"
+            @click="downloadSelected()"
+          >
+            <i class="bi bi-download"></i>
+            {{ downloading ? "Zipping..." : "Download selected" }}
+          </button>
+          <button
+            class="secondary outline"
+            :disabled="downloading"
+            @click="downloadAll()"
+          >
+            <i class="bi bi-file-earmark-zip"></i>
+            {{ downloading ? "Zipping..." : "Download all (.zip)" }}
+          </button>
+        </div>
       </div>
       <div class="share-file-list">
         <div v-if="files.length === 0" class="share-state">
-          <i class="bi bi-folder2-open"></i>
-          <p>No photos in this folder.</p>
+          <i :class="isFolder ? 'bi bi-folder2-open' : 'bi bi-images'"></i>
+          <p>
+            {{
+              isFolder
+                ? "No photos in this folder."
+                : "This share has no photos."
+            }}
+          </p>
         </div>
         <template v-else>
           <Gallery
             :files="files"
-            :enableSelection="false"
+            :enableSelection="true"
+            :selectedFiles="selectedFiles"
             @focusGalleryItem="focusGalleryItem"
+            @onFileSelected="onFileSelected"
           />
           <button
             v-if="hasMore"
@@ -62,9 +114,11 @@
         v-if="displayFullScreen"
         :galleryFiles="files"
         :initialPosition="positionFocus"
+        :selectedFiles="selectedFiles"
         :shareToken="token"
         class="share-item-focus"
         @onFileClosed="displayFullScreen = false"
+        @onFileSelected="onFileSelected"
       />
     </template>
   </div>
@@ -72,6 +126,9 @@
 
 <script>
 import { ShareService } from "~~/services/ShareService";
+import { BulkDownloadService } from "~~/services/BulkDownloadService";
+import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
+import { findIndex } from "lodash";
 
 export default {
   data() {
@@ -82,18 +139,44 @@ export default {
       folders: [],
       currentFolder: null,
       files: [],
+      selectedFiles: [],
       currentPage: 0,
       pageSize: 60,
       hasMore: false,
       loading: false,
       loadingMore: false,
+      downloading: false,
       displayFullScreen: false,
       positionFocus: 0,
     };
   },
   computed: {
-    folderName() {
-      return this.shareMeta ? this.shareMeta.folderName : "Shared folder";
+    scope() {
+      return this.shareMeta ? this.shareMeta.scope : "folder";
+    },
+    isFolder() {
+      return this.scope === "folder";
+    },
+    shareTitle() {
+      if (!this.shareMeta) {
+        return "Shared";
+      }
+      if (this.scope === "album") {
+        return this.shareMeta.albumName || this.shareMeta.name || "Album";
+      }
+      if (this.scope === "file") {
+        return this.shareMeta.fileName || this.shareMeta.name || "File";
+      }
+      return this.shareMeta.folderName || "Shared folder";
+    },
+    shareIcon() {
+      if (this.scope === "album") return "bi bi-collection";
+      if (this.scope === "file") return "bi bi-file-earmark-image";
+      return "bi bi-images";
+    },
+    photoCountText() {
+      const count = this.shareMeta ? this.shareMeta.photoCount || 0 : 0;
+      return count === 1 ? "1 photo" : `${count} photos`;
     },
     // The shared subtree root: the listed folder with the shortest path.
     shareRoot() {
@@ -132,7 +215,7 @@ export default {
         {
           id: this.shareRoot.id,
           path: this.shareRoot.folderpath,
-          name: this.folderName,
+          name: this.shareTitle,
         },
       ];
       const rootPath =
@@ -150,7 +233,7 @@ export default {
     },
   },
   async created() {
-    this.token = String(useRoute().query.t || "");
+    this.token = String(this.$route.query.t || "");
     if (!this.token) {
       this.invalidToken = true;
       return;
@@ -158,11 +241,13 @@ export default {
     this.loading = true;
     try {
       this.shareMeta = await ShareService.getMeta(this.token);
-      this.folders = await ShareService.getFolders(this.token);
-      this.currentFolder = this.shareRoot;
-      if (!this.currentFolder) {
-        this.invalidToken = true;
-        return;
+      if (this.isFolder) {
+        this.folders = await ShareService.getFolders(this.token);
+        this.currentFolder = this.shareRoot;
+        if (!this.currentFolder) {
+          this.invalidToken = true;
+          return;
+        }
       }
       await this.fetchFiles(true);
     } catch {
@@ -173,21 +258,31 @@ export default {
   },
   methods: {
     async fetchFiles(reset = false) {
-      if (!this.currentFolder) return;
       if (reset) {
         this.currentPage = 0;
         this.files = [];
+        this.selectedFiles = [];
       }
-      const result = await ShareService.getFiles(
-        this.token,
-        this.currentFolder.id,
-        {
+      let result;
+      if (this.isFolder) {
+        if (!this.currentFolder) return;
+        result = await ShareService.getFiles(
+          this.token,
+          this.currentFolder.id,
+          {
+            page: this.currentPage,
+            pageSize: this.pageSize,
+            sortOrder: "desc",
+            includeSubFolders: false,
+          },
+        );
+      } else {
+        result = await ShareService.getItems(this.token, {
           page: this.currentPage,
           pageSize: this.pageSize,
           sortOrder: "desc",
-          includeSubFolders: false,
-        },
-      );
+        });
+      }
       const newFiles = result.files || [];
       this.files = reset ? newFiles : [...this.files, ...newFiles];
       this.hasMore =
@@ -199,6 +294,9 @@ export default {
       try {
         this.currentPage += 1;
         await this.fetchFiles();
+      } catch (err) {
+        this.currentPage -= 1;
+        handleError(err);
       } finally {
         this.loadingMore = false;
       }
@@ -218,9 +316,62 @@ export default {
         this.loading = false;
       }
     },
+    onFileSelected(file) {
+      const selectedIndex = findIndex(this.selectedFiles, { id: file.id });
+      if (selectedIndex < 0) {
+        this.selectedFiles.push(file);
+      } else {
+        this.selectedFiles.splice(selectedIndex, 1);
+      }
+    },
+    clearSelection() {
+      this.selectedFiles = [];
+    },
+    async downloadSelected() {
+      if (this.downloading || this.selectedFiles.length === 0) return;
+      this.downloading = true;
+      try {
+        await BulkDownloadService.downloadShareZip(
+          this.token,
+          this.selectedFiles,
+        );
+        EventBus.emit(EventTypes.ALERT_MESSAGE, { text: "Download started" });
+      } catch (err) {
+        handleError(err);
+      } finally {
+        this.downloading = false;
+      }
+    },
+    async downloadAll() {
+      if (this.downloading) return;
+      this.downloading = true;
+      try {
+        await BulkDownloadService.downloadShareZip(this.token, this.files, {
+          all: true,
+        });
+        EventBus.emit(EventTypes.ALERT_MESSAGE, { text: "Download started" });
+      } catch (err) {
+        handleError(err);
+      } finally {
+        this.downloading = false;
+      }
+    },
     focusGalleryItem(file) {
       this.displayFullScreen = true;
       this.positionFocus = this.files.findIndex((f) => f.id === file.id);
+    },
+    displaySize(size) {
+      if (!size) return "";
+      if (size > 1000000000) {
+        return (Number(size) / 1000000000).toFixed(1) + " GB";
+      }
+      if (size > 1000000) {
+        return (Number(size) / 1000000).toFixed(1) + " MB";
+      }
+      if (size > 1000) {
+        return (Number(size) / 1000).toFixed(1) + " KB";
+      }
+      return size + " B";
     },
     formatDate(date) {
       if (!date) return "";
@@ -248,11 +399,28 @@ export default {
 .share-title {
   margin: 0;
   font-size: var(--font-xl);
+  word-break: break-word;
 }
-.share-expiry {
+.share-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin: 0;
   font-size: var(--font-sm);
-  opacity: 0.6;
-  font-weight: normal;
+  opacity: 0.8;
+}
+.share-stat {
+  padding: 0.1em 0.5em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+}
+.share-expiry-notice {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--color-warning);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
 }
 .share-breadcrumb {
   display: flex;
@@ -273,6 +441,16 @@ export default {
   width: auto;
   margin: 0;
   padding: var(--space-xs) var(--space-md);
+}
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.share-actions button {
+  width: auto;
+  margin: 0;
 }
 .share-file-list {
   overflow: auto;

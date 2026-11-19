@@ -4,6 +4,7 @@ import * as path from "path";
 import { Span } from "@opentelemetry/sdk-trace";
 import { StandardLogger, StandardTracer } from "@devopsplaybook.io/otel-utils";
 import {
+  SqlDbUtilsExecSQL,
   SqlDbUtilsInit,
   SqlDbUtilsQuerySQL,
   SqlDbUtilsSetOTel,
@@ -59,7 +60,12 @@ describe("AccountDataDelete", () => {
 
   async function seedAccount(
     name: string,
-  ): Promise<{ account: AccountDefinition; folder: Folder; file: File }> {
+  ): Promise<{
+    account: AccountDefinition;
+    folder: Folder;
+    file: File;
+    albumId: string;
+  }> {
     const account = new AccountDefinition();
     account.name = name;
     account.rootpath = path.join(baseDir, "cloud", name);
@@ -83,12 +89,33 @@ describe("AccountDataDelete", () => {
 
     await ShareDataCreate(span, account.id, folder.id);
 
+    const albumId = `album-${account.id}`;
+    const now = new Date().toISOString();
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO albums (id, accountId, name, coverFileId, orderMode, dateCreated, dateUpdated, info) VALUES (?, ?, ?, ?, 'capture', ?, ?, '{}')",
+      [albumId, account.id, "Photos", file.id, now, now],
+    );
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO album_items (albumId, fileId, position, dateAdded) VALUES (?, ?, 1, ?)",
+      [albumId, file.id, now],
+    );
+
     // Seed an account-owned cache subtree (plus a nested file).
     const cacheDir = path.join(dataDir, "cache", account.id, "a", "b");
     await fs.ensureDir(cacheDir);
     await fs.writeFile(path.join(cacheDir, "thumbnail.webp"), "cached");
 
-    return { account, folder, file };
+    return { account, folder, file, albumId };
+  }
+
+  function countAlbumItems(albumId: string): number {
+    return SqlDbUtilsQuerySQL(
+      span,
+      "SELECT COUNT(*) as count FROM album_items WHERE albumId = ?",
+      [albumId],
+    )[0].count;
   }
 
   it("cascades files, folders, shares and the cache subtree of one account only", async () => {
@@ -105,6 +132,8 @@ describe("AccountDataDelete", () => {
     expect(countRows("files", target.account.id)).toBe(0);
     expect(countRows("folders", target.account.id)).toBe(0);
     expect(countRows("shares", target.account.id)).toBe(0);
+    expect(countRows("albums", target.account.id)).toBe(0);
+    expect(countAlbumItems(target.albumId)).toBe(0);
     expect(await FolderDataGet(span, target.folder.id)).toBeNull();
     expect(await FileDataGet(span, target.file.id)).toBeNull();
     expect(fs.existsSync(path.join(dataDir, "cache", target.account.id))).toBe(
@@ -118,6 +147,8 @@ describe("AccountDataDelete", () => {
     expect(countRows("files", survivor.account.id)).toBe(1);
     expect(countRows("folders", survivor.account.id)).toBe(1);
     expect(countRows("shares", survivor.account.id)).toBe(1);
+    expect(countRows("albums", survivor.account.id)).toBe(1);
+    expect(countAlbumItems(survivor.albumId)).toBe(1);
     expect(
       fs.existsSync(path.join(dataDir, "cache", survivor.account.id)),
     ).toBe(true);

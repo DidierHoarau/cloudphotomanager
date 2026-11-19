@@ -23,6 +23,9 @@ import { TrashRoutes } from "./files/TrashRoutes";
 import { FolderDataInit } from "./folders/FolderData";
 import { SchedulerInit } from "./sync/Scheduler";
 import { ShareRoutes, ShareRoutesPublic } from "./shares/ShareRoutes";
+import { ShareDataInit } from "./shares/ShareData";
+import { ShareManagementRoutes } from "./shares/ShareManagementRoutes";
+import { AlbumRoutes } from "./albums/AlbumRoutes";
 import { SyncFileCacheInit } from "./sync/SyncFileCache";
 import { SyncNotificationsInit } from "./sync/SyncNotifications";
 import { SyncRoutes } from "./sync/SyncRoutes";
@@ -77,6 +80,7 @@ Promise.resolve().then(async () => {
   await SyncFileCacheInit(span, config);
   SyncNotificationsInit(span, config);
   await AuthInit(span, config);
+  ShareDataInit(span, config);
   MediaSigningInit(span, config);
   await FileDataInit(span, config);
   await FolderDataInit(span);
@@ -164,6 +168,14 @@ Promise.resolve().then(async () => {
 
   fastify.register(new ShareRoutesPublic().getRoutes, {
     prefix: "/api/share",
+  });
+
+  fastify.register(new AlbumRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/albums",
+  });
+
+  fastify.register(new ShareManagementRoutes().getRoutes, {
+    prefix: "/api/shares",
   });
 
   fastify.register(new SearchRoutes().getRoutes, {

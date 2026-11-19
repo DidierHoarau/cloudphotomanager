@@ -1,5 +1,6 @@
 import * as fs from "fs-extra";
 import * as path from "path";
+import * as zlib from "zlib";
 import { SqlDbUtilsExecSQL } from "@devopsplaybook.io/common-utils";
 import {
   routeSpecAuthHeaders,
@@ -46,6 +47,39 @@ function stubAccount(accountId: string, downloadFileOriginal: boolean) {
       },
     ),
   };
+}
+
+// Minimal zip central-directory reader: enough for specs to verify entry
+// names and (inflated) contents of archives produced by archiver.
+function zipEntries(zip: Buffer): Map<string, string> {
+  const entries = new Map<string, string>();
+  const eocd = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  if (eocd < 0) {
+    throw new Error("Not a zip archive (no EOCD)");
+  }
+  const centralSize = zip.readUInt32LE(eocd + 12);
+  const centralOffset = zip.readUInt32LE(eocd + 16);
+  const centralEnd = centralOffset + centralSize;
+  let pos = centralOffset;
+  while (pos + 46 <= centralEnd && zip.readUInt32LE(pos) === 0x02014b50) {
+    const method = zip.readUInt16LE(pos + 10);
+    const compressedSize = zip.readUInt32LE(pos + 20);
+    const nameLen = zip.readUInt16LE(pos + 28);
+    const extraLen = zip.readUInt16LE(pos + 30);
+    const commentLen = zip.readUInt16LE(pos + 32);
+    const localOffset = zip.readUInt32LE(pos + 42);
+    const name = zip.subarray(pos + 46, pos + 46 + nameLen).toString();
+    const localNameLen = zip.readUInt16LE(localOffset + 26);
+    const localExtraLen = zip.readUInt16LE(localOffset + 28);
+    const dataStart = localOffset + 30 + localNameLen + localExtraLen;
+    const data = zip.subarray(dataStart, dataStart + compressedSize);
+    entries.set(
+      name,
+      method === 0 ? data.toString() : zlib.inflateRawSync(data).toString(),
+    );
+    pos += 46 + nameLen + extraLen + commentLen;
+  }
+  return entries;
 }
 
 describe("ShareRoutes", () => {
@@ -381,5 +415,319 @@ describe("ShareRoutes", () => {
       url: `/api/share/${token}/files/${fileShared.id}/download`,
     });
     expect(download.statusCode).toBe(404);
+  });
+
+  describe("album and single-file shares", () => {
+    let albumId: string;
+    let albumToken: string;
+    let albumShareId: string;
+    let duplicateFile: any;
+
+    beforeAll(async () => {
+      duplicateFile = await routeSpecCreateFile(
+        ctx,
+        accountA.id,
+        folderChild,
+        "in-shared.jpg",
+      );
+      const created = await ctx.fastify.inject({
+        method: "POST",
+        url: `/api/accounts/${accountA.id}/albums`,
+        headers: routeSpecAuthHeaders(tokenAdmin),
+        payload: { name: "Share album" },
+      });
+      expect(created.statusCode).toBe(201);
+      albumId = created.json().id;
+      const added = await ctx.fastify.inject({
+        method: "POST",
+        url: `/api/accounts/${accountA.id}/albums/${albumId}/items`,
+        headers: routeSpecAuthHeaders(tokenAdmin),
+        payload: {
+          fileIds: [fileShared.id, fileElsewhere.id, duplicateFile.id],
+        },
+      });
+      expect(added.statusCode).toBe(200);
+
+      const shared = await ctx.fastify.inject({
+        method: "POST",
+        url: "/api/shares",
+        headers: routeSpecAuthHeaders(tokenAdmin),
+        payload: {
+          accountId: accountA.id,
+          scope: "album",
+          scopeId: albumId,
+          expiresInDays: 2,
+        },
+      });
+      expect(shared.statusCode).toBe(201);
+      albumShareId = shared.json().shareId;
+      albumToken = decodeURIComponent(shared.json().sharePath.split("t=")[1]);
+    });
+
+    it("serves an album share across folders", async () => {
+      const meta = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/share/${albumToken}/meta`,
+      });
+      expect(meta.statusCode).toBe(200);
+      expect(meta.json().scope).toBe("album");
+      expect(meta.json().albumName).toBe("Share album");
+      expect(meta.json().photoCount).toBe(3);
+      expect(meta.json().dateExpires).toBeTruthy();
+
+      // Album shares have no folder navigation.
+      const folders = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/share/${albumToken}/folders`,
+      });
+      expect(folders.statusCode).toBe(404);
+
+      const items = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/share/${albumToken}/items?page=0&pageSize=10`,
+      });
+      expect(items.statusCode).toBe(200);
+      expect(items.json().total).toBe(3);
+      expect(items.json().files.map((f: any) => f.id).sort()).toEqual(
+        [fileShared.id, fileElsewhere.id, duplicateFile.id].sort(),
+      );
+
+      // Every member is individually downloadable, non-members are not.
+      for (const file of [fileShared, fileElsewhere, duplicateFile]) {
+        const download = await ctx.fastify.inject({
+          method: "GET",
+          url: `/api/share/${albumToken}/files/${file.id}/download`,
+        });
+        expect(download.statusCode).toBe(200);
+        expect(download.payload).toBe(`original-of-${file.filename}`);
+      }
+      const nonMember = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/share/${albumToken}/files/${fileChild.id}/download`,
+      });
+      expect(nonMember.statusCode).toBe(403);
+    });
+
+    it("zips the whole album or a validated selection with basename entries", async () => {
+      const all = await ctx.fastify.inject({
+        method: "POST",
+        url: `/api/share/${albumToken}/download`,
+      });
+      expect(all.statusCode).toBe(200);
+      expect(all.headers["content-type"]).toBe("application/zip");
+      const allEntries = zipEntries(all.rawPayload);
+      expect(Array.from(allEntries.keys()).sort()).toEqual(
+        [
+          "child/in-shared.jpg",
+          "elsewhere/in-elsewhere.jpg",
+          "shared/in-shared.jpg",
+        ].sort(),
+      );
+      expect(allEntries.get("elsewhere/in-elsewhere.jpg")).toBe(
+        "original-of-in-elsewhere.jpg",
+      );
+
+      const selected = await ctx.fastify.inject({
+        method: "POST",
+        url: `/api/share/${albumToken}/download`,
+        payload: { fileIdList: [fileElsewhere.id] },
+      });
+      expect(selected.statusCode).toBe(200);
+      const selectedEntries = zipEntries(selected.rawPayload);
+      expect(Array.from(selectedEntries.keys())).toEqual([
+        "elsewhere/in-elsewhere.jpg",
+      ]);
+
+      // A selection can never escape the album.
+      const outside = await ctx.fastify.inject({
+        method: "POST",
+        url: `/api/share/${albumToken}/download`,
+        payload: { fileIdList: [fileChild.id] },
+      });
+      expect(outside.statusCode).toBe(403);
+
+      const invalid = await ctx.fastify.inject({
+        method: "POST",
+        url: `/api/share/${albumToken}/download`,
+        payload: { fileIdList: [] },
+      });
+      expect(invalid.statusCode).toBe(400);
+
+      const tooMany = await ctx.fastify.inject({
+        method: "POST",
+        url: `/api/share/${albumToken}/download`,
+        payload: {
+          fileIdList: Array.from({ length: 501 }, (_, i) => `file-${i}`),
+        },
+      });
+      expect(tooMany.statusCode).toBe(400);
+    });
+
+    it("stops serving an album share when the item is removed", async () => {
+      const removed = await ctx.fastify.inject({
+        method: "DELETE",
+        url: `/api/accounts/${accountA.id}/albums/${albumId}/items`,
+        headers: routeSpecAuthHeaders(tokenAdmin),
+        payload: { fileIds: [duplicateFile.id] },
+      });
+      expect(removed.statusCode).toBe(200);
+
+      const download = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/share/${albumToken}/files/${duplicateFile.id}/download`,
+      });
+      expect(download.statusCode).toBe(403);
+
+      const items = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/share/${albumToken}/items?page=0&pageSize=10`,
+      });
+      expect(items.json().total).toBe(2);
+
+      const zip = await ctx.fastify.inject({
+        method: "POST",
+        url: `/api/share/${albumToken}/download`,
+      });
+      expect(zip.statusCode).toBe(200);
+      expect(Array.from(zipEntries(zip.rawPayload).keys()).sort()).toEqual(
+        ["elsewhere/in-elsewhere.jpg", "shared/in-shared.jpg"].sort(),
+      );
+    });
+
+    it("serves a single-file share with only that file", async () => {
+      const created = await ctx.fastify.inject({
+        method: "POST",
+        url: "/api/shares",
+        headers: routeSpecAuthHeaders(tokenAdmin),
+        payload: {
+          accountId: accountA.id,
+          scope: "file",
+          scopeId: fileShared.id,
+        },
+      });
+      expect(created.statusCode).toBe(201);
+      const token = decodeURIComponent(created.json().sharePath.split("t=")[1]);
+
+      const meta = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/share/${token}/meta`,
+      });
+      expect(meta.statusCode).toBe(200);
+      expect(meta.json()).toMatchObject({
+        scope: "file",
+        fileName: fileShared.filename,
+        photoCount: 1,
+      });
+
+      const folders = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/share/${token}/folders`,
+      });
+      expect(folders.statusCode).toBe(404);
+
+      const items = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/share/${token}/items`,
+      });
+      expect(items.statusCode).toBe(200);
+      expect(items.json().total).toBe(1);
+      expect(items.json().files.map((f: any) => f.id)).toEqual([fileShared.id]);
+
+      expect(
+        (
+          await ctx.fastify.inject({
+            method: "GET",
+            url: `/api/share/${token}/files/${fileShared.id}/download`,
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await ctx.fastify.inject({
+            method: "GET",
+            url: `/api/share/${token}/files/${fileChild.id}/download`,
+          })
+        ).statusCode,
+      ).toBe(403);
+
+      const zip = await ctx.fastify.inject({
+        method: "POST",
+        url: `/api/share/${token}/download`,
+        payload: { fileIdList: [fileShared.id] },
+      });
+      expect(zip.statusCode).toBe(200);
+      expect(Array.from(zipEntries(zip.rawPayload).keys())).toEqual([
+        "shared/in-shared.jpg",
+      ]);
+
+      const wrongSelection = await ctx.fastify.inject({
+        method: "POST",
+        url: `/api/share/${token}/download`,
+        payload: { fileIdList: [fileElsewhere.id] },
+      });
+      expect(wrongSelection.statusCode).toBe(403);
+    });
+
+    it("stops serving expired album and file shares", async () => {
+      const fileShare = await ctx.fastify.inject({
+        method: "POST",
+        url: "/api/shares",
+        headers: routeSpecAuthHeaders(tokenAdmin),
+        payload: {
+          accountId: accountA.id,
+          scope: "file",
+          scopeId: fileElsewhere.id,
+        },
+      });
+      const fileToken = decodeURIComponent(
+        fileShare.json().sharePath.split("t=")[1],
+      );
+
+      for (const shareId of [albumShareId, fileShare.json().shareId]) {
+        await SqlDbUtilsExecSQL(
+          ctx.span,
+          "UPDATE shares SET dateExpires = ? WHERE id = ?",
+          ["2000-01-01T00:00:00.000Z", shareId],
+        );
+      }
+
+      for (const [token, fileId] of [
+        [albumToken, fileShared.id],
+        [fileToken, fileElsewhere.id],
+      ] as const) {
+        expect(
+          (
+            await ctx.fastify.inject({
+              method: "GET",
+              url: `/api/share/${token}/meta`,
+            })
+          ).statusCode,
+        ).toBe(404);
+        expect(
+          (
+            await ctx.fastify.inject({
+              method: "GET",
+              url: `/api/share/${token}/items`,
+            })
+          ).statusCode,
+        ).toBe(404);
+        expect(
+          (
+            await ctx.fastify.inject({
+              method: "POST",
+              url: `/api/share/${token}/download`,
+            })
+          ).statusCode,
+        ).toBe(404);
+        expect(
+          (
+            await ctx.fastify.inject({
+              method: "GET",
+              url: `/api/share/${token}/files/${fileId}/download`,
+            })
+          ).statusCode,
+        ).toBe(404);
+      }
+    });
   });
 });

@@ -1,6 +1,6 @@
 /**
  * Lightweight IndexedDB wrapper with TTL support for application data caching.
- * Stores: accounts | folders | fileMetadata
+ * Stores: accounts | folders | fileMetadata | albums
  *
  * Entries are scoped per user: every key is stored as `u:<userId>:<key>` and
  * reads/writes are no-ops until setUserScope() names the current user, so a
@@ -8,9 +8,9 @@
  */
 
 const DB_NAME = "cloudphotomanager-cache";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
-const STORES = ["accounts", "folders", "fileMetadata"] as const;
+const STORES = ["accounts", "folders", "fileMetadata", "albums"] as const;
 type StoreName = (typeof STORES)[number];
 
 interface CacheEntry<T> {
@@ -25,6 +25,7 @@ const STORE_TTL: Record<StoreName, number> = {
   accounts: 24 * 60 * 60 * 1000,
   folders: 24 * 60 * 60 * 1000,
   fileMetadata: 60 * 60 * 1000,
+  albums: 60 * 60 * 1000,
 };
 
 /** Hard entry caps per store — oldest entries beyond the cap are evicted. */
@@ -32,6 +33,7 @@ const MAX_ENTRIES: Record<StoreName, number> = {
   accounts: 10,
   folders: 10,
   fileMetadata: 200,
+  albums: 50,
 };
 
 class LocalCache {
@@ -318,4 +320,6 @@ export const TTL = {
   /** 24 hours – folder trees, account list */
   FOLDERS: 24 * 60 * 60 * 1000,
   ACCOUNTS: 24 * 60 * 60 * 1000,
+  /** 1 hour – offline album list and first album page */
+  ALBUMS: 60 * 60 * 1000,
 } as const;
