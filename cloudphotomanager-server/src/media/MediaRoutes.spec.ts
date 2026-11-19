@@ -19,7 +19,18 @@ import {
   MediaSigningExp,
   MediaSigningUrl,
 } from "./MediaSigning";
-import { ShareDataCreate, ShareDataDelete } from "../shares/ShareData";
+import {
+  ShareDataCreate,
+  ShareDataCreateForScope,
+  ShareDataDelete,
+} from "../shares/ShareData";
+import {
+  AlbumDataCreate,
+  AlbumDataItemsAdd,
+  AlbumDataItemsRemove,
+} from "../albums/AlbumData";
+import { Album } from "../model/Album";
+import { SqlDbUtilsExecSQL } from "@devopsplaybook.io/common-utils";
 
 // The missing-asset path enqueues a cache rebuild; keep it from running
 // asynchronously after the suite has torn down.
@@ -307,5 +318,107 @@ describe("MediaRoutes", () => {
     );
     const url = userUrl(pending);
     expect((await get(url, restrictedToken)).statusCode).toBe(404);
+  });
+
+  it("enforces live album membership on album-share media", async () => {
+    const album = new Album(accountA.id, "Media album");
+    await AlbumDataCreate(ctx.span, album);
+    await AlbumDataItemsAdd(ctx.span, album.id, [fileA.id]);
+    const created = await ShareDataCreateForScope(ctx.span, {
+      accountId: accountA.id,
+      scope: "album",
+      scopeId: album.id,
+    });
+    const url = MediaSigningUrl({
+      kind: "share",
+      accountId: accountA.id,
+      fileId: fileA.id,
+      asset: "thumbnail.webp",
+      exp: MediaSigningExp(),
+      subjectId: created.share.id,
+      subjectVersion: 0,
+    });
+    expect((await get(url)).statusCode).toBe(200);
+
+    // A file that is not a member is denied even with a valid signature.
+    const other = await routeSpecCreateFile(
+      ctx,
+      accountA.id,
+      folderAPhotos,
+      "not-member.jpg",
+    );
+    await routeSpecCreateFileCacheAssets(ctx, other);
+    const otherUrl = MediaSigningUrl({
+      kind: "share",
+      accountId: accountA.id,
+      fileId: other.id,
+      asset: "thumbnail.webp",
+      exp: MediaSigningExp(),
+      subjectId: created.share.id,
+      subjectVersion: 0,
+    });
+    expect((await get(otherUrl)).statusCode).toBe(403);
+
+    // Removing the member stops the same signed URL.
+    await AlbumDataItemsRemove(ctx.span, album.id, [fileA.id]);
+    expect((await get(url)).statusCode).toBe(403);
+  });
+
+  it("serves only the shared file of a single-file share", async () => {
+    const created = await ShareDataCreateForScope(ctx.span, {
+      accountId: accountA.id,
+      scope: "file",
+      scopeId: fileA.id,
+    });
+    const url = MediaSigningUrl({
+      kind: "share",
+      accountId: accountA.id,
+      fileId: fileA.id,
+      asset: "thumbnail.webp",
+      exp: MediaSigningExp(),
+      subjectId: created.share.id,
+      subjectVersion: 0,
+    });
+    expect((await get(url)).statusCode).toBe(200);
+
+    await routeSpecCreateFileCacheAssets(ctx, fileB);
+    const otherUrl = MediaSigningUrl({
+      kind: "share",
+      accountId: accountB.id,
+      fileId: fileB.id,
+      asset: "thumbnail.webp",
+      exp: MediaSigningExp(),
+      subjectId: created.share.id,
+      subjectVersion: 0,
+    });
+    expect((await get(otherUrl)).statusCode).toBe(403);
+  });
+
+  it("stops album and file share media on expiry", async () => {
+    const album = new Album(accountA.id, "Expiring album");
+    await AlbumDataCreate(ctx.span, album);
+    await AlbumDataItemsAdd(ctx.span, album.id, [fileA.id]);
+    const created = await ShareDataCreateForScope(ctx.span, {
+      accountId: accountA.id,
+      scope: "album",
+      scopeId: album.id,
+    });
+    const url = MediaSigningUrl({
+      kind: "share",
+      accountId: accountA.id,
+      fileId: fileA.id,
+      asset: "thumbnail.webp",
+      exp: MediaSigningExp(),
+      subjectId: created.share.id,
+      subjectVersion: 0,
+    });
+    expect((await get(url)).statusCode).toBe(200);
+
+    await SqlDbUtilsExecSQL(
+      ctx.span,
+      "UPDATE shares SET dateExpires = ? WHERE id = ?",
+      ["2000-01-01T00:00:00.000Z", created.share.id],
+    );
+    expect((await get(url)).statusCode).toBe(404);
   });
 });

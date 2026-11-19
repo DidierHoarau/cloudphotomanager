@@ -137,6 +137,13 @@
         >
           <i class="bi bi-arrows-move"></i> Move...
         </button>
+        <button
+          v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
+          class="secondary outline"
+          v-on:click="clickedAddToAlbum()"
+        >
+          <i class="bi bi-collection"></i> Add to Album...
+        </button>
       </div>
       <div class="search-item-list">
         <Loading v-if="loading" />
@@ -169,6 +176,11 @@
         v-if="activeOperation == 'move'"
         :files="selectedFiles"
         @onDone="onMoveDone"
+      />
+      <DialogAddToAlbum
+        v-if="activeOperation == 'add-to-album'"
+        :files="selectedFiles"
+        @onDone="onAddToAlbumDone"
       />
     </div>
   </SearchLayout>
@@ -398,6 +410,13 @@ export default {
     },
     clickedMove() {
       this.activeOperation = "move";
+    },
+    clickedAddToAlbum() {
+      this.activeOperation = "add-to-album";
+    },
+    onAddToAlbumDone() {
+      this.activeOperation = "";
+      this.selectedFiles = [];
     },
     onMoveDone() {
       this.activeOperation = "";

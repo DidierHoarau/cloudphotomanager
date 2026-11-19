@@ -18,6 +18,12 @@ export function getSettingsTabs(): SettingsTab[] {
       show: adminOnly,
     },
     {
+      id: "shares",
+      label: "Shares",
+      to: "/settings/shares",
+      show: adminOnly,
+    },
+    {
       id: "sync",
       label: "Sync Queue",
       to: "/settings/sync",

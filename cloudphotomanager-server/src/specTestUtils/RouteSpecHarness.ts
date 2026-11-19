@@ -92,6 +92,7 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   const userPassword = await import("../users/UserPassword");
   const auth = await import("../users/Auth");
   const mediaSigning = await import("../media/MediaSigning");
+  const shareData = await import("../shares/ShareData");
 
   await syncFailures.SyncFailuresInit(span);
   await syncQueue.SyncQueueInit(span);
@@ -99,6 +100,7 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   // AuthInit generates and persists JWT_KEY when it is not set, exactly like
   // the real boot path.
   await auth.AuthInit(span, config);
+  shareData.ShareDataInit(span, config as any);
   mediaSigning.MediaSigningInit(span, config);
   await fileData.FileDataInit(span, config);
   await folderData.FolderDataInit(span);
@@ -128,6 +130,10 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   const { ShareRoutes, ShareRoutesPublic } = await import(
     "../shares/ShareRoutes"
   );
+  const { ShareManagementRoutes } = await import(
+    "../shares/ShareManagementRoutes"
+  );
+  const { AlbumRoutes } = await import("../albums/AlbumRoutes");
   const { SearchRoutes } = await import("../analysis/SearchRoutes");
   const { AnalysisRoutes } = await import("../analysis/AnalysisRoutes");
   const { SyncRoutes } = await import("../sync/SyncRoutes");
@@ -188,6 +194,12 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   });
   await fastify.register(new ShareRoutesPublic().getRoutes, {
     prefix: "/api/share",
+  });
+  await fastify.register(new AlbumRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/albums",
+  });
+  await fastify.register(new ShareManagementRoutes().getRoutes, {
+    prefix: "/api/shares",
   });
   await fastify.register(new SearchRoutes().getRoutes, {
     prefix: "/api/accounts/:accountId/files/search",

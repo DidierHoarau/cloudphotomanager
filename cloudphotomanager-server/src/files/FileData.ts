@@ -46,7 +46,7 @@ export async function FileDataGet(context: Span, id: string): Promise<File> {
     if (rawData.length === 0) {
       return null;
     }
-    return fromRaw(rawData[0]);
+    return FileDataFromRaw(rawData[0]);
   } finally {
     span.end();
   }
@@ -64,7 +64,7 @@ export async function FileDataListForAccount(
   );
   const files = [];
   rawData.forEach((fileRaw) => {
-    files.push(fromRaw(fileRaw));
+    files.push(FileDataFromRaw(fileRaw));
   });
   span.end();
   return files;
@@ -105,7 +105,7 @@ export async function FileDataListByFolder(
   );
   const files = [];
   rawData.forEach((fileRaw) => {
-    files.push(fromRaw(fileRaw));
+    files.push(FileDataFromRaw(fileRaw));
   });
   span.end();
   return files;
@@ -343,7 +343,18 @@ export async function FileDataDelete(
   accountId: string,
 ): Promise<void> {
   const span = OTelTracer().startSpan("FileDataDelete", context);
-  await SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE id = ?", [id]);
+  // Album memberships and covers must not outlive the file row; a cover falls
+  // back to none so the album stays valid.
+  const apply = SqlDbUtilsGetDatabase().transaction(() => {
+    SqlDbUtilsExecSQL(span, "DELETE FROM album_items WHERE fileId = ?", [id]);
+    SqlDbUtilsExecSQL(
+      span,
+      "UPDATE albums SET coverFileId = NULL WHERE coverFileId = ?",
+      [id],
+    );
+    SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE id = ?", [id]);
+  });
+  apply();
   FolderDataCacheCountsMarkDirty(accountId);
   span.end();
 }
@@ -437,6 +448,80 @@ export async function FileDataGetCount(context: Span): Promise<number> {
   return count;
 }
 
+// Count and total size (from the recorded file info) of the non-trashed files
+// in one folder or a whole subtree, with the same optional grant filter used
+// by the listings.
+export async function FileDataStatsForFolderSubtree(
+  context: Span,
+  accountId: string,
+  folderpath: string,
+  permittedFolderIds: string[] | null = null,
+): Promise<{ count: number; size: number }> {
+  const span = OTelTracer().startSpan("FileData_statsForFolderSubtree", context);
+  try {
+    const subtreePrefix = folderpath === "/" ? "/" : `${folderpath}/`;
+    const subtreePattern = `${SqlEscapeLike(subtreePrefix)}%`;
+    const filter =
+      permittedFolderIds === null
+        ? ""
+        : " AND folderId IN (SELECT value FROM json_each(?)) ";
+    const params: any[] = [accountId, accountId, folderpath, subtreePattern];
+    if (permittedFolderIds !== null) {
+      params.push(JSON.stringify(permittedFolderIds));
+    }
+    const rows = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT COUNT(*) AS count, COALESCE(SUM(CAST(json_extract(info, '$.size') AS INTEGER)), 0) AS size " +
+        "FROM files WHERE accountId = ? AND COALESCE(trashed, 0) = 0 " +
+        "AND folderId IN (SELECT id FROM folders WHERE accountId = ? AND (folderpath = ? OR folderpath LIKE ? ESCAPE '\\'))" +
+        filter,
+      params,
+    );
+    return statsFromRows(rows);
+  } finally {
+    span.end();
+  }
+}
+
+export async function FileDataStatsForFolder(
+  context: Span,
+  accountId: string,
+  folderId: string,
+  permittedFolderIds: string[] | null = null,
+): Promise<{ count: number; size: number }> {
+  const span = OTelTracer().startSpan("FileData_statsForFolder", context);
+  try {
+    const filter =
+      permittedFolderIds === null
+        ? ""
+        : " AND folderId IN (SELECT value FROM json_each(?)) ";
+    const params: any[] = [accountId, folderId];
+    if (permittedFolderIds !== null) {
+      params.push(JSON.stringify(permittedFolderIds));
+    }
+    const rows = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT COUNT(*) AS count, COALESCE(SUM(CAST(json_extract(info, '$.size') AS INTEGER)), 0) AS size " +
+        "FROM files WHERE accountId = ? AND folderId = ? AND COALESCE(trashed, 0) = 0" +
+        filter,
+      params,
+    );
+    return statsFromRows(rows);
+  } finally {
+    span.end();
+  }
+}
+
+function statsFromRows(rows: any[]): { count: number; size: number } {
+  if (rows.length === 0) {
+    return { count: 0, size: 0 };
+  }
+  return {
+    count: Number(rows[0].count) || 0,
+    size: Number(rows[0].size) || 0,
+  };
+}
+
 // Re-keys a file after a rename/move: only id, folderId and filename change,
 // so curation (favorite, trash, keywords) and sync state survive. Returns the
 // new id (unchanged when the derived id is the same).
@@ -468,6 +553,28 @@ export async function FileDataReKey(
       // A stale row already at the destination would violate the id UNIQUE
       // constraint: the cloud listing is authoritative for the moved item.
       SqlDbUtilsExecSQL(span, "DELETE FROM files WHERE id = ?", [newFileId]);
+      // Album memberships and single-file shares follow the file id; a cover
+      // pointing at the moved file stays on the same photo. The destination's
+      // stale membership (if any) is dropped first to avoid a primary-key
+      // conflict.
+      SqlDbUtilsExecSQL(span, "DELETE FROM album_items WHERE fileId = ?", [
+        newFileId,
+      ]);
+      SqlDbUtilsExecSQL(
+        span,
+        "UPDATE album_items SET fileId = ? WHERE fileId = ?",
+        [newFileId, fileId],
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        "UPDATE albums SET coverFileId = ? WHERE coverFileId = ?",
+        [newFileId, fileId],
+      );
+      SqlDbUtilsExecSQL(
+        span,
+        "UPDATE shares SET fileId = ? WHERE scope = 'file' AND fileId = ?",
+        [newFileId, fileId],
+      );
       SqlDbUtilsExecSQL(
         span,
         "UPDATE files SET id = ?, folderId = ?, filename = ? WHERE id = ?",
@@ -513,7 +620,7 @@ export async function FileDataListByFolderPaginated(
   );
   const files: File[] = [];
   rawData.forEach((fileRaw) => {
-    files.push(fromRaw(fileRaw));
+    files.push(FileDataFromRaw(fileRaw));
   });
   span.end();
   return { files, total };
@@ -542,7 +649,7 @@ export async function FileDataListByFolderRecursivePaginated(
     ? " AND COALESCE(favorite, 0) = 1 "
     : "";
   // One pass for page + total: COUNT(*) OVER () avoids materializing the
-  // folder subtree a second time just for the count. fromRaw() ignores the
+  // folder subtree a second time just for the count. FileDataFromRaw() ignores the
   // extra column.
   const rawData = await SqlDbUtilsQuerySQL(
     span,
@@ -554,7 +661,7 @@ export async function FileDataListByFolderRecursivePaginated(
   if (rawData.length > 0) {
     total = rawData[0].total;
     rawData.forEach((fileRaw) => {
-      files.push(fromRaw(fileRaw));
+      files.push(FileDataFromRaw(fileRaw));
     });
   } else if (offset > 0) {
     // An empty page past the end yields no row, so the window total is
@@ -575,15 +682,31 @@ export async function FileDataDeleteNoFolder(
   accountId: string,
 ): Promise<void> {
   const span = OTelTracer().startSpan("FileDataDeleteNoFolder", context);
-  await SqlDbUtilsExecSQL(
-    span,
-    `DELETE FROM files
-     WHERE accountId = ?
-       AND folderId NOT IN (
-         SELECT id FROM folders WHERE accountId = ?
-       )`,
-    [accountId, accountId],
-  );
+  const orphanCondition =
+    "SELECT id FROM files WHERE accountId = ? AND folderId NOT IN (SELECT id FROM folders WHERE accountId = ?)";
+  const params = [accountId, accountId];
+  const apply = SqlDbUtilsGetDatabase().transaction(() => {
+    SqlDbUtilsExecSQL(
+      span,
+      `DELETE FROM album_items WHERE fileId IN (${orphanCondition})`,
+      params,
+    );
+    SqlDbUtilsExecSQL(
+      span,
+      `UPDATE albums SET coverFileId = NULL WHERE coverFileId IN (${orphanCondition})`,
+      params,
+    );
+    SqlDbUtilsExecSQL(
+      span,
+      `DELETE FROM files
+       WHERE accountId = ?
+         AND folderId NOT IN (
+           SELECT id FROM folders WHERE accountId = ?
+         )`,
+      params,
+    );
+  });
+  apply();
   FolderDataCacheCountsMarkDirty(accountId);
   span.end();
 }
@@ -612,7 +735,7 @@ export async function FileDataListForAccountPaginated(
   );
   const files: File[] = [];
   rawData.forEach((fileRaw) => {
-    files.push(fromRaw(fileRaw));
+    files.push(FileDataFromRaw(fileRaw));
   });
   span.end();
   return { files, total };
@@ -645,7 +768,7 @@ export async function FileDataListTrashPaginated(
   if (rawData.length > 0) {
     total = rawData[0].total;
     rawData.forEach((fileRaw) => {
-      files.push(fromRaw(fileRaw));
+      files.push(FileDataFromRaw(fileRaw));
     });
   } else if (page > 0) {
     const countRaw = await SqlDbUtilsQuerySQL(
@@ -736,7 +859,7 @@ export async function FileDataListByMonthPaginated(
   if (rawData.length > 0) {
     total = rawData[0].total;
     rawData.forEach((fileRaw) => {
-      files.push(fromRaw(fileRaw));
+      files.push(FileDataFromRaw(fileRaw));
     });
   } else if (page > 0) {
     const countParams: any[] = [accountId, monthStartIso, monthEndIsoExclusive];
@@ -959,7 +1082,7 @@ export async function FileDataResetEnrichment(
   }
 }
 
-function fromRaw(fileRaw: any): File {
+export function FileDataFromRaw(fileRaw: any): File {
   const file = new File(fileRaw.accountId, fileRaw.folderId, fileRaw.filename);
   file.id = fileRaw.id;
   file.idCloud = fileRaw.idCloud;

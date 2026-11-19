@@ -162,7 +162,7 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(14);
+    expect(dbVersion()).toBe(15);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
     const enrichmentColumns = SqlDbUtilsQuerySQL(
       undefined,
@@ -195,6 +195,69 @@ describe("SQL migrations", () => {
       "SELECT name FROM sqlite_master WHERE type='index' AND name = 'duplicate_ignores_accountId_dateIgnored'",
     );
     expect(ignoreIndex.length).toBe(1);
+
+    const albumColumns = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM pragma_table_info('albums') ORDER BY name",
+    ).map((row) => row.name);
+    expect(albumColumns).toEqual([
+      "accountId",
+      "coverFileId",
+      "dateCreated",
+      "dateUpdated",
+      "id",
+      "info",
+      "name",
+      "orderMode",
+      "ownerUserId",
+    ]);
+    const albumItemColumns = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM pragma_table_info('album_items') ORDER BY name",
+    ).map((row) => row.name);
+    expect(albumItemColumns).toEqual([
+      "albumId",
+      "dateAdded",
+      "fileId",
+      "position",
+    ]);
+    const albumItemPk = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM pragma_table_info('album_items') WHERE pk > 0 ORDER BY pk",
+    ).map((row) => row.name);
+    expect(albumItemPk).toEqual(["albumId", "fileId"]);
+    const shareColumns = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM pragma_table_info('shares') WHERE name IN " +
+        "('scope', 'albumId', 'fileId', 'lastAccessDate', 'ownerUserId', 'tokenMode') ORDER BY name",
+    ).map((row) => row.name);
+    expect(shareColumns).toEqual([
+      "albumId",
+      "fileId",
+      "lastAccessDate",
+      "ownerUserId",
+      "scope",
+      "tokenMode",
+    ]);
+    const shareDefaults = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name, dflt_value FROM pragma_table_info('shares') WHERE name IN ('scope', 'tokenMode') ORDER BY name",
+    );
+    expect(shareDefaults).toEqual([
+      { name: "scope", dflt_value: "'folder'" },
+      { name: "tokenMode", dflt_value: "'random'" },
+    ]);
+    const newIndexes = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM sqlite_master WHERE type='index' AND name IN " +
+        "('albums_account', 'album_items_album', 'album_items_file', 'shares_account') ORDER BY name",
+    ).map((row) => row.name);
+    expect(newIndexes).toEqual([
+      "album_items_album",
+      "album_items_file",
+      "albums_account",
+      "shares_account",
+    ]);
   });
 
   it("init-0012 dedupes duplicate folders, repoints references and adds the unique index", async () => {
@@ -497,7 +560,7 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(14);
+    expect(dbVersion()).toBe(15);
 
     SqlDbUtilsExecSQL(
       undefined,
@@ -518,7 +581,7 @@ describe("SQL migrations", () => {
     );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(14);
+    expect(dbVersion()).toBe(15);
 
     const rows = SqlDbUtilsQuerySQL(
       undefined,

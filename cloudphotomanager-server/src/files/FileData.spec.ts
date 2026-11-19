@@ -6,6 +6,7 @@ import { StandardLogger, StandardTracer } from "@devopsplaybook.io/otel-utils";
 import {
   SqlDbUtilsExecSQL,
   SqlDbUtilsInit,
+  SqlDbUtilsQuerySQL,
   SqlDbUtilsSetOTel,
 } from "@devopsplaybook.io/common-utils";
 import { OTelSetTracer, OTelTracer } from "../OTelContext";
@@ -725,5 +726,70 @@ describe("FileData", () => {
       { year: 2022, month: 4, count: 1 },
       { year: 2022, month: 3, count: 2 },
     ]);
+  });
+
+  it("re-keys album membership and single-file shares, then delete clears them", async () => {
+    const file = makeFile("rekey-me.jpg");
+    await fileData.FileDataAdd(span, file);
+    const now = new Date().toISOString();
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO albums (id, accountId, name, coverFileId, orderMode, dateCreated, dateUpdated, info) " +
+        "VALUES ('album-rekey', ?, 'Rekey', ?, 'capture', ?, ?, '{}')",
+      [file.accountId, file.id, now, now],
+    );
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO album_items (albumId, fileId, position, dateAdded) VALUES ('album-rekey', ?, 1, ?)",
+      [file.id, now],
+    );
+    SqlDbUtilsExecSQL(
+      span,
+      "INSERT INTO shares (id, accountId, scope, folderId, fileId, tokenHash, dateCreated, info) " +
+        "VALUES ('share-rekey', ?, 'file', '', ?, 'hash', ?, '{}')",
+      [file.accountId, file.id, now],
+    );
+
+    const newId = await fileData.FileDataReKey(
+      span,
+      file.id,
+      "folder-2",
+      "renamed.jpg",
+    );
+    expect(newId).not.toBe(file.id);
+
+    expect(
+      SqlDbUtilsQuerySQL(
+        span,
+        "SELECT fileId FROM album_items WHERE albumId = 'album-rekey'",
+      ).map((row: any) => row.fileId),
+    ).toEqual([newId]);
+    expect(
+      SqlDbUtilsQuerySQL(
+        span,
+        "SELECT coverFileId FROM albums WHERE id = 'album-rekey'",
+      )[0].coverFileId,
+    ).toBe(newId);
+    expect(
+      SqlDbUtilsQuerySQL(
+        span,
+        "SELECT scope, fileId FROM shares WHERE id = 'share-rekey'",
+      ),
+    ).toEqual([{ scope: "file", fileId: newId }]);
+
+    await fileData.FileDataDelete(span, newId, file.accountId);
+    expect(
+      SqlDbUtilsQuerySQL(
+        span,
+        "SELECT fileId FROM album_items WHERE albumId = 'album-rekey'",
+      ),
+    ).toEqual([]);
+    expect(
+      SqlDbUtilsQuerySQL(
+        span,
+        "SELECT coverFileId FROM albums WHERE id = 'album-rekey'",
+      )[0].coverFileId,
+    ).toBeNull();
+    expect(await fileData.FileDataGet(span, newId)).toBeNull();
   });
 });

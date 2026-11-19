@@ -59,6 +59,13 @@
         <i class="bi bi-arrows-move"></i> Move...
       </button>
       <button
+        v-if="selectedFiles.length > 0 && authenticationStore.isAdmin"
+        class="secondary outline"
+        v-on:click="clickedAddToAlbum()"
+      >
+        <i class="bi bi-collection"></i> Add to Album...
+      </button>
+      <button
         v-if="authenticationStore.isAdmin"
         class="secondary outline"
         v-on:click="clickedMore()"
@@ -150,6 +157,11 @@
       :sortOrder="sortOrder"
       @onSave="onOptionsSaved"
       @onClose="activeOperation = ''"
+    />
+    <DialogAddToAlbum
+      v-if="activeOperation == 'add-to-album'"
+      :files="selectedFiles"
+      @onDone="onAddToAlbumDone"
     />
   </div>
 </template>
@@ -691,6 +703,13 @@ export default {
     },
     clickedMove() {
       this.activeOperation = "move";
+    },
+    clickedAddToAlbum() {
+      this.activeOperation = "add-to-album";
+    },
+    onAddToAlbumDone() {
+      this.activeOperation = "";
+      this.selectedFiles = [];
     },
     clickedSelect() {
       this.activeOperation = "select";

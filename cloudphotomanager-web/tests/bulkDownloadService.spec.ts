@@ -128,6 +128,46 @@ describe("BulkDownloadService buffered fallback", () => {
   });
 });
 
+describe("BulkDownloadService share archive", () => {
+  it("posts the selection to the token download endpoint", async () => {
+    stubWindow({ secure: false });
+    const { link } = stubDocument();
+    const fetchMock = vi.fn(async () => new Response("zip-bytes"));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    await BulkDownloadService.downloadShareZip("t0k/en", bulkFiles(2));
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/share/t0k%2Fen/download", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fileIdList: ["f0", "f1"] }),
+    });
+    expect(link.click).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests the whole share with an empty body for download-all", async () => {
+    stubWindow({ secure: false });
+    stubDocument();
+    const fetchMock = vi.fn(async () => new Response("zip-bytes"));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    await BulkDownloadService.downloadShareZip("tok", bulkFiles(2), {
+      all: true,
+      zipName: "album.zip",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/share/tok/download", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+  });
+});
+
 describe("BulkDownloadService streamed download", () => {
   it("pipes the response body into the picked file", async () => {
     const chunks: number[] = [];

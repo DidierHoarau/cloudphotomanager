@@ -7,9 +7,32 @@ export interface ShareLinkInfo {
   dateExpires: string | null;
 }
 
+export type ShareScope = "folder" | "album" | "file";
+
 export interface ShareMeta {
-  folderName: string;
+  scope: ShareScope;
+  name: string;
+  folderName?: string;
+  albumName?: string;
+  fileName?: string;
+  photoCount: number;
+  totalSize: number;
   dateExpires: string | null;
+}
+
+export interface ShareOverviewEntry {
+  id: string;
+  accountId: string;
+  scope: ShareScope;
+  scopeId: string;
+  targetName: string | null;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  dateCreated: string;
+  dateExpires: string | null;
+  lastAccessDate: string | null;
+  legacy: boolean;
+  sharePath: string | null;
 }
 
 export interface ShareFolderRef {
@@ -59,6 +82,82 @@ export class ShareService {
     await axios.delete(
       `${(await Config.get()).SERVER_URL}/accounts/${accountId}/folders/${folderId}/share/${shareId}`,
     );
+  }
+
+  // Scope-aware management, shared by folder, album and single-file links.
+
+  public static async createForScope(options: {
+    accountId: string;
+    scope: ShareScope;
+    scopeId: string;
+    expiresInDays?: number;
+  }): Promise<{ shareId: string; sharePath: string; dateExpires: string | null }> {
+    const body: any = {
+      accountId: options.accountId,
+      scope: options.scope,
+      scopeId: options.scopeId,
+    };
+    if (options.expiresInDays && options.expiresInDays > 0) {
+      body.expiresInDays = options.expiresInDays;
+    }
+    const res = await axios.post(
+      `${(await Config.get()).SERVER_URL}/shares`,
+      body,
+    );
+    return res.data;
+  }
+
+  public static async listAll(
+    filters: {
+      accountId?: string;
+      scope?: ShareScope;
+      scopeId?: string;
+    } = {},
+  ): Promise<ShareOverviewEntry[]> {
+    const params = new URLSearchParams();
+    if (filters.accountId) params.set("accountId", filters.accountId);
+    if (filters.scope) params.set("scope", filters.scope);
+    if (filters.scopeId) params.set("scopeId", filters.scopeId);
+    const query = params.toString();
+    const res = await axios.get(
+      `${(await Config.get()).SERVER_URL}/shares${query ? `?${query}` : ""}`,
+    );
+    return res.data.shares || [];
+  }
+
+  public static async revokeById(shareId: string): Promise<void> {
+    await axios.delete(
+      `${(await Config.get()).SERVER_URL}/shares/${encodeURIComponent(shareId)}`,
+    );
+  }
+
+  public static async rotate(
+    shareId: string,
+  ): Promise<{ shareId: string; sharePath: string; dateExpires: string | null }> {
+    const res = await axios.post(
+      `${(await Config.get()).SERVER_URL}/shares/${encodeURIComponent(shareId)}/rotate`,
+    );
+    return res.data;
+  }
+
+  /** Flat item listing for album and single-file shares. */
+  public static async getItems(
+    token: string,
+    options: {
+      page?: number;
+      pageSize?: number;
+      sortOrder?: "asc" | "desc";
+    } = {},
+  ): Promise<ShareFilePage> {
+    const params = new URLSearchParams({
+      page: String(options.page ?? 0),
+      pageSize: String(options.pageSize ?? 100),
+      sortOrder: options.sortOrder ?? "desc",
+    });
+    const res = await axios.get(
+      `${(await Config.get()).SERVER_URL}/share/${encodeURIComponent(token)}/items?${params}`,
+    );
+    return res.data;
   }
 
   // Public share endpoints (the token is the credential, no session)

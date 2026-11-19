@@ -63,7 +63,34 @@ export class BulkDownloadService {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ fileIdList: files.map((file) => file.id) }),
     };
+    await this.downloadArchive(url, requestInit, files, zipName);
+  }
 
+  // Public share archive: `all` lets the server zip the whole share (album or
+  // folder subtree) without the client enumerating every id.
+  public static async downloadShareZip(
+    token: string,
+    files: BulkDownloadFile[],
+    options: { all?: boolean; zipName?: string } = {},
+  ): Promise<void> {
+    const zipName = options.zipName || buildZipFilename();
+    const url = `${Config.sync.SERVER_URL}/share/${encodeURIComponent(token)}/download`;
+    const requestInit: RequestInit = {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        options.all ? {} : { fileIdList: files.map((file) => file.id) },
+      ),
+    };
+    await this.downloadArchive(url, requestInit, files, zipName);
+  }
+
+  private static async downloadArchive(
+    url: string,
+    requestInit: RequestInit,
+    files: BulkDownloadFile[],
+    zipName: string,
+  ): Promise<void> {
     const pickerHost = window as unknown as {
       showSaveFilePicker?: ShowSaveFilePicker;
       isSecureContext?: boolean;

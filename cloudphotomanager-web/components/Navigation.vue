@@ -49,6 +49,15 @@
       </li>
       <li v-if="authenticationStore.isAuthenticated">
         <NuxtLink
+          to="/albums"
+          aria-label="Albums"
+          title="Albums"
+          :class="baseFolder === 'albums' ? 'active' : 'inactive'"
+          ><i class="bi bi-collection" aria-hidden="true"></i
+        ></NuxtLink>
+      </li>
+      <li v-if="authenticationStore.isAuthenticated">
+        <NuxtLink
           to="/search"
           aria-label="Search"
           title="Search"

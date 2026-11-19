@@ -25,6 +25,19 @@
       @onConfirm="onConfirmDialog"
       @onCancel="showConfirmDialog = false"
     />
+    <DialogAddToAlbum
+      v-if="showAddToAlbum && file"
+      :files="[file]"
+      @onDone="showAddToAlbum = false"
+    />
+    <DialogShareActions
+      v-if="showShareActions && file"
+      :accountId="file.accountId"
+      scope="file"
+      :scopeId="file.id"
+      :targetName="file.filename || ''"
+      @onDone="showShareActions = false"
+    />
     <div class="action-bar">
       <div class="action-bar-main">
         <button
@@ -124,6 +137,20 @@
                 @click="onActionClicked('move')"
               >
                 Move
+              </button>
+              <button
+                v-if="!shareToken && authenticationStore.isAuthenticated"
+                class="action-menu-item"
+                @click="onActionClicked('add-to-album')"
+              >
+                Add to album
+              </button>
+              <button
+                v-if="!shareToken && authenticationStore.isAdmin"
+                class="action-menu-item"
+                @click="onActionClicked('share-file')"
+              >
+                Share file link
               </button>
               <button
                 v-if="authenticationStore.isAdmin"
@@ -289,6 +316,8 @@ export default {
       actionsMenuOpen: false,
       showFileInfo: false,
       showFileMetadata: false,
+      showAddToAlbum: false,
+      showShareActions: false,
       file: null,
       files: [],
       position: 0,
@@ -553,6 +582,14 @@ export default {
       if (!action) return;
       if (action === "move") {
         this.clickedMove();
+        return;
+      }
+      if (action === "add-to-album") {
+        this.showAddToAlbum = true;
+        return;
+      }
+      if (action === "share-file") {
+        this.showShareActions = true;
         return;
       }
       if (action === "delete") {
