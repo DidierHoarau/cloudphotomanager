@@ -792,4 +792,33 @@ describe("FileData", () => {
     ).toBeNull();
     expect(await fileData.FileDataGet(span, newId)).toBeNull();
   });
+
+  it("persists place fields and clears them on reset", async () => {
+    const file = makeFile("place.jpg");
+    await fileData.FileDataAdd(span, file);
+
+    file.placeCountry = "France";
+    file.placeCountryCode = "FR";
+    file.placeRegion = "Bretagne";
+    file.placeCity = "Rennes";
+    file.placeStatus = "ok";
+    await fileData.FileDataUpdatePlace(span, file);
+
+    const loaded = await fileData.FileDataGet(span, file.id);
+    expect(loaded.placeCountry).toBe("France");
+    expect(loaded.placeCountryCode).toBe("FR");
+    expect(loaded.placeRegion).toBe("Bretagne");
+    expect(loaded.placeCity).toBe("Rennes");
+    expect(loaded.placeStatus).toBe("ok");
+
+    await fileData.FileDataResetPlace(span, file.id);
+    const reset = await fileData.FileDataGet(span, file.id);
+    expect(reset.placeCountry).toBeNull();
+    expect(reset.placeCountryCode).toBeNull();
+    expect(reset.placeRegion).toBeNull();
+    expect(reset.placeCity).toBeNull();
+    expect(reset.placeStatus).toBeNull();
+
+    await fileData.FileDataDelete(span, file.id, file.accountId);
+  });
 });

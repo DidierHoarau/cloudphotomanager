@@ -93,6 +93,28 @@
               </NuxtLink>
             </span>
           </div>
+          <div v-if="placeLabel" class="dialog-info-item">
+            <span class="dialog-info-item-label">Place</span>
+            <span class="dialog-info-item-value">
+              <NuxtLink :to="placeLink" @click="clickedClose()">
+                {{ placeLabel }} <i class="bi bi-search"></i> Search photos here
+              </NuxtLink>
+            </span>
+          </div>
+          <div v-if="keywords.length > 0" class="dialog-info-item">
+            <span class="dialog-info-item-label">Keywords</span>
+            <span class="dialog-info-item-value dialog-keywords">
+              <NuxtLink
+                v-for="keyword in keywords"
+                :key="keyword"
+                class="dialog-keyword-chip"
+                :to="keywordLink(keyword)"
+                @click="clickedClose()"
+              >
+                {{ keyword }}
+              </NuxtLink>
+            </span>
+          </div>
           <div v-if="showEnrichment" class="dialog-info-item">
             <span class="dialog-info-item-label">Labels</span>
             <span class="dialog-info-item-value">
@@ -288,6 +310,12 @@ export default {
     clickedClose() {
       this.$emit("onClose");
     },
+    keywordLink(keyword) {
+      return {
+        path: "/search",
+        query: { accountId: this.file.accountId, keywords: keyword },
+      };
+    },
     formatDate(date) {
       if (!date) return "Unknown";
       return new Date(date).toLocaleString();
@@ -402,6 +430,36 @@ export default {
     gpsCoords() {
       return GeoUtils.getGpsCoords(this.file);
     },
+    placeLabel() {
+      return [
+        this.file.placeCity,
+        this.file.placeRegion,
+        this.file.placeCountry,
+      ]
+        .filter(Boolean)
+        .join(", ");
+    },
+    placeLink() {
+      const query = { accountId: this.file.accountId };
+      if (this.file.placeCountry) query.placeCountry = this.file.placeCountry;
+      if (this.file.placeRegion) query.placeRegion = this.file.placeRegion;
+      if (this.file.placeCity) query.placeCity = this.file.placeCity;
+      return { path: "/search", query };
+    },
+    keywords() {
+      const raw = String(this.file.keywords ?? "").trim();
+      if (!raw) return [];
+      const seen = new Set();
+      const tokens = [];
+      for (const token of raw.split(/\s+/)) {
+        if (!token) continue;
+        const key = token.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        tokens.push(token);
+      }
+      return tokens;
+    },
     displayCoords() {
       if (!this.gpsCoords) return "";
       return `${this.gpsCoords.lat.toFixed(5)}, ${this.gpsCoords.lon.toFixed(5)}`;
@@ -473,5 +531,21 @@ export default {
   align-items: center;
   justify-content: center;
   background: var(--color-overlay);
+}
+.dialog-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+.dialog-keyword-chip {
+  display: inline-flex;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  text-decoration: none;
+}
+.dialog-keyword-chip:hover {
+  background: var(--color-bg-hover);
 }
 </style>

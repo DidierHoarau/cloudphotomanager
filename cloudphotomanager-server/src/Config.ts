@@ -62,6 +62,12 @@ export class Config extends ConfigBase {
   // retry cap (see SyncNotifications). Empty = disabled.
   public SYNC_FAILURE_WEBHOOK_URL =
     process.env.SYNC_FAILURE_WEBHOOK_URL || "";
+  // Reverse-geocoding backfill: resolves place columns for existing files
+  // from the bundled dataset. Runs once after boot and daily afterwards.
+  public PLACE_BACKFILL_ENABLED = process.env.PLACE_BACKFILL_ENABLED !== "N";
+  public CRON_PLACE_BACKFILL = process.env.CRON_PLACE_BACKFILL || "15 2 * * *";
+  public PLACE_BACKFILL_BATCH_SIZE =
+    parseInt(process.env.PLACE_BACKFILL_BATCH_SIZE, 10) || 500;
 
   constructor() {
     super("cloudphotomanager-server");
@@ -96,6 +102,9 @@ export class Config extends ConfigBase {
     this.addConfigField({ field: "MEDIA_URL_TTL_SECONDS" });
     this.addConfigField({ field: "MEDIA_CACHE_SECONDS" });
     this.addConfigField({ field: "SYNC_FAILURE_WEBHOOK_URL" });
+    this.addConfigField({ field: "PLACE_BACKFILL_ENABLED" });
+    this.addConfigField({ field: "CRON_PLACE_BACKFILL" });
+    this.addConfigField({ field: "PLACE_BACKFILL_BATCH_SIZE" });
   }
 
   public async reload(): Promise<void> {

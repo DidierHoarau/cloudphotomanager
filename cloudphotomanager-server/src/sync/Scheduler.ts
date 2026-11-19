@@ -30,6 +30,7 @@ import {
 } from "./SyncFileCache";
 import { SyncQueueGetCounts, SyncQueueQueueItem } from "./SyncQueue";
 import { OTelLogger, OTelMeter, OTelTracer } from "../OTelContext";
+import { PlaceBackfillRun } from "../geo/PlaceBackfill";
 
 const logger = OTelLogger().createModuleLogger("Scheduler");
 
@@ -92,6 +93,30 @@ export async function SchedulerInit(context: Span, configIn: Config) {
       cronSpan.end();
     }
   });
+
+  // Reverse-geocoding backfill: progressive place names for existing rows.
+  // Kept outside the AUTO_SYNC guard so maintenance still runs on read-only
+  // deployments, and started in the background so boot is not blocked.
+  if (config.PLACE_BACKFILL_ENABLED) {
+    cron.schedule(config.CRON_PLACE_BACKFILL, async () => {
+      const cronSpan = OTelTracer().startSpan("SchedulerCronPlaceBackfill");
+      try {
+        await SchedulerRunPlaceBackfill(cronSpan);
+      } catch (err) {
+        logger.error("Cron CRON_PLACE_BACKFILL error", err, cronSpan);
+      } finally {
+        cronSpan.end();
+      }
+    });
+    setImmediate(() => {
+      const backfillSpan = OTelTracer().startSpan("SchedulerPlaceBackfill");
+      SchedulerRunPlaceBackfill(backfillSpan)
+        .catch((err) => {
+          logger.error("Initial place backfill error", err, backfillSpan);
+        })
+        .finally(() => backfillSpan.end());
+    });
+  }
 
   if (config.AUTO_SYNC === false) {
     logger.info(
@@ -325,3 +350,25 @@ const stats = {
   nbFiles: 0,
   nbFolders: 0,
 };
+
+// Guards against the boot drain and the daily cron overlapping.
+let placeBackfillRunning = false;
+
+async function SchedulerRunPlaceBackfill(context: Span) {
+  if (placeBackfillRunning) {
+    logger.info("Place backfill already running, skipping this run", context);
+    return;
+  }
+  placeBackfillRunning = true;
+  try {
+    const result = await PlaceBackfillRun(context, {
+      batchSize: config.PLACE_BACKFILL_BATCH_SIZE,
+    });
+    logger.info(
+      `Place backfill finished: ${result.processed} rows across ${result.accounts} account(s)`,
+      context,
+    );
+  } finally {
+    placeBackfillRunning = false;
+  }
+}

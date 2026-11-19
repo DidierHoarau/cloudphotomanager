@@ -35,6 +35,9 @@
               <em v-else class="dialog-metadata-missing">
                 No GPS data on this file
               </em>
+              <div v-if="placeLabel" class="dialog-metadata-place">
+                <i class="bi bi-geo"></i> {{ placeLabel }}
+              </div>
             </td>
           </tr>
         </tbody>
@@ -135,6 +138,15 @@ export default {
     },
   },
   computed: {
+    placeLabel() {
+      return [
+        this.file?.placeCity,
+        this.file?.placeRegion,
+        this.file?.placeCountry,
+      ]
+        .filter(Boolean)
+        .join(", ");
+    },
     // Mirrors the server-side extraction in SearchGeoSql.ts:
     // info.exif.GPSInfo.{GPSLatitude,GPSLongitude} stored by
     // exif-reader v2 as DMS arrays [degrees, minutes, seconds],
@@ -192,6 +204,9 @@ export default {
 }
 .dialog-metadata-missing {
   opacity: 0.6;
+}
+.dialog-metadata-place {
+  margin-top: var(--space-xs);
 }
 .dialog-metadata-yaml {
   max-height: 30vh;

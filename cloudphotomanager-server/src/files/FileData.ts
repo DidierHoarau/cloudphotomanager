@@ -284,6 +284,43 @@ export async function FileDataUpdateInfo(
   span.end();
 }
 
+export async function FileDataUpdatePlace(
+  context: Span,
+  file: File,
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataUpdatePlace", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET placeCountry = ?, placeCountryCode = ?, placeRegion = ?, " +
+      "placeCity = ?, placeStatus = ? WHERE id = ? ",
+    [
+      file.placeCountry ?? null,
+      file.placeCountryCode ?? null,
+      file.placeRegion ?? null,
+      file.placeCity ?? null,
+      file.placeStatus ?? null,
+      file.id,
+    ],
+  );
+  span.end();
+}
+
+// Clears the computed place so the backfill re-processes the row after its
+// content (and therefore its GPS) was replaced under the same name.
+export async function FileDataResetPlace(
+  context: Span,
+  fileId: string,
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataResetPlace", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET placeCountry = NULL, placeCountryCode = NULL, " +
+      "placeRegion = NULL, placeCity = NULL, placeStatus = NULL WHERE id = ? ",
+    [fileId],
+  );
+  span.end();
+}
+
 export async function FileDataUpdateFavorite(
   context: Span,
   fileId: string,
@@ -1110,5 +1147,10 @@ export function FileDataFromRaw(fileRaw: any): File {
   file.dateTrashed = fileRaw.dateTrashed
     ? new Date(fileRaw.dateTrashed)
     : null;
+  file.placeCountry = fileRaw.placeCountry ?? null;
+  file.placeCountryCode = fileRaw.placeCountryCode ?? null;
+  file.placeRegion = fileRaw.placeRegion ?? null;
+  file.placeCity = fileRaw.placeCity ?? null;
+  file.placeStatus = fileRaw.placeStatus ?? null;
   return file;
 }

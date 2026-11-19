@@ -19,8 +19,10 @@ import {
   FileDataRecordEnrichmentSuccess,
   FileDataUpdateInfo,
   FileDataUpdateKeywords,
+  FileDataUpdatePlace,
 } from "../files/FileData";
 import { extractGps } from "../files/ExifGpsExtractor";
+import { PlaceGeocoderFillFile } from "../geo/PlaceGeocoder";
 import { Account } from "../model/Account";
 import { File } from "../model/File";
 import { FileMediaType } from "../model/FileMediaType";
@@ -534,6 +536,25 @@ export async function syncVideoFromFull(
   }
 }
 
+// Best-effort reverse geocoding: a place lookup failure must never fail the
+// media sync, and files without GPS keep placeStatus NULL.
+async function persistPlaceIfChanged(
+  span: Span,
+  account: Account,
+  file: File,
+): Promise<void> {
+  try {
+    if (PlaceGeocoderFillFile(file)) {
+      await FileDataUpdatePlace(span, file);
+    }
+  } catch (err) {
+    logger.warn(
+      `Place geocoding failed for ${account.getAccountDefinition().id} ${file.id} : ${file.filename}: ${err?.message ?? err}`,
+      span,
+    );
+  }
+}
+
 export async function syncPhotoFromFull(
   account: Account,
   file: File,
@@ -598,6 +619,7 @@ export async function syncPhotoFromFull(
           );
         }
         await FileDataUpdateInfo(span, file);
+        await persistPlaceIfChanged(span, account, file);
         // Auto-rotate pixels based on EXIF orientation tag, then strip it.
         // A corrupt image (e.g. truncated JPEG) must not fail the sync on
         // every cycle: tombstone cache generation for the file instead.
@@ -741,6 +763,7 @@ export async function syncPhotoKeyWords(
           file.keywords = file.keywords.toLowerCase();
         });
       await FileDataUpdateKeywords(span, file);
+      await persistPlaceIfChanged(span, account, file);
       await FileDataRecordEnrichmentSuccess(span, file.id);
       EnrichmentRuntimeRecordSuccess();
     } catch (err) {

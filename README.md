@@ -15,6 +15,9 @@ CloudPhotoManager is a self-hosted free and open source photo managegement tool.
 - Label browsing: click the classification labels detected on your photos to search them
 - Search results support selection and the same bulk actions as the gallery (trash/download/move), with the folder path shown on each result
 - Geo map: browse geo-tagged photos on a world map, reachable from a Map tab and "Show on map" entry points in the File Info dialog and the fullscreen viewer
+- Place names: photos are reverse-geocoded locally at sync time from a bundled GeoNames dataset (no external geocoder); the File Info dialog, metadata dialog and map cells show the nearest city/region/country, and a place filter — plus free-text place matching such as `Brittany 2024` — narrows the search. See [docs/geocoding.md](docs/geocoding.md)
+- Accessible map: zoom-adaptive grid clustering, keyboard and screen-reader reachable cells named after their place, an "Open in search" link to the filtered results, and `?accountId&lat&lon&zoom` deep links that preserve the map view across navigation
+- Search precision: inclusive same-day date ranges in your timezone, sort by capture date/filename/size, an explicit "Showing X of Y" with 5,000-result pages and "Load more" instead of silent truncation, and a filterable label list (up to 500 labels)
 - Trash: deletes move files to a restorable Trash (30 days retention, automatic purge), with restore and permanent delete
 - Timeline: browse the whole library by month across folders
 - Sync notification center: the header sync icon opens a panel summarizing failed actions (with plain-language causes and suggested fixes), recently completed operations and queue activity, linking to the full failure list in Settings → Sync
