@@ -162,7 +162,7 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(13);
+    expect(dbVersion()).toBe(14);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
     const enrichmentColumns = SqlDbUtilsQuerySQL(
       undefined,
@@ -174,6 +174,27 @@ describe("SQL migrations", () => {
       "lastEnrichmentAttempt",
       "lastEnrichmentError",
     ]);
+    const ignoreColumns = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM pragma_table_info('duplicate_ignores')",
+    ).map((row) => row.name);
+    expect(ignoreColumns.sort()).toEqual([
+      "accountId",
+      "dateIgnored",
+      "hash",
+      "info",
+      "userId",
+    ]);
+    const ignorePk = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM pragma_table_info('duplicate_ignores') WHERE pk > 0 ORDER BY pk",
+    ).map((row) => row.name);
+    expect(ignorePk).toEqual(["accountId", "hash"]);
+    const ignoreIndex = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM sqlite_master WHERE type='index' AND name = 'duplicate_ignores_accountId_dateIgnored'",
+    );
+    expect(ignoreIndex.length).toBe(1);
   });
 
   it("init-0012 dedupes duplicate folders, repoints references and adds the unique index", async () => {
@@ -461,6 +482,51 @@ describe("SQL migrations", () => {
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
     expect(dbVersion()).toBe(13);
+    const appliedLogAfter = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT COUNT(*) as count FROM metadata WHERE type='db_version'",
+    );
+    expect(appliedLogAfter[0].count).toBe(appliedLogBefore[0].count);
+  });
+
+  it("init-0014 persists duplicate ignores across a re-init", async () => {
+    const files = (await fs.readdir(realSqlDir)).filter((name) =>
+      /^init-\d+\.sql$/.test(name),
+    );
+    for (const name of files.sort()) {
+      await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
+    }
+    await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
+    expect(dbVersion()).toBe(14);
+
+    SqlDbUtilsExecSQL(
+      undefined,
+      "INSERT INTO duplicate_ignores (accountId, hash, dateIgnored, userId, info) VALUES (?, ?, ?, ?, ?)",
+      ["acct-ignore", "hash-ignore", new Date().toISOString(), "user-1", "{}"],
+    );
+    // Repeated insert of the same key is a no-op (composite primary key).
+    SqlDbUtilsExecSQL(
+      undefined,
+      "INSERT INTO duplicate_ignores (accountId, hash, dateIgnored, userId, info) VALUES (?, ?, ?, ?, ?) " +
+        "ON CONFLICT (accountId, hash) DO NOTHING",
+      ["acct-ignore", "hash-ignore", new Date().toISOString(), "user-1", "{}"],
+    );
+
+    const appliedLogBefore = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT COUNT(*) as count FROM metadata WHERE type='db_version'",
+    );
+    closeCurrentDb();
+    await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
+    expect(dbVersion()).toBe(14);
+
+    const rows = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT hash FROM duplicate_ignores WHERE accountId = ?",
+      ["acct-ignore"],
+    );
+    expect(rows.map((row) => row.hash)).toEqual(["hash-ignore"]);
+    // The migration did not run a second time.
     const appliedLogAfter = SqlDbUtilsQuerySQL(
       undefined,
       "SELECT COUNT(*) as count FROM metadata WHERE type='db_version'",

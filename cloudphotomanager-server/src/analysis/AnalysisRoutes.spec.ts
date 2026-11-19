@@ -317,3 +317,375 @@ describe("AnalysisRoutes permissions", () => {
     ).toEqual(["dup-cross", "dup-in-p"]);
   });
 });
+
+describe("AnalysisRoutes bulk duplicate review", () => {
+  let ctx: RouteSpecContext;
+  let accountA: any;
+  let accountB: any;
+  let folderA: any;
+  let folderB: any;
+  let folderShared: any;
+  const files: Record<string, any[]> = {
+    "gz-a1": [],
+    "gz-b2": [],
+    "gz-c3": [],
+    "gz-shared": [],
+    "gz-stale": [],
+  };
+  let tokenAdmin: string;
+  let tokenUser: string;
+
+  async function seedGroup(
+    account: any,
+    folder: any,
+    hash: string,
+    count: number,
+  ): Promise<any[]> {
+    const seeded = [];
+    for (let index = 0; index < count; index++) {
+      seeded.push(
+        await routeSpecCreateFile(
+          ctx,
+          account.id,
+          folder,
+          `${hash}-${index}.jpg`,
+          hash,
+        ),
+      );
+    }
+    return seeded;
+  }
+
+  beforeAll(async () => {
+    ctx = await routeSpecSetup();
+    accountA = await routeSpecCreateAccount(ctx, "acct-bulk-a");
+    accountB = await routeSpecCreateAccount(ctx, "acct-bulk-b");
+    folderA = await routeSpecCreateFolder(ctx, accountA.id, "/a");
+    folderB = await routeSpecCreateFolder(ctx, accountA.id, "/b");
+    folderShared = await routeSpecCreateFolder(ctx, accountA.id, "/shared");
+
+    files["gz-a1"] = await seedGroup(accountA, folderA, "gz-a1", 2);
+    files["gz-b2"] = await seedGroup(accountA, folderB, "gz-b2", 2);
+    files["gz-c3"] = await seedGroup(accountA, folderA, "gz-c3", 3);
+    files["gz-shared"] = await seedGroup(
+      accountA,
+      folderShared,
+      "gz-shared",
+      2,
+    );
+    files["gz-stale"] = await seedGroup(accountA, folderB, "gz-stale", 2);
+    await routeSpecCreateFile(
+      ctx,
+      accountA.id,
+      folderA,
+      "unique.jpg",
+      "gz-unique",
+    );
+
+    // Account B has its own copies of the shared hash: ignores are account
+    // scoped, so an ignore on A must never hide B's group.
+    const folderBAccount = await routeSpecCreateFolder(
+      ctx,
+      accountB.id,
+      "/b",
+    );
+    await seedGroup(accountB, folderBAccount, "gz-shared", 2);
+
+    const admin = await routeSpecAddUser(ctx, {
+      name: "admin-bulk",
+      password: "pw",
+      isAdmin: true,
+    });
+    const user = await routeSpecAddUser(ctx, {
+      name: "user-bulk",
+      password: "pw",
+      grants: [{ folderId: folderA.id, scope: "ro" }],
+    });
+    tokenAdmin = await routeSpecTokenFor(ctx, admin);
+    tokenUser = await routeSpecTokenFor(ctx, user);
+  });
+
+  afterAll(async () => {
+    await ctx.fastify.close();
+  });
+
+  it("paginates duplicate groups with a stable order and a total", async () => {
+    const page0 = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates?page=0&pageSize=2`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(page0.statusCode).toBe(200);
+    expect(page0.json().page).toBe(0);
+    expect(page0.json().pageSize).toBe(2);
+    expect(page0.json().total).toBe(5);
+    expect(page0.json().duplicates.map((g: any) => g.hash)).toEqual([
+      "gz-a1",
+      "gz-b2",
+    ]);
+
+    const page1 = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates?page=1&pageSize=2`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(page1.json().duplicates.map((g: any) => g.hash)).toEqual([
+      "gz-c3",
+      "gz-shared",
+    ]);
+    const page2 = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates?page=2&pageSize=2`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(page2.json().duplicates.map((g: any) => g.hash)).toEqual([
+      "gz-stale",
+    ]);
+    expect(page2.json().total).toBe(5);
+
+    const allHashes = [
+      ...page0.json().duplicates,
+      ...page1.json().duplicates,
+      ...page2.json().duplicates,
+    ].map((g: any) => g.hash);
+    expect(allHashes.sort()).toEqual([
+      "gz-a1",
+      "gz-b2",
+      "gz-c3",
+      "gz-shared",
+      "gz-stale",
+    ]);
+    expect(new Set(allHashes).size).toBe(allHashes.length);
+
+    // Every copy of a page's group is returned, not just the first two.
+    const threeCopies = page1
+      .json()
+      .duplicates.find((g: any) => g.hash === "gz-c3");
+    expect(threeCopies.files.length).toBe(3);
+
+    const pastEnd = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates?page=99&pageSize=2`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(pastEnd.json().duplicates).toEqual([]);
+    expect(pastEnd.json().total).toBe(5);
+
+    for (const query of ["pageSize=0", "pageSize=201", "page=abc"]) {
+      const invalid = await ctx.fastify.inject({
+        method: "GET",
+        url: `/api/accounts/${accountA.id}/analysis/duplicates?${query}`,
+        headers: routeSpecAuthHeaders(tokenAdmin),
+      });
+      expect(invalid.statusCode).toBe(400);
+    }
+  });
+
+  it("persists an ignore, removes it from list and counts, and is reversible", async () => {
+    const ignored = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/ignore`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { hashes: ["gz-b2"] },
+    });
+    expect(ignored.statusCode).toBe(200);
+    expect(ignored.json().ignored).toBe(1);
+
+    const list = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(list.json().total).toBe(4);
+    expect(list.json().duplicates.map((g: any) => g.hash)).not.toContain(
+      "gz-b2",
+    );
+
+    const counts = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/counts`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { fileIds: files["gz-b2"].map((f) => f.id) },
+    });
+    expect(counts.json().counts).toEqual({});
+
+    // Repeating the ignore is a no-op.
+    const repeated = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/ignore`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { hashes: ["gz-b2"] },
+    });
+    expect(repeated.json().ignored).toBe(0);
+
+    const ignoredList = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/ignored`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(ignoredList.statusCode).toBe(200);
+    expect(ignoredList.json().ignores).toHaveLength(1);
+    expect(ignoredList.json().ignores[0].hash).toBe("gz-b2");
+    expect(ignoredList.json().ignores[0].info.fileCount).toBe(2);
+
+    // The ignored group no longer surfaces in the file-level lookup.
+    const fileLookup = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/${files["gz-b2"][0].id}`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(fileLookup.json().duplicate).toBeNull();
+
+    const unignored = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/unignore`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { hashes: ["gz-b2"] },
+    });
+    expect(unignored.json().unignored).toBe(1);
+
+    const restoredList = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(restoredList.json().total).toBe(5);
+    const restoredCounts = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/counts`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { fileIds: files["gz-b2"].map((f) => f.id) },
+    });
+    expect(restoredCounts.json().counts).toEqual({
+      [files["gz-b2"][0].id]: 2,
+      [files["gz-b2"][1].id]: 2,
+    });
+  });
+
+  it("scopes ignores to the account", async () => {
+    const ignored = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/ignore`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { hashes: ["gz-shared"] },
+    });
+    expect(ignored.json().ignored).toBe(1);
+
+    const accountAList = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(accountAList.json().total).toBe(4);
+
+    const accountBList = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountB.id}/analysis/duplicates`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(accountBList.json().total).toBe(1);
+    expect(accountBList.json().duplicates[0].hash).toBe("gz-shared");
+
+    await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/unignore`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { hashes: ["gz-shared"] },
+    });
+  });
+
+  it("restricts ignore management to admins and validates the payload", async () => {
+    const nonAdminIgnored = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/ignored`,
+      headers: routeSpecAuthHeaders(tokenUser),
+    });
+    expect(nonAdminIgnored.statusCode).toBe(403);
+    const nonAdminIgnore = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/ignore`,
+      headers: routeSpecAuthHeaders(tokenUser),
+      payload: { hashes: ["gz-a1"] },
+    });
+    expect(nonAdminIgnore.statusCode).toBe(403);
+    const nonAdminUnignore = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/unignore`,
+      headers: routeSpecAuthHeaders(tokenUser),
+      payload: { hashes: ["gz-a1"] },
+    });
+    expect(nonAdminUnignore.statusCode).toBe(403);
+
+    const anonymousIgnored = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/ignored`,
+    });
+    expect(anonymousIgnored.statusCode).toBe(403);
+    const anonymousIgnore = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/ignore`,
+      payload: { hashes: ["gz-a1"] },
+    });
+    expect(anonymousIgnore.statusCode).toBe(403);
+    const anonymousUnignore = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/unignore`,
+      payload: { hashes: ["gz-a1"] },
+    });
+    expect(anonymousUnignore.statusCode).toBe(403);
+
+    for (const payload of [
+      {},
+      { hashes: [] },
+      { hashes: ["gz-a1", ""] },
+      { hashes: [42] },
+      {
+        hashes: Array.from({ length: 201 }, (_, index) => `hash-${index}`),
+      },
+    ]) {
+      const invalid = await ctx.fastify.inject({
+        method: "POST",
+        url: `/api/accounts/${accountA.id}/analysis/duplicates/ignore`,
+        headers: routeSpecAuthHeaders(tokenAdmin),
+        payload,
+      });
+      expect(invalid.statusCode).toBe(400);
+    }
+
+    // Only hashes that currently form a group are persisted.
+    const notAGroup = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/ignore`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { hashes: ["gz-unique", "no-such-hash"] },
+    });
+    expect(notAGroup.json().ignored).toBe(0);
+    const ignoredList = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/ignored`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(ignoredList.json().ignores).toEqual([]);
+  });
+
+  it("prunes an ignore once its group no longer has two copies", async () => {
+    const ignored = await ctx.fastify.inject({
+      method: "POST",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/ignore`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+      payload: { hashes: ["gz-stale"] },
+    });
+    expect(ignored.json().ignored).toBe(1);
+
+    for (const file of files["gz-stale"]) {
+      await ctx.fileData.FileDataDelete(ctx.span, file.id, accountA.id);
+    }
+
+    const ignoredList = await ctx.fastify.inject({
+      method: "GET",
+      url: `/api/accounts/${accountA.id}/analysis/duplicates/ignored`,
+      headers: routeSpecAuthHeaders(tokenAdmin),
+    });
+    expect(ignoredList.json().ignores).toEqual([]);
+  });
+});

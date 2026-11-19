@@ -4,8 +4,8 @@ import { AnalysisDuplicate } from "../model/AnalysisDuplicate";
 import { SqlDbUtilsQuerySQL } from "@devopsplaybook.io/common-utils";
 import { OTelTracer } from "../OTelContext";
 
-// Caps keeping a duplicate analysis from loading an entire account at once.
-const DUPLICATES_MAX_GROUPS = 500;
+// Caps keeping a single duplicate group from loading an entire account at
+// once. The listing itself is paginated by group (see below).
 const DUPLICATES_MAX_ROWS = 10000;
 
 // When permittedFolderIds is non-null, adds a folder scope filter; the ids
@@ -28,6 +28,11 @@ function folderScopeFilter(permittedFolderIds: string[] | null): {
 // duplicate listings ignore copies that await restore or purge.
 const TRASHED_CONDITION = " AND COALESCE(trashed, 0) = 0 ";
 
+// Persisted "keep both / not duplicates" groups are excluded from listings,
+// single-file lookups and counts; the subquery keeps the account scoped.
+const IGNORED_CONDITION =
+  " AND hash NOT IN (SELECT hash FROM duplicate_ignores WHERE accountId = ?) ";
+
 export async function AnalysisDataGetFileDuplicates(
   context: Span,
   accountId: string,
@@ -45,6 +50,7 @@ export async function AnalysisDataGetFileDuplicates(
     "SELECT * FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
       outerFilter.sql +
       TRASHED_CONDITION +
+      IGNORED_CONDITION +
       " AND hash IN " +
       " (SELECT hash FROM files WHERE id = ? AND accountId = ? AND hash IS NOT NULL AND hash != '' " +
       innerFilter.sql +
@@ -53,6 +59,7 @@ export async function AnalysisDataGetFileDuplicates(
     [
       accountId,
       ...outerFilter.params,
+      accountId,
       fileId,
       accountId,
       ...innerFilter.params,
@@ -122,8 +129,9 @@ export async function AnalysisDataGetFilesDuplicateCounts(
         ") " +
         innerFilter.sql +
         TRASHED_CONDITION +
+        IGNORED_CONDITION +
         " GROUP BY hash",
-      [accountId, ...hashes, ...innerFilter.params],
+      [accountId, ...hashes, ...innerFilter.params, accountId],
     );
     countByHash = new Map(
       counted.map((row) => [row.hash, Number(row.count)]),
@@ -139,17 +147,37 @@ export async function AnalysisDataGetFilesDuplicateCounts(
   return result;
 }
 
+// Lists duplicate groups page by page. Groups are ordered by hash (stable
+// across pages) and every copy of a page's groups is returned. `total` is the
+// number of duplicate groups in scope so the client can show "N of M".
 export async function AnalysisDataListAccountDuplicates(
   context: Span,
   accountId: string,
-  permittedFolderIds: string[] | null = null,
-): Promise<AnalysisDuplicate[]> {
+  permittedFolderIds: string[] | null,
+  page: number,
+  pageSize: number,
+): Promise<{ duplicates: AnalysisDuplicate[]; total: number }> {
   const span = OTelTracer().startSpan(
     "AnalysisData_listAccountDuplicates",
     context,
   );
   const outerFilter = folderScopeFilter(permittedFolderIds);
   const innerFilter = folderScopeFilter(permittedFolderIds);
+  const groupSelect =
+    "SELECT hash FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
+    innerFilter.sql +
+    TRASHED_CONDITION +
+    IGNORED_CONDITION +
+    " GROUP BY hash HAVING count(*) > 1 ";
+  const totalRows = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT COUNT(*) AS count FROM (" + groupSelect + ")",
+    [accountId, ...innerFilter.params, accountId],
+  );
+  const total = Number(totalRows[0]?.count ?? 0);
+  // A page large enough to overflow the multiplication can never be reached:
+  // clamp so the bound value stays an integer.
+  const offset = Math.min(page * pageSize, Number.MAX_SAFE_INTEGER);
   const rawData = await SqlDbUtilsQuerySQL(
     span,
     "SELECT * " +
@@ -158,18 +186,18 @@ export async function AnalysisDataListAccountDuplicates(
       outerFilter.sql +
       TRASHED_CONDITION +
       " AND hash IN " +
-      " ( SELECT hash FROM files WHERE accountId = ? AND hash IS NOT NULL AND hash != '' " +
-      innerFilter.sql +
-      TRASHED_CONDITION +
-      " GROUP BY hash HAVING count(*) > 1 ORDER BY hash LIMIT ?) " +
-      " ORDER BY hash, id LIMIT ? ",
+      " (" +
+      groupSelect +
+      " ORDER BY hash LIMIT ? OFFSET ?) " +
+      " ORDER BY hash, id ",
     [
       accountId,
       ...outerFilter.params,
       accountId,
       ...innerFilter.params,
-      DUPLICATES_MAX_GROUPS,
-      DUPLICATES_MAX_ROWS,
+      accountId,
+      pageSize,
+      offset,
     ],
   );
   const analysis: AnalysisDuplicate[] = [];
@@ -191,7 +219,55 @@ export async function AnalysisDataListAccountDuplicates(
     currentAnalysisDuplicate.files.push(file);
   }
   span.end();
-  return analysis;
+  return { duplicates: analysis, total };
+}
+
+// Server-side snapshot of the groups being ignored: the client-supplied counts
+// and paths are never trusted, only hashes that currently form a group for the
+// account are persisted.
+export async function AnalysisDataGetDuplicateGroupSummaries(
+  context: Span,
+  accountId: string,
+  hashes: string[],
+): Promise<
+  Record<string, { fileCount: number; filename: string; folderId: string }>
+> {
+  const span = OTelTracer().startSpan(
+    "AnalysisData_getDuplicateGroupSummaries",
+    context,
+  );
+  const result: Record<
+    string,
+    { fileCount: number; filename: string; folderId: string }
+  > = {};
+  if (!hashes || hashes.length === 0) {
+    span.end();
+    return result;
+  }
+  const placeholders = hashes.map(() => "?").join(", ");
+  const rows = await SqlDbUtilsQuerySQL(
+    span,
+    "SELECT hash, COUNT(*) AS count, MIN(filename) AS filename, MIN(folderId) AS folderId " +
+      " FROM files " +
+      " WHERE accountId = ? AND hash IN (" +
+      placeholders +
+      ") AND hash IS NOT NULL AND hash != '' " +
+      TRASHED_CONDITION +
+      " GROUP BY hash ",
+    [accountId, ...hashes],
+  );
+  for (const row of rows) {
+    const fileCount = Number(row.count);
+    if (fileCount > 1) {
+      result[row.hash] = {
+        fileCount,
+        filename: row.filename,
+        folderId: row.folderId,
+      };
+    }
+  }
+  span.end();
+  return result;
 }
 
 // Private Function

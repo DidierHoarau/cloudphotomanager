@@ -9,7 +9,7 @@ CloudPhotoManager is a self-hosted free and open source photo managegement tool.
 - Supported Storage Providers: OneDrive, AWS S3, Local Drive
 - Organize Photos by Folders
 - Multiple users to be able to shared some folder to some users
-- Detection of duplicates
+- Duplicate review: exact-hash groups load progressively past the first page ("showing N of M"), with a keep-best suggestion (resolution, file size, capture date, folder depth) that can be overridden, a side-by-side compare dialog, group and cross-group selection, bulk "Move to Trash" with a path/count confirmation and inline Undo, and a persisted "keep both / not duplicates" ignore list that removes groups from the list, badges and counts until restored
 - Favorites: mark keepers from the viewer, filter the gallery and the search by favorites
 - Faceted search: filter by media type (photos/videos/RAW), folder subtree, has-location, favorites and outtakes
 - Label browsing: click the classification labels detected on your photos to search them
