@@ -1,6 +1,6 @@
 <template>
-  <dialog open>
-    <article>
+  <dialog open @keydown="onKeydown">
+    <article ref="confirmArticle" tabindex="-1">
       <header>
         <a
           href="#close"
@@ -22,6 +22,8 @@
 </template>
 
 <script>
+import { dialogFocusFirst, dialogTrapFocus } from "~~/utils/DialogFocus";
+
 export default {
   props: {
     title: {
@@ -33,7 +35,37 @@ export default {
       required: true,
     },
   },
+  data() {
+    return {
+      restoreFocusElement: null,
+    };
+  },
+  mounted() {
+    if (typeof document !== "undefined") {
+      this.restoreFocusElement =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+    }
+    this.$nextTick(() => dialogFocusFirst(this.$refs.confirmArticle));
+  },
+  beforeUnmount() {
+    if (
+      this.restoreFocusElement &&
+      document.contains(this.restoreFocusElement)
+    ) {
+      this.restoreFocusElement.focus();
+    }
+  },
   methods: {
+    onKeydown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.clickedCancel();
+        return;
+      }
+      dialogTrapFocus(event, this.$refs.confirmArticle);
+    },
     clickedCancel() {
       this.$emit("onCancel");
     },

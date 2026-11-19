@@ -3,15 +3,20 @@ import * as exifr from "exifr";
 import * as fs from "fs-extra";
 import * as path from "path";
 import sharp from "sharp";
-import { AnalysisImagesGetLabels } from "../analysis/AnalysisImages";
+import { AnalysisImagesGetLabels, AnalysisImagesIsModelError } from "../analysis/AnalysisImages";
 import { Config } from "../Config";
 import {
+  FileDataBackfillFilenameKeywords,
   FileDataGet,
   FileDataGetFileCacheDir,
   FileDataGetFileTmpDir,
   FileDataListByFolder,
   FileDataListForAccountPaginated,
   FileDataListIdsForAccount,
+  FileDataRecordEnrichmentDisabled,
+  FileDataRecordEnrichmentFailure,
+  FileDataRecordEnrichmentPending,
+  FileDataRecordEnrichmentSuccess,
   FileDataUpdateInfo,
   FileDataUpdateKeywords,
 } from "../files/FileData";
@@ -27,6 +32,13 @@ import { ThumbnailNotAvailableError } from "../accounts/oneDrive/OneDriveFileOpe
 import { SyncQueueQueueItem } from "./SyncQueue";
 import { AccountFactoryGetAccountImplementation } from "../accounts/AccountFactory";
 import { SyncQueueGetBatchWaitingCount } from "./SyncQueue";
+import {
+  EnrichmentRuntimeCanAttempt,
+  EnrichmentRuntimeGetState,
+  EnrichmentRuntimeIsEnabled,
+  EnrichmentRuntimeRecordModelFailure,
+  EnrichmentRuntimeRecordSuccess,
+} from "./EnrichmentRuntime";
 
 const logger = OTelLogger().createModuleLogger("SyncFileCache");
 let config: Config;
@@ -227,6 +239,23 @@ export async function SyncFileCacheCheckFile(
   }
 
   if (isImage && !file.keywords) {
+    // Persist the filename immediately so the photo stays findable by name
+    // even while classification is unavailable.
+    await FileDataBackfillFilenameKeywords(span, file);
+  }
+
+  // Enrichment is queued only while it can make progress: enabled, circuit
+  // closed, and the file has no terminal enrichment status. An outage must
+  // not generate a retry storm, and failed files wait for the manual repair.
+  if (
+    isImage &&
+    config?.IMAGE_CLASSIFICATION_ENABLED !== false &&
+    EnrichmentRuntimeIsEnabled() &&
+    EnrichmentRuntimeCanAttempt() &&
+    (file.enrichmentStatus === null ||
+      file.enrichmentStatus === undefined ||
+      file.enrichmentStatus === "pending")
+  ) {
     await SyncQueueQueueItem(
       account.getAccountDefinition().id,
       file.id,
@@ -305,6 +334,20 @@ export async function SyncFileCacheCleanUp(context: Span, account: Account) {
 }
 
 // Private Functions
+
+function errorMessageChain(err: unknown): string {
+  let message = err instanceof Error ? err.message : String(err);
+  let cause: unknown = err instanceof Error ? err.cause : undefined;
+  const seen = new Set<unknown>();
+  while (cause instanceof Error && !seen.has(cause)) {
+    seen.add(cause);
+    if (cause.message && !message.includes(cause.message)) {
+      message += `: ${cause.message}`;
+    }
+    cause = cause.cause;
+  }
+  return message;
+}
 
 // sharp/libvips error signatures for unreadable image content (truncated or
 // corrupt JPEG streams). Used to skip cache generation instead of failing.
@@ -602,6 +645,11 @@ export async function syncPhotoFromFull(
   }
 }
 
+// Best-effort keyword/label enrichment. Never throws for classification,
+// model or network problems: the filename keywords are persisted first so
+// filename search and media availability never depend on the model, and the
+// outcome is recorded in the dedicated enrichment columns instead of the
+// media retry counter.
 export async function syncPhotoKeyWords(
   account: Account,
   file: File,
@@ -622,9 +670,26 @@ export async function syncPhotoKeyWords(
         file.id,
       )) + "_image_classification";
     const hasImagePreview = fs.existsSync(`${cacheDir}/preview.webp`);
-    file.keywords = file.filename;
+    file.keywords = `${file.filename ?? ""}`.toLowerCase();
+    await FileDataUpdateKeywords(span, file);
 
-    if (config.IMAGE_CLASSIFICATION_ENABLED) {
+    if (!config?.IMAGE_CLASSIFICATION_ENABLED || !EnrichmentRuntimeIsEnabled()) {
+      await FileDataRecordEnrichmentDisabled(span, file.id);
+      return;
+    }
+    if (!EnrichmentRuntimeCanAttempt()) {
+      const state = EnrichmentRuntimeGetState();
+      await FileDataRecordEnrichmentPending(
+        span,
+        file.id,
+        `Label enrichment paused after a model access failure${
+          state.lastModelError ? `: ${state.lastModelError}` : ""
+        }; retrying automatically after ${state.retryAfterSeconds}s`,
+      );
+      return;
+    }
+
+    try {
       if (!hasImagePreview) {
         await syncPhotoFromFull(account, file, signal);
       }
@@ -674,27 +739,33 @@ export async function syncPhotoKeyWords(
             }
           });
           file.keywords = file.keywords.toLowerCase();
-        })
-        .catch((err) => {
-          logger.warn(
-            `Error Generating Keywords for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}: ${err?.message ?? err}`,
-          );
-          throw err;
         });
+      await FileDataUpdateKeywords(span, file);
+      await FileDataRecordEnrichmentSuccess(span, file.id);
+      EnrichmentRuntimeRecordSuccess();
+    } catch (err) {
+      const message = errorMessageChain(err);
+      logger.warn(
+        `Enrichment failed for photo ${account.getAccountDefinition().id} ${file.id} : ${file.filename}: ${message}`,
+        span,
+      );
+      if (AnalysisImagesIsModelError(err)) {
+        EnrichmentRuntimeRecordModelFailure(err);
+      }
+      await FileDataRecordEnrichmentFailure(span, file.id, message);
+      // Best-effort: the file stays fully usable with its filename keywords.
     }
-    await FileDataUpdateKeywords(span, file);
-    span.end();
   } catch (errSync) {
-    span.setStatus({ code: 2, message: errSync.message });
+    // Unexpected failure (e.g. database or cache-directory error): record it
+    // for observability but never fail the file's media synchronization.
+    span.setStatus({ code: 2, message: errSync?.message ?? String(errSync) });
     span.recordException(errSync);
-    span.end();
-    const err = new Error("syncPhotoKeyWords Failed");
-    err.cause = errSync;
-    throw err;
+    logger.error("syncPhotoKeyWords failed unexpectedly", errSync, span);
   } finally {
     if (tmpDir) {
       await fs.remove(tmpDir);
     }
+    span.end();
   }
 }
 

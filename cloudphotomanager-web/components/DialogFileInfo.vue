@@ -8,8 +8,19 @@
         @onCancel="showConfirmDelete = false"
       />
     </div>
-    <div class="dialog-overlay" @click.self="clickedClose()">
-      <article class="dialog-article dialog-article--wide">
+    <div
+      class="dialog-overlay"
+      @click.self="clickedClose()"
+      @keydown="onDialogKeydown"
+    >
+      <article
+        ref="dialogArticle"
+        class="dialog-article dialog-article--wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dialog-file-info-title"
+        tabindex="-1"
+      >
         <header>
           <a
             href="#close"
@@ -17,7 +28,7 @@
             class="close"
             @click.prevent="clickedClose()"
           ></a>
-          File Info
+          <span id="dialog-file-info-title">File Info</span>
         </header>
         <div class="dialog-thumbnail">
           <LazyMediaThumbnail :file="file" />
@@ -82,6 +93,39 @@
               </NuxtLink>
             </span>
           </div>
+          <div v-if="showEnrichment" class="dialog-info-item">
+            <span class="dialog-info-item-label">Labels</span>
+            <span class="dialog-info-item-value">
+              <span
+                class="dialog-enrichment-status"
+                :class="`dialog-enrichment-${enrichmentStatusClass}`"
+                >{{ enrichmentLabel }}</span
+              >
+              <small
+                v-if="enrichmentError"
+                class="dialog-enrichment-error"
+                role="status"
+                >{{ enrichmentError }}</small
+              >
+              <button
+                v-if="canRetryLabels"
+                type="button"
+                class="dialog-copy-btn dialog-enrichment-retry"
+                :disabled="retryingEnrichment || !isOnline"
+                :aria-label="retryLabelAria"
+                :title="retryLabelTitle"
+                @click="retryEnrichment"
+              >
+                <i
+                  class="bi"
+                  :class="
+                    retryingEnrichment ? 'bi-arrow-repeat' : 'bi-arrow-clockwise'
+                  "
+                ></i>
+                <span class="dialog-enrichment-retry-text">Retry enrichment</span>
+              </button>
+            </span>
+          </div>
           <div v-if="canDownloadOriginal" class="dialog-info-item">
             <span class="dialog-info-item-label">Original</span>
             <span class="dialog-info-item-value">
@@ -140,7 +184,14 @@ import axios from "axios";
 import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { GeoUtils } from "~~/services/GeoUtils";
+import { FileUtils } from "~~/services/FileUtils";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
+import { dialogFocusFirst, dialogTrapFocus } from "~~/utils/DialogFocus";
+import {
+  canRetryEnrichment,
+  enrichmentErrorText,
+  enrichmentStatusLabel,
+} from "~~/utils/SyncHealth";
 
 export default {
   props: {
@@ -158,13 +209,82 @@ export default {
       pendingDeleteDup: null,
       copiedKey: null,
       serverUrl: "",
+      retryingEnrichment: false,
+      localEnrichmentStatus: null,
+      isOnline: true,
+      restoreFocusElement: null,
     };
   },
   async created() {
+    if (typeof document !== "undefined") {
+      this.restoreFocusElement =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+    }
+    if (typeof navigator !== "undefined") {
+      this.isOnline = navigator.onLine;
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", this.onNetworkOnline);
+      window.addEventListener("offline", this.onNetworkOffline);
+    }
+    this.$nextTick(() => dialogFocusFirst(this.$refs.dialogArticle));
     this.serverUrl = (await Config.get()).SERVER_URL;
     await this.loadDuplicates();
   },
+  beforeUnmount() {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", this.onNetworkOnline);
+      window.removeEventListener("offline", this.onNetworkOffline);
+    }
+    // Give focus back to the control that opened the dialog.
+    if (
+      this.restoreFocusElement &&
+      document.contains(this.restoreFocusElement)
+    ) {
+      this.restoreFocusElement.focus();
+    }
+  },
   methods: {
+    onNetworkOnline() {
+      this.isOnline = true;
+    },
+    onNetworkOffline() {
+      this.isOnline = false;
+    },
+    onDialogKeydown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.clickedClose();
+        return;
+      }
+      dialogTrapFocus(event, this.$refs.dialogArticle);
+    },
+    async retryEnrichment() {
+      if (this.retryingEnrichment) {
+        return;
+      }
+      this.retryingEnrichment = true;
+      try {
+        await axios.post(
+          `${(await Config.get()).SERVER_URL}/sync/enrichment/retry/${encodeURIComponent(
+            this.file.id,
+          )}`,
+          {},
+          await AuthService.getAuthHeader(),
+        );
+        this.localEnrichmentStatus = "pending";
+        EventBus.emit(EventTypes.ALERT_MESSAGE, {
+          text: "Label enrichment re-queued",
+        });
+        this.$emit("onEnrichmentRetried", this.file.id);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        this.retryingEnrichment = false;
+      }
+    },
     clickedClose() {
       this.$emit("onClose");
     },
@@ -296,6 +416,49 @@ export default {
           zoom: 16,
         },
       };
+    },
+    showEnrichment() {
+      return FileUtils.isImage(this.file);
+    },
+    enrichmentStatus() {
+      if (this.localEnrichmentStatus) {
+        return this.localEnrichmentStatus;
+      }
+      return this.file.enrichmentStatus || null;
+    },
+    enrichmentFile() {
+      return {
+        enrichmentStatus: this.enrichmentStatus,
+        lastEnrichmentError: this.file.lastEnrichmentError,
+        enrichmentFailCount: this.file.enrichmentFailCount,
+      };
+    },
+    enrichmentLabel() {
+      return enrichmentStatusLabel(this.enrichmentFile);
+    },
+    enrichmentError() {
+      return enrichmentErrorText(this.enrichmentFile);
+    },
+    enrichmentStatusClass() {
+      return this.enrichmentStatus || "unknown";
+    },
+    canRetryLabels() {
+      return (
+        this.isAdmin && canRetryEnrichment(this.enrichmentFile, this.isOnline)
+      );
+    },
+    retryLabelAria() {
+      if (!this.isOnline) {
+        return "Retry label enrichment (offline)";
+      }
+      return this.retryingEnrichment
+        ? "Retrying label enrichment"
+        : "Retry label enrichment";
+    },
+    retryLabelTitle() {
+      return this.isOnline
+        ? "Re-queue label enrichment for this file"
+        : "Unavailable while offline";
     },
   },
 };

@@ -9,6 +9,7 @@ import {
 
 jest.mock("@huggingface/transformers", () => ({
   pipeline: jest.fn(),
+  env: {},
 }));
 const mockedPipeline = pipeline as jest.Mock;
 

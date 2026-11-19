@@ -26,6 +26,7 @@ jest.mock("@devopsplaybook.io/common-utils", () => {
 jest.mock("../analysis/AnalysisImages", () => ({
   AnalysisImagesGetLabels: jest.fn().mockResolvedValue([]),
   AnalysisImagesInit: jest.fn(),
+  AnalysisImagesIsModelError: jest.fn(() => false),
 }));
 
 import { SqlDbUtilsQuerySQL } from "@devopsplaybook.io/common-utils";

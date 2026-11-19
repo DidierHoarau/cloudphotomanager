@@ -13,6 +13,7 @@ import {
 jest.mock("./AnalysisImages", () => ({
   AnalysisImagesGetLabels: jest.fn().mockResolvedValue([]),
   AnalysisImagesInit: jest.fn(),
+  AnalysisImagesIsModelError: jest.fn(() => false),
 }));
 
 describe("SearchRoutes permissions", () => {

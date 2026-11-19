@@ -94,11 +94,13 @@ const FOLDER_SYNC_OPS = new Set<string>(["SyncInventorySyncFolder"]);
 
 // Thumbnail/preview sync ops whose per-file failure count drives the
 // poison-file retry cap (see SyncFileCache SYNC_FAIL_MAX_AUTO_RETRY).
+// syncPhotoKeyWords is intentionally absent: keyword enrichment is
+// best-effort and must never increment the media retry counter or fire the
+// persistent-failure webhook.
 const FILE_CACHE_OPS = new Set<string>([
   "syncPhotoFromFull",
   "syncThumbnail",
   "syncVideoFromFull",
-  "syncPhotoKeyWords",
   "syncThumbnailFromVideoPreview",
 ]);
 
@@ -438,6 +440,75 @@ export function SyncQueueQueueItem(
   span.end();
 
   processQueue();
+}
+
+// Bulk variant used by the enrichment repair action: enqueues one item per
+// file in chunks so a library-wide repair does not issue one round trip per
+// row. Duplicate rows coalesce like SyncQueueQueueItem.
+const QUEUE_BULK_CHUNK_SIZE = 100;
+
+export function SyncQueueQueueFileItemsBulk(
+  functionName: string,
+  items: { id: string; accountId: string }[],
+  priority: SyncQueueItemPriority,
+): number {
+  if (!items || items.length === 0) {
+    return 0;
+  }
+  const span = OTelTracer().startSpan("SyncQueueQueueFileItemsBulk");
+  let queued = 0;
+  const now = new Date().toISOString();
+  try {
+    for (let offset = 0; offset < items.length; offset += QUEUE_BULK_CHUNK_SIZE) {
+      const chunk = items.slice(offset, offset + QUEUE_BULK_CHUNK_SIZE);
+      const rowIds = chunk.map((item) => `${item.id}:${functionName}`);
+      const existing = new Set(
+        SqlDbUtilsQuerySQL(
+          span,
+          `SELECT id FROM sync_queue WHERE id IN (${rowIds.map(() => "?").join(", ")})`,
+          rowIds,
+        ).map((row: any) => row.id),
+      );
+      const missing = chunk.filter(
+        (_item, index) => !existing.has(rowIds[index]),
+      );
+      if (missing.length === 0) {
+        continue;
+      }
+      const values = missing.map(() => "(?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+      const params: any[] = [];
+      for (const item of missing) {
+        params.push(
+          `${item.id}:${functionName}`,
+          item.accountId,
+          functionName,
+          priority,
+          SyncQueueItemStatus.WAITING,
+          JSON.stringify({ fileId: item.id }),
+          JSON.stringify([item.id]),
+          now,
+        );
+      }
+      SqlDbUtilsExecSQL(
+        span,
+        "INSERT OR IGNORE INTO sync_queue " +
+          "(id, accountId, functionName, priority, status, data, fileIds, dateCreated) " +
+          `VALUES ${values}`,
+        params,
+      );
+      for (const item of missing) {
+        incrementFileIdRef(item.id);
+      }
+      queued += missing.length;
+    }
+  } finally {
+    if (queued > 0) {
+      scheduleBroadcastQueueUpdate();
+      processQueue();
+    }
+    span.end();
+  }
+  return queued;
 }
 
 // Private Functions

@@ -162,8 +162,18 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(12);
+    expect(dbVersion()).toBe(13);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
+    const enrichmentColumns = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM pragma_table_info('files') WHERE name IN ('enrichmentStatus', 'lastEnrichmentError', 'lastEnrichmentAttempt', 'enrichmentFailCount')",
+    ).map((row) => row.name);
+    expect(enrichmentColumns.sort()).toEqual([
+      "enrichmentFailCount",
+      "enrichmentStatus",
+      "lastEnrichmentAttempt",
+      "lastEnrichmentError",
+    ]);
   });
 
   it("init-0012 dedupes duplicate folders, repoints references and adds the unique index", async () => {
@@ -315,5 +325,146 @@ describe("SQL migrations", () => {
       "SELECT COUNT(*) as count FROM folders",
     );
     expect(folderCountAfter[0].count).toBe(folderCountBefore[0].count);
+  });
+
+  it("init-0013 moves legacy enrichment failures off the media counters and backfills filename keywords", async () => {
+    // Boot at 0012, then seed the legacy state init-0013 has to repair.
+    const files = (await fs.readdir(realSqlDir))
+      .filter((name) => {
+        const match = /^init-(\d+)\.sql$/.exec(name);
+        return match !== null && Number(match[1]) < 13;
+      })
+      .sort();
+    for (const name of files) {
+      await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
+    }
+    await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
+    expect(dbVersion()).toBe(12);
+
+    const insertFile =
+      "INSERT INTO files (id, idCloud, accountId, folderId, filename, dateSync, dateUpdated, dateMedia, hash, info, metadata, keywords, syncFailCount, lastSyncError, lastSyncAttempt) " +
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    const now = new Date().toISOString();
+    // Legacy enrichment failure: retry cap reached, no keywords persisted.
+    SqlDbUtilsExecSQL(undefined, insertFile, [
+      "file-legacy-failed",
+      "/cloud/legacy/Beach.JPG",
+      "acct-enrichment",
+      "folder-1",
+      "Beach.JPG",
+      now,
+      now,
+      now,
+      "hash",
+      "{}",
+      "{}",
+      null,
+      5,
+      "syncPhotoKeyWords Failed: Unauthorized access to file",
+      now,
+    ]);
+    // Successful enrichment: keywords already persisted.
+    SqlDbUtilsExecSQL(undefined, insertFile, [
+      "file-already-ok",
+      "/cloud/ok/Dog.png",
+      "acct-enrichment",
+      "folder-1",
+      "Dog.png",
+      now,
+      now,
+      now,
+      "hash",
+      "{}",
+      "{}",
+      "dog golden retriever",
+      0,
+      null,
+      null,
+    ]);
+    // Never attempted image: pending after the migration, filename backfilled.
+    SqlDbUtilsExecSQL(undefined, insertFile, [
+      "file-pending",
+      "/cloud/new/New.PNG",
+      "acct-enrichment",
+      "folder-1",
+      "New.PNG",
+      now,
+      now,
+      now,
+      "hash",
+      "{}",
+      "{}",
+      null,
+      0,
+      null,
+      null,
+    ]);
+    // Videos are not enrichment targets.
+    SqlDbUtilsExecSQL(undefined, insertFile, [
+      "file-video",
+      "/cloud/video/Clip.MP4",
+      "acct-enrichment",
+      "folder-1",
+      "Clip.MP4",
+      now,
+      now,
+      now,
+      "hash",
+      "{}",
+      "{}",
+      null,
+      0,
+      null,
+      null,
+    ]);
+
+    closeCurrentDb();
+    await fs.copy(
+      path.join(realSqlDir, "init-0013.sql"),
+      path.join(sqlDir, "init-0013.sql"),
+    );
+    await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
+    expect(dbVersion()).toBe(13);
+
+    const rows = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT id, keywords, syncFailCount, lastSyncError, enrichmentStatus, lastEnrichmentError, enrichmentFailCount " +
+        "FROM files WHERE accountId = ? ORDER BY id",
+      ["acct-enrichment"],
+    );
+    const byId = new Map(rows.map((row) => [row.id, row]));
+
+    const failed = byId.get("file-legacy-failed");
+    expect(failed.enrichmentStatus).toBe("failed");
+    expect(failed.lastEnrichmentError).toContain("syncPhotoKeyWords Failed");
+    expect(failed.enrichmentFailCount).toBe(5);
+    expect(failed.syncFailCount).toBe(0);
+    expect(failed.lastSyncError).toBeNull();
+    expect(failed.keywords).toBe("beach.jpg");
+
+    expect(byId.get("file-already-ok").enrichmentStatus).toBe("ok");
+    expect(byId.get("file-already-ok").keywords).toBe("dog golden retriever");
+
+    const pending = byId.get("file-pending");
+    expect(pending.enrichmentStatus).toBe("pending");
+    expect(pending.keywords).toBe("new.png");
+
+    const video = byId.get("file-video");
+    expect(video.enrichmentStatus).toBeNull();
+    expect(video.keywords).toBeNull();
+
+    // Re-boot: the migration does not run again.
+    const appliedLogBefore = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT COUNT(*) as count FROM metadata WHERE type='db_version'",
+    );
+    closeCurrentDb();
+    await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
+    expect(dbVersion()).toBe(13);
+    const appliedLogAfter = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT COUNT(*) as count FROM metadata WHERE type='db_version'",
+    );
+    expect(appliedLogAfter[0].count).toBe(appliedLogBefore[0].count);
   });
 });

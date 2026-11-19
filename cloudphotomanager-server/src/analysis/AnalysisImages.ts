@@ -1,9 +1,34 @@
-import { pipeline } from "@huggingface/transformers";
+import { env, pipeline } from "@huggingface/transformers";
 import { Span } from "@opentelemetry/sdk-trace";
+import * as path from "path";
 import { OTelLogger, OTelTracer } from "../OTelContext";
 import { Config } from "../Config";
 
 const logger = OTelLogger().createModuleLogger("AnalysisImages");
+
+// Thrown when the model itself cannot be acquired (download, mirror endpoint
+// or local model directory). The caller distinguishes it from a per-image
+// inference error: only acquisition failures open the enrichment circuit.
+export class AnalysisImagesModelError extends Error {
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = "AnalysisImagesModelError";
+    this.cause = cause;
+  }
+}
+
+export function AnalysisImagesIsModelError(err: unknown): boolean {
+  let current: unknown = err;
+  const seen = new Set<unknown>();
+  while (current instanceof Error && !seen.has(current)) {
+    seen.add(current);
+    if (current instanceof AnalysisImagesModelError) {
+      return true;
+    }
+    current = current.cause;
+  }
+  return false;
+}
 
 // Memory tunables:
 // - Release the ~hundreds-of-MB model after a short idle window and check
@@ -50,7 +75,7 @@ export async function AnalysisImagesGetLabels(
   try {
     await prev;
     dateLastUsed = new Date();
-    await ensurePipeline(config.IMAGE_CLASSIFICATION_MODEL);
+    await ensurePipeline();
 
     // Ask the pipeline for only the top-K labels to avoid retaining a long
     // result array (some models default to the full label space).
@@ -94,9 +119,21 @@ let releaseTimer: NodeJS.Timeout | null = null;
 // Single-flight pipeline initialization: concurrent callers share one
 // Promise instead of each racing to load the model (which previously could
 // double-load on the first burst of parallel requests).
-async function ensurePipeline(model: string): Promise<void> {
+async function ensurePipeline(): Promise<void> {
   if (pipe) return;
   if (!pipePromise) {
+    const model = resolveModelSource();
+    env.cacheDir = resolveCacheDir();
+    env.allowLocalModels = true;
+    if (config.IMAGE_CLASSIFICATION_MODEL_PATH) {
+      // No network at runtime when an operator ships the model with the image.
+      env.allowRemoteModels = false;
+    } else {
+      env.allowRemoteModels = true;
+      if (config.IMAGE_CLASSIFICATION_HF_ENDPOINT) {
+        env.remoteHost = config.IMAGE_CLASSIFICATION_HF_ENDPOINT;
+      }
+    }
     pipePromise = pipeline("image-classification", model)
       .then((p) => {
         pipe = p;
@@ -104,10 +141,33 @@ async function ensurePipeline(model: string): Promise<void> {
       })
       .catch((err) => {
         pipePromise = null;
-        throw err;
+        throw new AnalysisImagesModelError(
+          `Image classification model "${model}" could not be loaded: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+          err,
+        );
       });
   }
   await pipePromise;
+}
+
+function resolveModelSource(): string {
+  const localPath = config?.IMAGE_CLASSIFICATION_MODEL_PATH;
+  if (localPath) {
+    return path.resolve(localPath);
+  }
+  return config.IMAGE_CLASSIFICATION_MODEL;
+}
+
+function resolveCacheDir(): string | undefined {
+  if (config?.IMAGE_CLASSIFICATION_CACHE_DIR) {
+    return config.IMAGE_CLASSIFICATION_CACHE_DIR;
+  }
+  if (config?.DATA_DIR) {
+    return path.join(config.DATA_DIR, "models");
+  }
+  return undefined;
 }
 
 function scheduleReleaseCheck(): void {

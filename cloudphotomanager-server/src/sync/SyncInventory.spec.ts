@@ -31,6 +31,7 @@ jest.mock("exifr", () => ({
 jest.mock("../analysis/AnalysisImages", () => ({
   AnalysisImagesGetLabels: jest.fn().mockResolvedValue([]),
   AnalysisImagesInit: jest.fn(),
+  AnalysisImagesIsModelError: jest.fn(() => false),
 }));
 
 describe("SyncInventory folder reconciliation", () => {
@@ -261,13 +262,14 @@ describe("SyncInventory folder reconciliation", () => {
 
     await syncInventory.SyncInventorySyncFolder(account, folder);
 
-    // The record is refreshed and the stale cache/keywords/failures and the
-    // gone tombstone are cleared.
+    // The record is refreshed and the stale keywords/failures and the gone
+    // tombstone are cleared. Label enrichment is best-effort, so the filename
+    // is kept as a keyword to keep filename search working.
     const updated = await fileData.FileDataGet(span, file.id);
     expect(updated).not.toBeNull();
     expect(updated.idCloud).toBe(file.idCloud);
     expect(updated.hash).toBe(sha256File(file.idCloud));
-    expect(updated.keywords).toBeNull();
+    expect(updated.keywords).toBe("replaced.jpg");
     expect(updated.syncFailCount).toBe(0);
     expect(updated.syncGone).toBe(0);
     expect(fs.existsSync(path.join(cacheDir, "preview.webp"))).toBe(false);

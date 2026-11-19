@@ -192,11 +192,91 @@ export async function FileDataUpdateKeywords(
   span.end();
 }
 
+// Persist the filename as keywords for an image that has none yet. This keeps
+// filename search working before (or without) classification. The enrichment
+// status is only initialized when it is still null: an `ok`/`failed`/`disabled`
+// status is never overwritten here.
+export async function FileDataBackfillFilenameKeywords(
+  context: Span,
+  file: File,
+): Promise<string> {
+  const span = OTelTracer().startSpan("FileDataBackfillFilenameKeywords", context);
+  const keywords = `${file.filename ?? ""}`.toLowerCase();
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET keywords = ?, enrichmentStatus = COALESCE(enrichmentStatus, 'pending') " +
+      "WHERE id = ? AND (keywords IS NULL OR keywords = '')",
+    [keywords, file.id],
+  );
+  span.end();
+  file.keywords = keywords;
+  return keywords;
+}
+
+export async function FileDataRecordEnrichmentSuccess(
+  context: Span,
+  fileId: string,
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataRecordEnrichmentSuccess", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET enrichmentStatus = 'ok', lastEnrichmentError = NULL, " +
+      "lastEnrichmentAttempt = ?, enrichmentFailCount = 0 WHERE id = ?",
+    [new Date().toISOString(), fileId],
+  );
+  span.end();
+}
+
+export async function FileDataRecordEnrichmentFailure(
+  context: Span,
+  fileId: string,
+  errorMessage: string,
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataRecordEnrichmentFailure", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET enrichmentStatus = 'failed', lastEnrichmentError = ?, " +
+      "lastEnrichmentAttempt = ?, " +
+      "enrichmentFailCount = COALESCE(enrichmentFailCount, 0) + 1 " +
+      "WHERE id = ?",
+    [errorMessage, new Date().toISOString(), fileId],
+  );
+  span.end();
+}
+
+export async function FileDataRecordEnrichmentPending(
+  context: Span,
+  fileId: string,
+  reason: string | null,
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataRecordEnrichmentPending", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET enrichmentStatus = 'pending', lastEnrichmentError = ?, " +
+      "lastEnrichmentAttempt = ? WHERE id = ?",
+    [reason, new Date().toISOString(), fileId],
+  );
+  span.end();
+}
+
+export async function FileDataRecordEnrichmentDisabled(
+  context: Span,
+  fileId: string,
+): Promise<void> {
+  const span = OTelTracer().startSpan("FileDataRecordEnrichmentDisabled", context);
+  await SqlDbUtilsExecSQL(
+    span,
+    "UPDATE files SET enrichmentStatus = 'disabled', lastEnrichmentError = NULL, " +
+      "lastEnrichmentAttempt = ? WHERE id = ?",
+    [new Date().toISOString(), fileId],
+  );
+  span.end();
+}
+
 export async function FileDataUpdateInfo(
   context: Span,
   file: File,
-): Promise<void> {
-  const span = OTelTracer().startSpan("FileDataUpdateInfo", context);
+): Promise<void> {  const span = OTelTracer().startSpan("FileDataUpdateInfo", context);
   await SqlDbUtilsExecSQL(span, "UPDATE files SET info = ? WHERE id = ? ", [
     JSON.stringify(file.info),
     file.id,
@@ -676,6 +756,209 @@ export async function FileDataListByMonthPaginated(
 
 // Private Funciton
 
+// Images (including RAW) as understood by File.getMediaType: used by the
+// library-health queries and the legacy migration backfill.
+export const FILE_IMAGE_SQL_CONDITION =
+  "(" +
+  ["jpg", "jpeg", "png", "gif", "webp", "tiff", "dng", "raw", "arw", "heic"]
+    .map((ext) => `LOWER(filename) LIKE '%.${ext}'`)
+    .join(" OR ") +
+  ")";
+
+export interface EnrichmentAccountHealth {
+  accountId: string;
+  totalImages: number;
+  missingKeywords: number;
+  ok: number;
+  failed: number;
+  pending: number;
+  disabled: number;
+  atRetryCap: number;
+}
+
+export interface EnrichmentHealth {
+  accounts: EnrichmentAccountHealth[];
+  totals: Omit<EnrichmentAccountHealth, "accountId">;
+  lastEnrichmentError: {
+    accountId: string;
+    error: string;
+    date: string;
+  } | null;
+  retryCap: { cause: string; count: number }[];
+  oldestWaitingItem: {
+    id: string;
+    functionName: string;
+    priority: number;
+    dateCreated: string;
+  } | null;
+}
+
+export async function FileDataGetEnrichmentHealth(
+  context: Span,
+): Promise<EnrichmentHealth> {
+  const span = OTelTracer().startSpan("FileDataGetEnrichmentHealth", context);
+  try {
+    const rows = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT accountId, COUNT(*) AS totalImages, " +
+        "SUM(CASE WHEN keywords IS NULL OR keywords = '' THEN 1 ELSE 0 END) AS missingKeywords, " +
+        "SUM(CASE WHEN enrichmentStatus = 'ok' THEN 1 ELSE 0 END) AS okCount, " +
+        "SUM(CASE WHEN enrichmentStatus = 'failed' THEN 1 ELSE 0 END) AS failedCount, " +
+        "SUM(CASE WHEN enrichmentStatus = 'pending' THEN 1 ELSE 0 END) AS pendingCount, " +
+        "SUM(CASE WHEN enrichmentStatus = 'disabled' THEN 1 ELSE 0 END) AS disabledCount, " +
+        "SUM(CASE WHEN COALESCE(syncFailCount, 0) >= 5 THEN 1 ELSE 0 END) AS atRetryCap " +
+        "FROM files WHERE COALESCE(trashed, 0) = 0 AND " +
+        FILE_IMAGE_SQL_CONDITION +
+        " GROUP BY accountId ORDER BY accountId",
+    );
+    const accounts: EnrichmentAccountHealth[] = rows.map((row: any) => ({
+      accountId: row.accountId,
+      totalImages: Number(row.totalImages) || 0,
+      missingKeywords: Number(row.missingKeywords) || 0,
+      ok: Number(row.okCount) || 0,
+      failed: Number(row.failedCount) || 0,
+      pending: Number(row.pendingCount) || 0,
+      disabled: Number(row.disabledCount) || 0,
+      atRetryCap: Number(row.atRetryCap) || 0,
+    }));
+    const totals = accounts.reduce(
+      (acc, account) => ({
+        totalImages: acc.totalImages + account.totalImages,
+        missingKeywords: acc.missingKeywords + account.missingKeywords,
+        ok: acc.ok + account.ok,
+        failed: acc.failed + account.failed,
+        pending: acc.pending + account.pending,
+        disabled: acc.disabled + account.disabled,
+        atRetryCap: acc.atRetryCap + account.atRetryCap,
+      }),
+      {
+        totalImages: 0,
+        missingKeywords: 0,
+        ok: 0,
+        failed: 0,
+        pending: 0,
+        disabled: 0,
+        atRetryCap: 0,
+      },
+    );
+
+    const lastErrorRows = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT accountId, lastEnrichmentError, lastEnrichmentAttempt FROM files " +
+        "WHERE lastEnrichmentError IS NOT NULL AND COALESCE(trashed, 0) = 0 AND " +
+        FILE_IMAGE_SQL_CONDITION +
+        " ORDER BY lastEnrichmentAttempt DESC LIMIT 1",
+    );
+    const lastEnrichmentError =
+      lastErrorRows.length > 0
+        ? {
+            accountId: lastErrorRows[0].accountId,
+            error: lastErrorRows[0].lastEnrichmentError,
+            date: lastErrorRows[0].lastEnrichmentAttempt,
+          }
+        : null;
+
+    const retryCapRows = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT COALESCE(lastSyncError, 'Unknown error') AS cause, COUNT(*) AS count " +
+        "FROM files WHERE COALESCE(trashed, 0) = 0 AND syncFailCount >= 5 " +
+        "GROUP BY cause ORDER BY count DESC LIMIT 20",
+    );
+    const retryCap = retryCapRows.map((row: any) => ({
+      cause: row.cause,
+      count: Number(row.count) || 0,
+    }));
+
+    const waitingRows = await SqlDbUtilsQuerySQL(
+      span,
+      "SELECT id, functionName, priority, dateCreated FROM sync_queue " +
+        "WHERE status = 'WAITING' ORDER BY dateCreated ASC LIMIT 1",
+    );
+    const oldestWaitingItem =
+      waitingRows.length > 0
+        ? {
+            id: waitingRows[0].id,
+            functionName: waitingRows[0].functionName,
+            priority: Number(waitingRows[0].priority) || 0,
+            dateCreated: waitingRows[0].dateCreated,
+          }
+        : null;
+
+    return { accounts, totals, lastEnrichmentError, retryCap, oldestWaitingItem };
+  } finally {
+    span.end();
+  }
+}
+
+export interface EnrichmentRetryScope {
+  accountId?: string;
+  folderId?: string;
+  folderpath?: string;
+  fileId?: string;
+}
+
+export interface EnrichmentRetryCandidate {
+  id: string;
+  accountId: string;
+}
+
+// Resets the enrichment state of the files in scope and returns them so the
+// caller can re-queue them. Only images still needing enrichment (pending,
+// failed or never attempted) are selected: trashed and tombstoned files are
+// skipped, and media sync counters are left untouched.
+export async function FileDataResetEnrichment(
+  context: Span,
+  scope: EnrichmentRetryScope,
+): Promise<EnrichmentRetryCandidate[]> {
+  const span = OTelTracer().startSpan("FileDataResetEnrichment", context);
+  try {
+    const conditions: string[] = [
+      "COALESCE(trashed, 0) = 0",
+      "COALESCE(syncGone, 0) = 0",
+      "(enrichmentStatus IS NULL OR enrichmentStatus IN ('failed', 'pending'))",
+      FILE_IMAGE_SQL_CONDITION,
+    ];
+    const params: any[] = [];
+    if (scope.fileId) {
+      conditions.push("id = ?");
+      params.push(scope.fileId);
+    }
+    if (scope.accountId) {
+      conditions.push("accountId = ?");
+      params.push(scope.accountId);
+    }
+    if (scope.folderId && scope.folderpath !== undefined) {
+      const subtreePrefix =
+        scope.folderpath === "/" ? "/" : `${scope.folderpath}/`;
+      const subPattern = `${SqlEscapeLike(subtreePrefix)}%`;
+      conditions.push(
+        "folderId IN (SELECT id FROM folders WHERE accountId = ? " +
+          "AND (folderpath = ? OR folderpath LIKE ? ESCAPE '\\'))",
+      );
+      params.push(scope.accountId, scope.folderpath, subPattern);
+    } else if (scope.folderId) {
+      conditions.push("folderId = ?");
+      params.push(scope.folderId);
+    }
+    const where = conditions.join(" AND ");
+    await SqlDbUtilsExecSQL(
+      span,
+      "UPDATE files SET enrichmentStatus = 'pending', lastEnrichmentError = NULL, " +
+        "lastEnrichmentAttempt = NULL, enrichmentFailCount = 0 WHERE " +
+        where,
+      params,
+    );
+    const rows = await SqlDbUtilsQuerySQL(
+      span,
+      `SELECT id, accountId FROM files WHERE ${where}`,
+      params,
+    );
+    return rows.map((row: any) => ({ id: row.id, accountId: row.accountId }));
+  } finally {
+    span.end();
+  }
+}
+
 function fromRaw(fileRaw: any): File {
   const file = new File(fileRaw.accountId, fileRaw.folderId, fileRaw.filename);
   file.id = fileRaw.id;
@@ -692,6 +975,12 @@ function fromRaw(fileRaw: any): File {
   file.lastSyncAttempt = fileRaw.lastSyncAttempt
     ? new Date(fileRaw.lastSyncAttempt)
     : null;
+  file.enrichmentStatus = fileRaw.enrichmentStatus ?? null;
+  file.lastEnrichmentError = fileRaw.lastEnrichmentError ?? null;
+  file.lastEnrichmentAttempt = fileRaw.lastEnrichmentAttempt
+    ? new Date(fileRaw.lastEnrichmentAttempt)
+    : null;
+  file.enrichmentFailCount = fileRaw.enrichmentFailCount ?? 0;
   file.syncGone = fileRaw.syncGone ?? 0;
   file.favorite = fileRaw.favorite ?? 0;
   file.trashed = fileRaw.trashed ?? 0;
