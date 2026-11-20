@@ -53,6 +53,13 @@
             <NuxtLink :to="cellSearchHref" @click="closeCellDialog()">
               <i class="bi bi-search"></i> Open in search
             </NuxtLink>
+            <button
+              v-if="cellFiles.length > 0"
+              class="secondary outline"
+              @click="clickedSlideshow()"
+            >
+              <i class="bi bi-play-fill"></i> Slideshow
+            </button>
           </div>
           <Loading v-if="loadingCell" />
           <Gallery
@@ -69,6 +76,7 @@
         :galleryFiles="cellFiles"
         :initialPosition="positionFocus"
         :selectedFiles="[]"
+        :slideshow="slideshowMode"
         class="gallery-item-focus"
         @onFileClosed="unFocusGalleryItem"
       />
@@ -125,6 +133,7 @@ export default {
       // Full-screen viewer
       displayFullScreen: false,
       positionFocus: 0,
+      slideshowMode: false,
     };
   },
   computed: {
@@ -469,14 +478,21 @@ export default {
     },
     focusGalleryItem(file) {
       if (!file) {
-        this.displayFullScreen = false;
+        this.unFocusGalleryItem();
         return;
       }
+      this.slideshowMode = false;
       this.positionFocus = findIndex(this.cellFiles, { id: file.id });
+      this.displayFullScreen = true;
+    },
+    clickedSlideshow() {
+      this.positionFocus = 0;
+      this.slideshowMode = true;
       this.displayFullScreen = true;
     },
     unFocusGalleryItem() {
       this.displayFullScreen = false;
+      this.slideshowMode = false;
     },
   },
 };

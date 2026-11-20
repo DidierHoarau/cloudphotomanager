@@ -84,6 +84,13 @@
       <button class="secondary outline" v-on:click="clickedOptions()">
         <i class="bi bi-sliders"></i> Options...
       </button>
+      <button
+        v-if="files.length > 0"
+        class="secondary outline"
+        v-on:click="clickedSlideshow()"
+      >
+        <i class="bi bi-play-fill"></i> Slideshow
+      </button>
     </div>
     <div class="gallery-outtakes-section" v-if="outtakesCount > 0">
       <label class="outtakes-checkbox">
@@ -107,9 +114,10 @@
     </div>
     <GalleryItemFocus
       v-if="displayFullScreen"
-      :galleryFiles="files"
+      :galleryFiles="slideshowMode ? viewerFiles : files"
       :initialPosition="positionFocus"
       :selectedFiles="selectedFiles"
+      :slideshow="slideshowMode"
       class="gallery-item-focus"
       @onFileClosed="unFocusGalleryItem"
       @onFileSelected="onFileSelected"
@@ -179,6 +187,7 @@ import { DuplicateCountService } from "~~/services/DuplicateCountService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import { FileUtils } from "~~/services/FileUtils";
 import { BulkDownloadService } from "~~/services/BulkDownloadService";
+import { slideshowSourceFiles } from "~~/utils/Slideshow";
 import { localCache, TTL } from "~~/services/LocalCache";
 
 export default {
@@ -204,6 +213,8 @@ export default {
       activeOperation: "",
       displayFullScreen: false,
       positionFocus: 0,
+      viewerFiles: [],
+      slideshowMode: false,
       showOutakes: false,
       outtakesCount: 0,
       includeSubFolders: false,
@@ -349,6 +360,8 @@ export default {
       () => {
         if (this.currentFolderId !== useRoute().query.folderId) {
           this.displayFullScreen = false;
+          this.slideshowMode = false;
+          this.viewerFiles = [];
           this.fetchFiles(
             useRoute().query.accountId,
             useRoute().query.folderId,
@@ -372,6 +385,8 @@ export default {
             );
           } else {
             this.displayFullScreen = false;
+            this.slideshowMode = false;
+            this.viewerFiles = [];
           }
         }, 500);
       },
@@ -656,13 +671,27 @@ export default {
     focusGalleryItem(file) {
       if (!file) {
         this.displayFullScreen = false;
+        this.slideshowMode = false;
+        this.viewerFiles = [];
         return;
       }
       if (FileUtils.getType(file) === "unknown") {
         return;
       }
+      this.slideshowMode = false;
+      this.viewerFiles = [];
       this.displayFullScreen = true;
       this.positionFocus = findIndex(this.files, { id: file.id });
+    },
+    clickedSlideshow() {
+      const source = slideshowSourceFiles(this.files, this.selectedFiles);
+      if (source.length === 0) {
+        return;
+      }
+      this.viewerFiles = source;
+      this.positionFocus = 0;
+      this.slideshowMode = true;
+      this.displayFullScreen = true;
     },
     unFocusGalleryItem() {
       useRouter().push({
@@ -672,6 +701,8 @@ export default {
         },
       });
       this.displayFullScreen = false;
+      this.slideshowMode = false;
+      this.viewerFiles = [];
     },
     openListMenu() {
       this.menuOpened = !this.menuOpened;

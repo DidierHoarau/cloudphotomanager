@@ -11,6 +11,8 @@
 </template>
 
 <script>
+import { PreferencesMemories } from "~~/services/PreferencesMemories";
+
 export default {
   props: {
     initialAccountId: {
@@ -25,6 +27,12 @@ export default {
           id: "search",
           label: "Search",
           to: "/search",
+        },
+        {
+          id: "memories",
+          label: "Memories",
+          to: "/search/memories",
+          show: () => PreferencesMemories.isEnabled(),
         },
         {
           id: "map",

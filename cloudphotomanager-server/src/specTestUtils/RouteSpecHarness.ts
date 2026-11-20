@@ -136,6 +136,7 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   );
   const { AlbumRoutes } = await import("../albums/AlbumRoutes");
   const { SearchRoutes } = await import("../analysis/SearchRoutes");
+  const { MemoriesRoutes } = await import("../analysis/MemoriesRoutes");
   const { AnalysisRoutes } = await import("../analysis/AnalysisRoutes");
   const { SyncRoutes } = await import("../sync/SyncRoutes");
   const { SyncFailureRoutes } = await import("../sync/SyncFailureRoutes");
@@ -204,6 +205,9 @@ export async function routeSpecSetup(): Promise<RouteSpecContext> {
   });
   await fastify.register(new SearchRoutes().getRoutes, {
     prefix: "/api/accounts/:accountId/files/search",
+  });
+  await fastify.register(new MemoriesRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/memories",
   });
   await fastify.register(new AnalysisRoutes().getRoutes, {
     prefix: "/api/accounts/:accountId/analysis",
