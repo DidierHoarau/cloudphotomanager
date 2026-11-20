@@ -10,6 +10,7 @@ import * as path from "path";
 import { AnalysisImagesInit } from "./analysis/AnalysisImages";
 import { AnalysisRoutes } from "./analysis/AnalysisRoutes";
 import { SearchRoutes } from "./analysis/SearchRoutes";
+import { MemoriesRoutes } from "./analysis/MemoriesRoutes";
 import { Config } from "./Config";
 import { FileDataInit } from "./files/FileData";
 import { FileRoutes } from "./files/FileRoutes";
@@ -180,6 +181,10 @@ Promise.resolve().then(async () => {
 
   fastify.register(new SearchRoutes().getRoutes, {
     prefix: "/api/accounts/:accountId/files/search",
+  });
+
+  fastify.register(new MemoriesRoutes().getRoutes, {
+    prefix: "/api/accounts/:accountId/memories",
   });
 
   fastify.register(new AnalysisRoutes().getRoutes, {

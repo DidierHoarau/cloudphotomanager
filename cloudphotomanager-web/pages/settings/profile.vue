@@ -80,6 +80,27 @@
             </button>
           </div>
         </article>
+        <!-- Memories Preference -->
+        <article>
+          <h3>
+            <i class="bi bi-calendar-heart"></i>
+            Memories
+          </h3>
+          <p>
+            Show the Memories tab with On this day, the past 7 days and monthly
+            highlights.
+          </p>
+          <div class="article-actions">
+            <label class="article-checkbox">
+              <input
+                type="checkbox"
+                v-model="memoriesEnabled"
+                @change="toggleMemories()"
+              />
+              Enable Memories
+            </label>
+          </div>
+        </article>
       </div>
     </div>
   </div>
@@ -96,6 +117,7 @@ import { AuthService } from "~~/services/AuthService";
 import { UserService } from "~~/services/UserService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import { ThemeService } from "~~/services/ThemeService";
+import { PreferencesMemories } from "~~/services/PreferencesMemories";
 import { getSettingsTabs } from "~~/utils/SettingsTabs";
 import { clearClientData } from "~~/services/ClientDataCleanup";
 
@@ -107,10 +129,12 @@ export default {
       isChangePasswordStarted: false,
       savingPassword: false,
       isDark: false,
+      memoriesEnabled: true,
     };
   },
   async created() {
     this.isDark = ThemeService.isDark();
+    this.memoriesEnabled = PreferencesMemories.isEnabled();
     if (!(await UserService.isInitialized())) {
       useRouter().push({ path: "/users/new" });
     }
@@ -121,6 +145,9 @@ export default {
   methods: {
     toggleTheme() {
       this.isDark = ThemeService.toggleTheme();
+    },
+    toggleMemories() {
+      PreferencesMemories.setEnabled(this.memoriesEnabled);
     },
     async changePassword() {
       if (this.user.password && this.user.passwordOld) {
@@ -208,5 +235,17 @@ export default {
   margin-top: var(--space-base);
   display: flex;
   gap: var(--space-sm);
+}
+
+.article-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+}
+
+.article-checkbox input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--color-primary);
 }
 </style>

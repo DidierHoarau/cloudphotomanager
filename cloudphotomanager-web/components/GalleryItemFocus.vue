@@ -38,12 +38,89 @@
       :targetName="file.filename || ''"
       @onDone="showShareActions = false"
     />
+    <div v-if="file" class="media-overlay">
+      <div class="media-overlay-meta">
+        <span v-if="captureDate" class="media-overlay-date">
+          {{ captureDate }}
+        </span>
+        <span v-if="placeLabel" class="media-overlay-place">
+          <i class="bi bi-geo-alt"></i> {{ placeLabel }}
+        </span>
+        <span v-if="file.favorite" class="media-overlay-favorite" title="Favorite">
+          <i class="bi bi-star-fill"></i>
+          <span class="visually-hidden">Favorite</span>
+        </span>
+      </div>
+      <a
+        v-if="canDownloadOriginal"
+        class="media-overlay-download"
+        :href="downloadOriginalHref()"
+        :download="file.filename"
+        aria-label="Download original"
+        title="Download original"
+      >
+        <i class="bi bi-download"></i>
+        <span class="visually-hidden">Download original</span>
+      </a>
+    </div>
+    <span class="visually-hidden" aria-live="polite">{{ mediaAnnouncement }}</span>
     <div class="action-bar">
+      <div v-if="slideshowActive" class="action-bar-main slideshow-controls">
+        <select
+          v-model.number="slideshowInterval"
+          class="slideshow-interval"
+          aria-label="Slideshow interval"
+          @change="onSlideshowIntervalChange()"
+        >
+          <option
+            v-for="seconds in slideshowIntervals"
+            :key="seconds"
+            :value="seconds"
+          >
+            {{ seconds }} s
+          </option>
+        </select>
+        <button
+          type="button"
+          class="action-btn"
+          :class="{ 'slideshow-toggle-active': slideshowLoop }"
+          :aria-pressed="slideshowLoop"
+          @click="toggleSlideshowLoop()"
+        >
+          <i class="bi bi-arrow-repeat"></i> Loop
+        </button>
+        <button
+          type="button"
+          class="action-btn"
+          :class="{ 'slideshow-toggle-active': slideshowShuffle }"
+          :aria-pressed="slideshowShuffle"
+          @click="toggleSlideshowShuffle()"
+        >
+          <i class="bi bi-shuffle"></i> Shuffle
+        </button>
+        <button
+          v-if="fullscreenSupported"
+          type="button"
+          class="action-btn"
+          :aria-label="fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+          :title="fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+          @click="toggleFullscreen()"
+        >
+          <i
+            class="bi"
+            :class="fullscreen ? 'bi-fullscreen-exit' : 'bi-arrows-fullscreen'"
+          ></i>
+        </button>
+        <span class="slideshow-status" aria-live="off">
+          {{ slideshowPlaying ? "Playing" : "Paused" }}
+        </span>
+      </div>
       <div class="action-bar-main">
         <button
           class="action-btn"
           @click="previousMedia()"
           :disabled="!hasPreviousSupported"
+          aria-label="Previous photo"
           title="Previous"
         >
           <i class="bi bi-arrow-left"></i>
@@ -52,15 +129,29 @@
           class="action-btn"
           @click="nextMedia()"
           :disabled="!hasNextSupported"
+          aria-label="Next photo"
           title="Next"
         >
           <i class="bi bi-arrow-right"></i>
         </button>
+        <button
+          class="action-btn"
+          @click="toggleSlideshowPlay()"
+          :disabled="!hasSlideshowFiles"
+          :aria-label="slideshowPlaying ? 'Pause slideshow' : 'Play slideshow'"
+          :title="slideshowPlaying ? 'Pause slideshow' : 'Play slideshow'"
+        >
+          <i
+            class="bi"
+            :class="slideshowPlaying ? 'bi-pause-fill' : 'bi-play-fill'"
+          ></i>
+        </button>
         <div class="action-bar-divider"></div>
-        <label class="action-checkbox" title="Select">
+        <label class="action-checkbox" title="Select" aria-label="Select photo">
           <input
             type="checkbox"
             :checked="isFileSelected"
+            aria-label="Select photo"
             @change="toggleSelection()"
           />
         </label>
@@ -70,6 +161,7 @@
           class="action-btn"
           :href="downloadOriginalHref()"
           :download="file && file.filename"
+          aria-label="Download"
           title="Download"
         >
           <i class="bi bi-download"></i>
@@ -80,6 +172,7 @@
           :href="downloadOriginalHref('inline')"
           target="_blank"
           rel="noopener"
+          aria-label="Open original"
           title="Open original"
         >
           <i class="bi bi-box-arrow-up-right"></i>
@@ -88,6 +181,9 @@
           v-if="authenticationStore.isAdmin && !shareToken"
           class="action-btn"
           @click="doActionToggleFavorite()"
+          :aria-label="
+            file && file.favorite ? 'Remove favorite' : 'Add favorite'
+          "
           :title="file && file.favorite ? 'Remove favorite' : 'Add favorite'"
         >
           <i
@@ -99,6 +195,7 @@
           v-if="!shareToken"
           class="action-btn"
           @click="showFileInfo = true"
+          aria-label="Info"
           title="Info"
         >
           <i class="bi bi-info-circle"></i>
@@ -107,11 +204,17 @@
           v-if="mapLink"
           class="action-btn"
           :to="mapLink"
+          aria-label="Show on map"
           title="Show on map"
         >
           <i class="bi bi-geo-alt"></i>
         </NuxtLink>
-        <button class="action-btn" @click="clickedClose()" title="Close">
+        <button
+          class="action-btn"
+          @click="clickedClose()"
+          aria-label="Close"
+          title="Close"
+        >
           <i class="bi bi-x-lg"></i>
         </button>
         <template v-if="authenticationStore.isAdmin || (file && isImage(file))">
@@ -239,9 +342,14 @@
         <video
           class="media-content"
           v-if="!videoUnavailable"
+          ref="videoElement"
           controls
+          muted
+          playsinline
           :class="{ 'media-hidden': mediaLoading }"
           @loadeddata="onMediaLoaded"
+          @playing="onVideoPlaying"
+          @ended="onVideoEnded"
           @error="onVideoError"
         >
           <source
@@ -282,6 +390,14 @@ import { AuthService } from "~~/services/AuthService";
 import { FileUtils } from "~~/services/FileUtils";
 import { MediaUrls } from "~~/services/MediaUrls";
 import { GeoUtils } from "~~/services/GeoUtils";
+import { PreferencesSlideshow } from "~~/services/PreferencesSlideshow";
+import {
+  buildSlideshowOrder,
+  nextSlideshowPosition,
+  previousSlideshowPosition,
+  SLIDESHOW_INTERVALS,
+} from "~~/utils/Slideshow";
+import { formatCaptureDate, formatPlace } from "~~/utils/MediaInfo";
 import { isSyncBlocked, isSyncGone } from "~~/utils/SyncHealth";
 import { findIndex } from "lodash";
 
@@ -299,6 +415,11 @@ export default {
       type: Array,
       required: false,
       default: () => [],
+    },
+    // Starts in slideshow mode (auto-advance, video autoplay, wake lock).
+    slideshow: {
+      type: Boolean,
+      default: false,
     },
     // When set, the viewer runs on the public share page: downloads go
     // through the token-based share endpoint instead of the session-cookie
@@ -340,6 +461,15 @@ export default {
       confirmDialogTitle: "",
       confirmDialogMessage: "",
       confirmDialogCallback: null,
+      slideshowIntervals: SLIDESHOW_INTERVALS,
+      slideshowActive: false,
+      slideshowPlaying: false,
+      slideshowInterval: 5,
+      slideshowLoop: true,
+      slideshowShuffle: false,
+      slideshowOrder: [],
+      fullscreen: false,
+      prefersReducedMotion: false,
     };
   },
   watch: {
@@ -375,14 +505,76 @@ export default {
   async created() {
     this.serverUrl = (await Config.get()).SERVER_URL;
 
+    const slideshowOptions = PreferencesSlideshow.getOptions();
+    this.slideshowInterval = slideshowOptions.interval;
+    this.slideshowLoop = slideshowOptions.loop;
+    this.slideshowShuffle = slideshowOptions.shuffle;
+
+    if (typeof window !== "undefined" && window.matchMedia) {
+      this._reducedMotionQuery = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      );
+      this.prefersReducedMotion = this._reducedMotionQuery.matches;
+      this._onReducedMotionChange = (event) => {
+        this.prefersReducedMotion = event.matches;
+      };
+      if (this._reducedMotionQuery.addEventListener) {
+        this._reducedMotionQuery.addEventListener(
+          "change",
+          this._onReducedMotionChange,
+        );
+      }
+    }
+
     this.files = this.galleryFiles;
     this.position = this.initialPosition;
     this.loadMedia(true);
 
     this._onKeyDown = (event) => {
-      if (event.key === "ArrowRight") this.nextMedia();
-      else if (event.key === "ArrowLeft") this.previousMedia();
-      else if (event.key === "Escape") {
+      const target = event.target;
+      const tagName = target?.tagName ? target.tagName.toLowerCase() : "";
+      const isContentEditable = !!target?.isContentEditable;
+      const isTextEntry =
+        tagName === "textarea" ||
+        tagName === "select" ||
+        isContentEditable ||
+        (tagName === "input" &&
+          ![
+            "checkbox",
+            "radio",
+            "button",
+            "submit",
+            "reset",
+            "file",
+            "range",
+            "color",
+          ].includes(target.type || "text"));
+      // Space and F keep their native meaning on form controls; arrows keep
+      // working after clicking an action button.
+      const isFormControl =
+        isTextEntry ||
+        tagName === "button" ||
+        tagName === "a" ||
+        tagName === "input";
+      if (event.key === "ArrowRight" && !isTextEntry) {
+        event.preventDefault();
+        this.nextMedia();
+      } else if (event.key === "ArrowLeft" && !isTextEntry) {
+        event.preventDefault();
+        this.previousMedia();
+      } else if (
+        (event.key === " " || event.key === "Spacebar") &&
+        !isFormControl
+      ) {
+        event.preventDefault();
+        this.toggleSlideshowPlay();
+      } else if (
+        (event.key === "f" || event.key === "F") &&
+        !isFormControl
+      ) {
+        event.preventDefault();
+        this.toggleFullscreen();
+      } else if (event.key === "Escape") {
         if (this.actionsMenuOpen) {
           this.closeActionsMenu();
         } else {
@@ -391,8 +583,24 @@ export default {
       }
     };
     this._onGlobalClick = (event) => this.onGlobalClick(event);
+    this._onFullscreenChange = () => {
+      this.fullscreen = !!(
+        typeof document !== "undefined" && document.fullscreenElement
+      );
+    };
+    this._onVisibilityChange = () => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "visible" &&
+        this.slideshowPlaying
+      ) {
+        this.requestWakeLock();
+      }
+    };
     window.addEventListener("keydown", this._onKeyDown);
     window.addEventListener("click", this._onGlobalClick);
+    document.addEventListener("fullscreenchange", this._onFullscreenChange);
+    document.addEventListener("visibilitychange", this._onVisibilityChange);
 
     this._onOperationComplete = (message) => {
       if (!this.file) return;
@@ -411,6 +619,9 @@ export default {
     EventBus.on(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
   },
   async mounted() {
+    if (this.slideshow) {
+      this.startSlideshow();
+    }
     const mediaContainer = this.$refs.mediaContainer;
     if (!mediaContainer) return;
     // Dynamic import: hammerjs (~20 KB) is only needed when the viewer is open
@@ -484,12 +695,25 @@ export default {
   },
   unmounted() {
     this._isUnmounted = true;
+    this.pauseSlideshow();
+    this._preloadedImages = [];
     if (this._gestureManager) {
       this._gestureManager.destroy();
       this._gestureManager = null;
     }
     window.removeEventListener("keydown", this._onKeyDown);
     window.removeEventListener("click", this._onGlobalClick);
+    document.removeEventListener("fullscreenchange", this._onFullscreenChange);
+    document.removeEventListener("visibilitychange", this._onVisibilityChange);
+    if (
+      this._reducedMotionQuery &&
+      this._reducedMotionQuery.removeEventListener
+    ) {
+      this._reducedMotionQuery.removeEventListener(
+        "change",
+        this._onReducedMotionChange,
+      );
+    }
     if (this._onOperationComplete) {
       EventBus.off(EventTypes.OPERATION_COMPLETE, this._onOperationComplete);
     }
@@ -511,6 +735,7 @@ export default {
       }
     },
     clickedClose() {
+      this.pauseSlideshow();
       this.$emit("onFileClosed", {});
     },
     clickedMove() {
@@ -692,10 +917,17 @@ export default {
         newPos += step;
       }
       if (newPos < 0 || newPos >= this.files.length) return;
+      this.navigateToPosition(newPos, isPrevious);
+    },
+    navigateToPosition(newPos, isPrevious) {
+      if (this.navigating) return;
+      if (newPos < 0 || newPos >= this.files.length) return;
+      if (this.getType(this.files[newPos]) === "unknown") return;
       const mediaDomElement =
         this.$refs.mediaContainer?.querySelector(".media-content");
-      if (!mediaDomElement) {
-        // No animation possible, navigate immediately
+      // Reduced-motion users swap media without the slide animation, both for
+      // manual navigation and for automatic slideshow advances.
+      if (!mediaDomElement || this.prefersReducedMotion) {
         this.position = newPos;
         this.loadMedia();
         return;
@@ -726,6 +958,233 @@ export default {
     nextMedia() {
       this.navigateMedia("next");
     },
+    hasPlayableFile(file) {
+      return (
+        !!file &&
+        !FileUtils.isOuttake(file) &&
+        this.getType(file) !== "unknown"
+      );
+    },
+    startSlideshow() {
+      const order = buildSlideshowOrder(this.files, this.slideshowShuffle);
+      if (order.length === 0) {
+        return;
+      }
+      this.slideshowOrder = order;
+      this.slideshowActive = true;
+      if (!order.includes(this.position)) {
+        this.position = order[0];
+        this.loadMedia();
+      }
+      this.slideshowPlaying = true;
+      this.requestWakeLock();
+      if (!this.mediaLoading) {
+        this.scheduleSlideshowTick();
+      }
+      this.preloadSlideshowNeighbors();
+      this.$nextTick(() => this.tryAutoplayVideo());
+    },
+    pauseSlideshow() {
+      this.slideshowPlaying = false;
+      this.clearSlideshowTimer();
+      this.releaseWakeLock();
+    },
+    toggleSlideshowPlay() {
+      if (this.slideshowPlaying) {
+        this.pauseSlideshow();
+        return;
+      }
+      if (!this.slideshowActive || this.slideshowOrder.length === 0) {
+        this.startSlideshow();
+        return;
+      }
+      this.slideshowPlaying = true;
+      this.requestWakeLock();
+      if (!this.mediaLoading) {
+        this.scheduleSlideshowTick();
+      }
+      this.$nextTick(() => this.tryAutoplayVideo());
+    },
+    clearSlideshowTimer() {
+      if (this._slideshowTimer) {
+        clearTimeout(this._slideshowTimer);
+        this._slideshowTimer = null;
+      }
+    },
+    scheduleSlideshowTick() {
+      this.clearSlideshowTimer();
+      if (!this.slideshowPlaying) return;
+      // Videos advance on their `ended` event, not on a timer.
+      if (this.file && this.getType(this.file) === "video") return;
+      this._slideshowTimer = setTimeout(
+        () => {
+          this._slideshowTimer = null;
+          this.slideshowAdvance();
+        },
+        Math.max(1, this.slideshowInterval) * 1000,
+      );
+    },
+    slideshowAdvance() {
+      if (!this.slideshowPlaying) return;
+      if (this.navigating) {
+        // Do not drop an advance that fires while the previous one animates.
+        this.clearSlideshowTimer();
+        this._slideshowTimer = setTimeout(() => {
+          this._slideshowTimer = null;
+          this.slideshowAdvance();
+        }, 150);
+        return;
+      }
+      const next = nextSlideshowPosition(
+        this.slideshowOrder,
+        this.position,
+        this.slideshowLoop,
+      );
+      if (next === null) {
+        this.pauseSlideshow();
+        return;
+      }
+      this.navigateToPosition(next, next < this.position);
+    },
+    persistSlideshowPreferences() {
+      PreferencesSlideshow.setOptions({
+        interval: this.slideshowInterval,
+        loop: this.slideshowLoop,
+        shuffle: this.slideshowShuffle,
+      });
+    },
+    onSlideshowIntervalChange() {
+      this.persistSlideshowPreferences();
+      if (this.slideshowPlaying) {
+        this.scheduleSlideshowTick();
+      }
+    },
+    toggleSlideshowLoop() {
+      this.slideshowLoop = !this.slideshowLoop;
+      this.persistSlideshowPreferences();
+    },
+    toggleSlideshowShuffle() {
+      this.slideshowShuffle = !this.slideshowShuffle;
+      this.persistSlideshowPreferences();
+      if (this.slideshowActive) {
+        this.slideshowOrder = buildSlideshowOrder(
+          this.files,
+          this.slideshowShuffle,
+        );
+      }
+    },
+    preloadSlideshowNeighbors() {
+      if (!this.slideshowPlaying || this.slideshowOrder.length === 0) {
+        return;
+      }
+      if (!this._preloadedImages) {
+        this._preloadedImages = [];
+      }
+      const positions = [];
+      const next = nextSlideshowPosition(
+        this.slideshowOrder,
+        this.position,
+        this.slideshowLoop,
+      );
+      if (next !== null) {
+        positions.push(next);
+      }
+      if (this.slideshowLoop && this.slideshowOrder.length > 1) {
+        positions.push(this.slideshowOrder[0]);
+      }
+      for (const position of positions) {
+        const file = this.files[position];
+        if (!file || !this.isImage(file)) {
+          continue;
+        }
+        const image = new Image();
+        image.src = this.getImageSource(file);
+        this._preloadedImages.push(image);
+      }
+      // Keep only the most recent preloads: a long slideshow must not retain
+      // every decoded image in memory.
+      if (this._preloadedImages.length > 6) {
+        this._preloadedImages.splice(0, this._preloadedImages.length - 6);
+      }
+    },
+    async tryAutoplayVideo() {
+      if (!this.slideshowPlaying || !this.file) {
+        return;
+      }
+      if (this.getType(this.file) !== "video") {
+        return;
+      }
+      const video = this.$refs.videoElement;
+      if (!video) {
+        return;
+      }
+      try {
+        await video.play();
+      } catch (err) {
+        // Autoplay refused: keep the controls usable and stop advancing.
+        this.pauseSlideshow();
+      }
+    },
+    onVideoPlaying() {
+      this.mediaLoading = false;
+      this.preloadSlideshowNeighbors();
+    },
+    onVideoEnded() {
+      if (this.slideshowPlaying) {
+        this.slideshowAdvance();
+      }
+    },
+    toggleFullscreen() {
+      if (
+        typeof document === "undefined" ||
+        !document.documentElement.requestFullscreen
+      ) {
+        return;
+      }
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.()?.catch(() => {});
+      } else {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    },
+    requestWakeLock() {
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.wakeLock ||
+        this._wakeLock
+      ) {
+        return;
+      }
+      try {
+        navigator.wakeLock
+          .request("screen")
+          .then((lock) => {
+            this._wakeLock = lock;
+            if (lock && lock.addEventListener) {
+              lock.addEventListener("release", () => {
+                this._wakeLock = null;
+              });
+            }
+          })
+          .catch(() => {
+            this._wakeLock = null;
+          });
+      } catch (err) {
+        this._wakeLock = null;
+      }
+    },
+    releaseWakeLock() {
+      const lock = this._wakeLock;
+      this._wakeLock = null;
+      if (!lock || !lock.release) {
+        return;
+      }
+      try {
+        lock.release().catch(() => {});
+      } catch (err) {
+        /* ignore */
+      }
+    },
     loadMedia(newRoute = false) {
       this.videoDelayedLoadingDone = false;
       this.videoUnavailable = false;
@@ -754,7 +1213,9 @@ export default {
       }
       setTimeout(() => {
         this.videoDelayedLoadingDone = true;
+        this.tryAutoplayVideo();
       }, 100);
+      this.preloadSlideshowNeighbors();
     },
     preloadFile(file) {
       const img = new Image();
@@ -777,6 +1238,8 @@ export default {
     },
     onMediaLoaded() {
       this.mediaLoading = false;
+      this.preloadSlideshowNeighbors();
+      this.scheduleSlideshowTick();
     },
     unavailableIcon(syncingIcon) {
       if (this.fileIsSyncGone) {
@@ -790,10 +1253,12 @@ export default {
     onImageError() {
       this.imageUnavailable = true;
       this.mediaLoading = false;
+      this.scheduleSlideshowTick();
     },
     onVideoError() {
       this.videoUnavailable = true;
       this.mediaLoading = false;
+      this.scheduleSlideshowTick();
     },
     onThumbnailBackdropError() {
       this.thumbnailBackdropVisible = false;
@@ -924,6 +1389,34 @@ export default {
       }
       return "Video not yet available — still synchronizing";
     },
+    hasSlideshowFiles() {
+      return this.files.some((item) => this.hasPlayableFile(item));
+    },
+    fullscreenSupported() {
+      return (
+        typeof document !== "undefined" &&
+        !!document.documentElement.requestFullscreen
+      );
+    },
+    captureDate() {
+      return formatCaptureDate(this.file?.dateMedia);
+    },
+    placeLabel() {
+      return formatPlace(this.file);
+    },
+    mediaAnnouncement() {
+      if (!this.file) {
+        return "";
+      }
+      const parts = [`file ${this.position + 1} of ${this.files.length}`];
+      if (this.captureDate) {
+        parts.push(this.captureDate);
+      }
+      if (this.placeLabel) {
+        parts.push(this.placeLabel);
+      }
+      return parts.join(" — ");
+    },
   },
 };
 </script>
@@ -967,6 +1460,7 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  gap: var(--space-xs);
 }
 .action-bar-main {
   display: flex;
@@ -1209,5 +1703,85 @@ export default {
   font-size: var(--font-body);
   z-index: 300;
   pointer-events: none;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.media-overlay {
+  position: fixed;
+  top: var(--space-base);
+  left: var(--space-base);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  max-width: calc(100vw - 2 * var(--space-base));
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-accent-bg);
+  backdrop-filter: blur(6px);
+  border-radius: var(--radius-md);
+  color: var(--color-accent);
+  font-size: var(--font-base);
+}
+.media-overlay-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.media-overlay-place {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.media-overlay-favorite {
+  color: var(--color-warning);
+}
+.media-overlay-download {
+  display: inline-flex;
+  padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+}
+.media-overlay-download:hover,
+.media-overlay-download:focus-visible {
+  background: rgba(170, 170, 255, 0.15);
+  color: var(--color-text-inverse);
+}
+.slideshow-controls {
+  gap: var(--space-sm);
+}
+.slideshow-interval {
+  width: auto;
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-base);
+}
+.slideshow-toggle-active {
+  background: rgba(170, 170, 255, 0.2);
+}
+.slideshow-status {
+  font-size: var(--font-sm);
+  color: var(--color-accent);
+  opacity: 0.75;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-media-out-left,
+  .animate-media-out-right,
+  .animate-media-in-left,
+  .animate-media-in-right {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
 }
 </style>

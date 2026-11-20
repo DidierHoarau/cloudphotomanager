@@ -160,6 +160,13 @@
         >
           <i class="bi bi-check2-square"></i> Select all
         </button>
+        <button
+          v-if="files.length > 0"
+          class="secondary outline"
+          v-on:click="clickedSlideshow()"
+        >
+          <i class="bi bi-play-fill"></i> Slideshow
+        </button>
         <kbd v-if="selectedFiles.length > 0"
           >Selected: {{ selectedFiles.length }}</kbd
         >
@@ -225,9 +232,10 @@
       </div>
       <GalleryItemFocus
         v-if="displayFullScreen"
-        :galleryFiles="files"
+        :galleryFiles="slideshowMode ? viewerFiles : files"
         :initialPosition="positionFocus"
         :selectedFiles="selectedFiles"
+        :slideshow="slideshowMode"
         class="gallery-item-focus"
         @onFileClosed="unFocusGalleryItem"
       />
@@ -272,6 +280,7 @@ import {
   SORT_DEFAULT,
   SORT_OPTIONS,
 } from "~~/utils/SearchFilters";
+import { slideshowSourceFiles } from "~~/utils/Slideshow";
 
 // Matches SEARCH_MAX_RESULTS on the server: the per-request maximum. More
 // results are fetched explicitly with the "Load more" button.
@@ -321,6 +330,8 @@ export default {
       selectedFiles: [],
       displayFullScreen: false,
       positionFocus: 0,
+      viewerFiles: [],
+      slideshowMode: false,
       activeOperation: "",
       confirmMessage: "",
       bulkDownloading: false,
@@ -635,14 +646,28 @@ export default {
     },
     focusGalleryItem(file) {
       if (!file) {
-        this.displayFullScreen = false;
+        this.unFocusGalleryItem();
         return;
       }
+      this.slideshowMode = false;
+      this.viewerFiles = [];
       this.displayFullScreen = true;
       this.positionFocus = findIndex(this.files, { id: file.id });
     },
+    clickedSlideshow() {
+      const source = slideshowSourceFiles(this.files, this.selectedFiles);
+      if (source.length === 0) {
+        return;
+      }
+      this.viewerFiles = source;
+      this.positionFocus = 0;
+      this.slideshowMode = true;
+      this.displayFullScreen = true;
+    },
     unFocusGalleryItem(result) {
       this.displayFullScreen = false;
+      this.slideshowMode = false;
+      this.viewerFiles = [];
     },
   },
 };
