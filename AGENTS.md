@@ -22,6 +22,17 @@ cloudphotomanager-tools/        # Processing scripts (ffmpeg, ImageMagick)
 
 ## Key Conventions
 
+### Sessions
+
+`JWT_VALIDITY_DURATION` is 30 days (literal `2592000`, re-registered with
+`addConfigField` so it survives `reload()`). The app has no absolute cap: the
+custom `users/Auth.ts` signs `exp = now + JWT_VALIDITY_DURATION`, slides the
+httpOnly cookie server-side at half-life and never enforces the inherited
+`JWT_SESSION_MAX_DURATION` field. Keep the deviation in sync with the
+[session policy](https://github.com/devopsplaybook-io/common-utils/blob/main/docs/auth-session-policy.md)
+and the literal assertions in `Config.spec.ts`. common-utils stays on ^2.9.2
+intentionally.
+
 ### CSS Centralization (cloudphotomanager-web)
 
 CSS design tokens are centralized in `cloudphotomanager-web/assets/css/variables.css`. All components and CSS files must use these variables instead of hardcoded values.
