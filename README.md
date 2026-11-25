@@ -35,6 +35,7 @@ CloudPhotoManager is a self-hosted free and open source photo managegement tool.
 - Sessions survive an application restart as long as the `/data` volume (which holds the database containing the JWT signing key) is persistent.
 - Logout, password changes, permission changes and user deletion revoke the user's sessions server-side (the JWT carries a token version checked against the database on every request): every previously issued token, including copies, stops working at the next request.
 - Users and permissions are reloaded on every request, so a deleted user or a demoted admin loses access immediately.
+- This is the deviation listed in the [session policy](https://github.com/devopsplaybook-io/common-utils/blob/main/docs/auth-session-policy.md): a 30-day sliding cookie session with **no absolute cap** (`users/Auth.ts` signs `exp = now + JWT_VALIDITY_DURATION` and re-issues the cookie server-side; the inherited `JWT_SESSION_MAX_DURATION` field is never enforced). `Config.spec.ts` pins the literal effective values.
 
 # Media access
 

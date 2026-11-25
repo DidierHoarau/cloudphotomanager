@@ -12,9 +12,14 @@ describe("Config", () => {
 
   it("keeps the one-month login token lifetime after a config reload", async () => {
     const config = new Config();
-    expect(config.JWT_VALIDITY_DURATION).toBe(30 * 24 * 3600);
+    // Literal effective value from the session policy doc: 30-day validity.
+    expect(config.JWT_VALIDITY_DURATION).toBe(2592000);
     await config.reload();
-    expect(config.JWT_VALIDITY_DURATION).toBe(30 * 24 * 3600);
+    expect(config.JWT_VALIDITY_DURATION).toBe(2592000);
+    // Inherited from common-utils but unused: users/Auth.ts signs
+    // exp = now + JWT_VALIDITY_DURATION and slides the httpOnly cookie
+    // server-side; there is no absolute cap.
+    expect(config.JWT_SESSION_MAX_DURATION).toBe(2592000);
   });
 
   it("reads and coerces the image classification settings from the environment", async () => {
