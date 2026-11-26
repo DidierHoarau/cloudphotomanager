@@ -31,6 +31,15 @@
         </button>
       </div>
     </article>
+
+    <article v-if="loginCodeAvailable" class="profile-card">
+      <LoginWithCodeCard
+        :service="loginCodeService"
+        variant="plain"
+        :heading-level="3"
+        @approved="onLoginCodeApproved"
+      />
+    </article>
   </div>
 </template>
 
@@ -44,12 +53,22 @@ import Config from "~~/services/Config.ts";
 import { AuthService } from "~~/services/AuthService";
 import { handleError, EventBus, EventTypes } from "~~/services/EventBus";
 import { UserService } from "~~/services/UserService";
+import LoginWithCodeCard from "@devopsplaybook.io/common-web/components/LoginWithCodeCard.vue";
+import {
+  loginCodesServiceCreate,
+  loginCodesIsAvailable,
+} from "~~/utils/loginCodes";
 
 export default {
+  components: {
+    LoginWithCodeCard,
+  },
   data() {
     return {
       user: {},
       loggingIn: false,
+      loginCodeService: loginCodesServiceCreate(),
+      loginCodeAvailable: false,
     };
   },
   async created() {
@@ -59,8 +78,29 @@ export default {
     if (await AuthService.isAuthenticated()) {
       useRouter().push({ path: "/settings/profile" });
     }
+    // Hidden entirely when the feature is off: the routes answer 404.
+    this.loginCodeAvailable = await loginCodesIsAvailable(
+      this.loginCodeService,
+    );
   },
   methods: {
+    // The approved poll already set the httpOnly session cookie; never touch
+    // the body "token" (it is a non-secret sentinel). Reload the session the
+    // same way the password login does.
+    async onLoginCodeApproved() {
+      if (!(await AuthenticationStore().ensureAuthenticated())) {
+        EventBus.emit(EventTypes.ALERT_MESSAGE, {
+          type: "error",
+          text: "Sign-in could not be completed",
+        });
+        return;
+      }
+      EventBus.emit(EventTypes.ALERT_MESSAGE, {
+        type: "info",
+        text: "User Logged In",
+      });
+      useRouter().push({ path: "/gallery" });
+    },
     async login() {
       if (this.user.name && this.user.password) {
         this.loggingIn = true;
@@ -101,6 +141,7 @@ export default {
   flex-direction: column;
   align-items: center;
   padding-top: var(--space-2xl);
+  gap: var(--space-xl);
   width: 100%;
 }
 

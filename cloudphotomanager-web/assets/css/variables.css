@@ -32,6 +32,12 @@
   --color-bg-secondary: #f5f7f8;
   --color-bg-hover: #eceff1;
 
+  /* ---------- Host tokens for @devopsplaybook.io/common-web cards ---------- */
+  /* Aliases to the app palette so the login-code cards follow light/dark. */
+  --color-surface: var(--color-bg);
+  --color-surface-raised: var(--color-bg-secondary);
+  --color-on-primary: var(--color-text-inverse);
+
   /* ---------- Colors: Status ---------- */
   --color-success: #43a047;
   --color-warning: #fd7e14;
