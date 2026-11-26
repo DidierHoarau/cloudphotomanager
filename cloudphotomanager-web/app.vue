@@ -38,6 +38,7 @@ onUnmounted(() => {
       <NuxtPage />
     </main>
     <AlertMessages id="page-alert-messages" />
+    <AppUpdatePrompt />
   </div>
 </template>
 
