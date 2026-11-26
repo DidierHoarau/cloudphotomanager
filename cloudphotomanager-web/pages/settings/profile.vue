@@ -24,6 +24,16 @@
           </div>
         </article>
 
+        <!-- Approve a cross-device sign-in -->
+        <article v-if="loginCodeAvailable">
+          <AuthorizeDeviceCard
+            :service="loginCodeService"
+            variant="plain"
+            :heading-level="3"
+            @approved="onLoginCodeApproved"
+          />
+        </article>
+
         <!-- Change Password -->
         <article>
           <h3>
@@ -120,8 +130,16 @@ import { ThemeService } from "~~/services/ThemeService";
 import { PreferencesMemories } from "~~/services/PreferencesMemories";
 import { getSettingsTabs } from "~~/utils/SettingsTabs";
 import { clearClientData } from "~~/services/ClientDataCleanup";
+import AuthorizeDeviceCard from "@devopsplaybook.io/common-web/components/AuthorizeDeviceCard.vue";
+import {
+  loginCodesServiceCreate,
+  loginCodesIsAvailable,
+} from "~~/utils/loginCodes";
 
 export default {
+  components: {
+    AuthorizeDeviceCard,
+  },
   data() {
     return {
       settingsTabs: getSettingsTabs(),
@@ -130,6 +148,8 @@ export default {
       savingPassword: false,
       isDark: false,
       memoriesEnabled: true,
+      loginCodeService: loginCodesServiceCreate(),
+      loginCodeAvailable: false,
     };
   },
   async created() {
@@ -141,8 +161,18 @@ export default {
     if (!(await AuthService.isAuthenticated())) {
       useRouter().push({ path: "/users/login" });
     }
+    // Hidden entirely when the feature is off: the routes answer 404.
+    this.loginCodeAvailable = await loginCodesIsAvailable(
+      this.loginCodeService,
+    );
   },
   methods: {
+    onLoginCodeApproved() {
+      EventBus.emit(EventTypes.ALERT_MESSAGE, {
+        type: "info",
+        text: "Device approved",
+      });
+    },
     toggleTheme() {
       this.isDark = ThemeService.toggleTheme();
     },

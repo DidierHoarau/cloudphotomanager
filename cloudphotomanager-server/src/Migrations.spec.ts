@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { StandardLogger, StandardTracer } from "@devopsplaybook.io/otel-utils";
 import {
+  LOGIN_CODES_DDL_SQLITE,
   SqlDbUtilsExecSQL,
   SqlDbUtilsGetDatabase,
   SqlDbUtilsInit,
@@ -162,7 +163,7 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(16);
+    expect(dbVersion()).toBe(17);
     expect(existingIndexes().sort()).toEqual([...NEW_INDEXES].sort());
     const enrichmentColumns = SqlDbUtilsQuerySQL(
       undefined,
@@ -583,7 +584,7 @@ describe("SQL migrations", () => {
       await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
     }
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(16);
+    expect(dbVersion()).toBe(17);
 
     SqlDbUtilsExecSQL(
       undefined,
@@ -604,7 +605,7 @@ describe("SQL migrations", () => {
     );
     closeCurrentDb();
     await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
-    expect(dbVersion()).toBe(16);
+    expect(dbVersion()).toBe(17);
 
     const rows = SqlDbUtilsQuerySQL(
       undefined,
@@ -618,5 +619,38 @@ describe("SQL migrations", () => {
       "SELECT COUNT(*) as count FROM metadata WHERE type='db_version'",
     );
     expect(appliedLogAfter[0].count).toBe(appliedLogBefore[0].count);
+  });
+
+  it("init-0017 creates the login-code table and ships the library DDL verbatim", async () => {
+    const files = (await fs.readdir(realSqlDir)).filter((name) =>
+      /^init-\d+\.sql$/.test(name),
+    );
+    for (const name of files.sort()) {
+      await fs.copy(path.join(realSqlDir, name), path.join(sqlDir, name));
+    }
+    await SqlDbUtilsInit(span, { DATA_DIR: dataDir }, sqlDir);
+    expect(dbVersion()).toBe(17);
+
+    const tables = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='users_login_codes'",
+    ).map((row) => row.name);
+    expect(tables).toEqual(["users_login_codes"]);
+
+    const indexes = SqlDbUtilsQuerySQL(
+      undefined,
+      "SELECT name FROM sqlite_master WHERE type='index' AND name IN " +
+        "('users_login_codes_code_hash', 'users_login_codes_status_expires') ORDER BY name",
+    ).map((row) => row.name);
+    expect(indexes).toEqual([
+      "users_login_codes_code_hash",
+      "users_login_codes_status_expires",
+    ]);
+
+    const migration = fs.readFileSync(
+      path.join(realSqlDir, "init-0017.sql"),
+      "utf8",
+    );
+    expect(migration).toContain(LOGIN_CODES_DDL_SQLITE);
   });
 });

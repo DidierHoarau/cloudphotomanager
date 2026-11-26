@@ -30,8 +30,21 @@ custom `users/Auth.ts` signs `exp = now + JWT_VALIDITY_DURATION`, slides the
 httpOnly cookie server-side at half-life and never enforces the inherited
 `JWT_SESSION_MAX_DURATION` field. Keep the deviation in sync with the
 [session policy](https://github.com/devopsplaybook-io/common-utils/blob/main/docs/auth-session-policy.md)
-and the literal assertions in `Config.spec.ts`. common-utils stays on ^2.9.2
-intentionally.
+and the literal assertions in `Config.spec.ts`. common-utils is on `^2.12.0`
+for the cross-device login-code toolkit (`LoginCodesRoutes`,
+`createLoginCodesStoreCommonUtils`, the `LOGIN_CODE_*` config fields); the
+session deviation above is still intentional and unchanged.
+
+### Login with a code
+
+The cross-device "login with a code" routes are mounted at
+`/api/users/login-codes` only when `LOGIN_CODE_ENABLED` is true at boot
+(`cloudphotomanager-server/src/users/LoginCodes.ts`). The approved `POST /poll`
+response keeps the JWT out of the JSON body: a scoped `onSend` hook writes it
+to the same signed httpOnly `token` cookie the password login uses and leaves a
+constant sentinel in the body. The web never reads or stores a token for this
+flow — after approval it reloads the session from the cookie.
+
 
 ### CSS Centralization (cloudphotomanager-web)
 

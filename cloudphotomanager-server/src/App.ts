@@ -33,6 +33,7 @@ import { SyncRoutes } from "./sync/SyncRoutes";
 import { SyncEnrichmentRoutes } from "./sync/SyncEnrichmentRoutes";
 import { EnrichmentRuntimeInit } from "./sync/EnrichmentRuntime";
 import { AuthInit } from "./users/Auth";
+import { LoginCodesMount } from "./users/LoginCodes";
 import { UserRoutes } from "./users/UserRoutes";
 import { MediaSigningInit } from "./media/MediaSigning";
 import { MediaRoutes } from "./media/MediaRoutes";
@@ -118,6 +119,11 @@ Promise.resolve().then(async () => {
   fastify.register(new UserRoutes().getRoutes, {
     prefix: "/api/users",
   });
+
+  // Cross-device "login with a code". Read at boot: enabling/disabling needs a
+  // restart; when off the routes do not exist at all. The approved poll
+  // response sets the same httpOnly session cookie as the password login.
+  await LoginCodesMount(fastify, config);
 
   fastify.register(new AccountRoutes(config.DATA_DIR).getRoutes, {
     prefix: "/api/accounts",
